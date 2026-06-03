@@ -1,0 +1,8 @@
+{
+  "auth": true,
+  "projects": true,
+  "tasks": true,
+  "goals": true,
+  "library": true,
+  "ai": true
+}
