@@ -2,6 +2,122 @@
   align-items: stretch;
 }
 
+.dashboard-header-actions {
+  align-items: flex-end;
+  align-self: flex-start;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.dashboard-clock {
+  color: #fff;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.64rem;
+  font-weight: 700;
+  line-height: 2.4;
+  text-align: right;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dashboard-action-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(7.2rem, 1fr));
+  gap: 0.4rem;
+}
+
+.dashboard-action-tile,
+.llm-status-tile {
+  min-height: 2.35rem;
+}
+
+.dashboard-action-tile {
+  width: 100%;
+  padding: 0.38rem 0.55rem;
+  font-size: 0.62rem;
+}
+
+.llm-status-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.34rem;
+  min-width: 7.2rem;
+  border: 1px solid var(--ops-border);
+  background: #000;
+  color: var(--ops-muted);
+  padding: 0.38rem 0.55rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.llm-status-tile.connected {
+  border-color: rgba(34, 197, 94, 0.7);
+  color: var(--ops-signal);
+}
+
+.llm-status-tile.disconnected {
+  border-color: rgba(239, 68, 68, 0.7);
+  color: #f87171;
+}
+
+.llm-status-symbol {
+  display: inline-grid;
+  width: 0.72rem;
+  height: 0.72rem;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.llm-live-dot {
+  width: 0.46rem;
+  height: 0.46rem;
+  border: 1px solid var(--ops-signal);
+  background: var(--ops-signal);
+  animation: llm-status-blink 1.2s ease-in-out infinite;
+}
+
+.llm-cross {
+  position: relative;
+  width: 0.56rem;
+  height: 0.56rem;
+}
+
+.llm-cross::before,
+.llm-cross::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.7rem;
+  height: 0.12rem;
+  background: #f87171;
+  content: "";
+  transform-origin: center;
+}
+
+.llm-cross::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.llm-cross::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+@keyframes llm-status-blink {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(34, 197, 94, 0.68);
+  }
+
+  50% {
+    opacity: 0.35;
+    box-shadow: none;
+  }
+}
+
 .health-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
@@ -124,6 +240,24 @@
 }
 
 @media (max-width: 860px) {
+  .dashboard-header-actions {
+    align-items: stretch;
+  }
+
+  .dashboard-clock {
+    text-align: left;
+    white-space: normal;
+  }
+
+  .dashboard-action-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .llm-status-tile {
+    min-width: 0;
+  }
+
   .mission-row {
     grid-template-columns: 1fr;
   }

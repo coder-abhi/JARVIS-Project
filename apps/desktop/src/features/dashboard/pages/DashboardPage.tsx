@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { createProject, getProjectSummaries, type ProjectSummary, type ProjectType } from "@/lib/api";
+import { createProject, getAiStatus, getProjectSummaries, type AiStatus, type ProjectSummary, type ProjectType } from "@/lib/api";
 import "./DashboardPage.css";
 
 const projectTypes: { value: ProjectType; label: string; description: string }[] = [
@@ -17,6 +17,9 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
+  const [isAiReachable, setIsAiReachable] = useState(true);
+  const [now, setNow] = useState(() => new Date());
 
   async function loadDashboard() {
     setError(null);
@@ -28,6 +31,34 @@ export default function DashboardPage() {
     loadDashboard()
       .catch((err: Error) => setError(err.message))
       .finally(() => setIsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const tick = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(tick);
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadAiStatus() {
+      try {
+        const nextStatus = await getAiStatus();
+        if (!isMounted) return;
+        setAiStatus(nextStatus);
+        setIsAiReachable(true);
+      } catch {
+        if (!isMounted) return;
+        setAiStatus(null);
+        setIsAiReachable(false);
+      }
+    }
+
+    void loadAiStatus();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const stats = useMemo(
@@ -55,6 +86,10 @@ export default function DashboardPage() {
 
   const activeMissions = [...projects].sort((a, b) => getMissionRisk(b) - getMissionRisk(a));
   const liveFeed = buildLiveFeed(projects);
+  const isLlmConnected = Boolean(isAiReachable && aiStatus?.connected);
+  const timeLabel = now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: true });
+  const dateLabel = now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  const clockLabel = `${dateLabel} : ${timeLabel}`;
 
   async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -83,11 +118,21 @@ export default function DashboardPage() {
           <h1>Command Overview</h1>
           <p className="ops-subtitle">Execution telemetry, active missions, daily briefing, and system health.</p>
         </div>
-        <div className="ops-header-actions">
-          <span className={stats.overdueTasks > 0 ? "ops-chip danger" : "ops-chip signal"}>{stats.overdueTasks > 0 ? "ATTENTION REQUIRED" : "SYSTEM HEALTHY"}</span>
-          <button type="button" onClick={() => setIsCreateOpen(true)} className="ops-button primary">
-            New Mission
-          </button>
+        <div className="ops-header-actions dashboard-header-actions">
+          <div className="dashboard-clock" aria-label={clockLabel}>
+            {clockLabel}
+          </div>
+          <div className="dashboard-action-tiles">
+            <button type="button" onClick={() => setIsCreateOpen(true)} className="ops-button primary dashboard-action-tile">
+              New Mission
+            </button>
+            <span className={isLlmConnected ? "llm-status-tile connected" : "llm-status-tile disconnected"}>
+              <span className="llm-status-symbol" aria-hidden="true">
+                {isLlmConnected ? <span className="llm-live-dot" /> : <span className="llm-cross" />}
+              </span>
+              {isLlmConnected ? "LLM Live" : "LLM Offline"}
+            </span>
+          </div>
         </div>
       </section>
 
