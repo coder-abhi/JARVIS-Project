@@ -9,6 +9,8 @@ const projectTypes: { value: ProjectType; label: string; description: string }[]
   { value: "continuous", label: "Continuous", description: "Persistent operating loop or habit system." },
 ];
 
+let cachedAiConnectivity: { status: AiStatus | null; reachable: boolean } | null = null;
+
 export default function DashboardPage() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [name, setName] = useState("");
@@ -42,13 +44,21 @@ export default function DashboardPage() {
     let isMounted = true;
 
     async function loadAiStatus() {
+      if (cachedAiConnectivity) {
+        setAiStatus(cachedAiConnectivity.status);
+        setIsAiReachable(cachedAiConnectivity.reachable);
+        return;
+      }
+
       try {
         const nextStatus = await getAiStatus();
         if (!isMounted) return;
+        cachedAiConnectivity = { status: nextStatus, reachable: true };
         setAiStatus(nextStatus);
         setIsAiReachable(true);
       } catch {
         if (!isMounted) return;
+        cachedAiConnectivity = { status: null, reachable: false };
         setAiStatus(null);
         setIsAiReachable(false);
       }
