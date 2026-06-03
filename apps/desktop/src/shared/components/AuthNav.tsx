@@ -34,19 +34,19 @@ export function AuthNav() {
     <div className="flex flex-wrap items-center justify-end gap-3">
       <div className="flex items-center gap-2 rounded-full bg-gray-100 p-1 text-sm font-medium text-gray-600">
         <Link href="/goals" className="rounded-full px-4 py-2 transition hover:bg-white hover:text-gray-950 hover:shadow-sm">
-          Goals
+          Mission Control
         </Link>
         <Link href="/" className="rounded-full px-4 py-2 transition hover:bg-white hover:text-gray-950 hover:shadow-sm">
-          Dashboard
+          Command Overview
         </Link>
         <Link href="/timeline" className="rounded-full px-4 py-2 transition hover:bg-white hover:text-gray-950 hover:shadow-sm">
-          Timeline
+          Mission Schedule
         </Link>
         <Link href="/pomodoro" className="rounded-full px-4 py-2 transition hover:bg-white hover:text-gray-950 hover:shadow-sm">
-          Pomodoro
+          Focus Operations
         </Link>
         <Link href="/library" className="rounded-full px-4 py-2 transition hover:bg-white hover:text-gray-950 hover:shadow-sm">
-          Library
+          Knowledge Command
         </Link>
       </div>
 
