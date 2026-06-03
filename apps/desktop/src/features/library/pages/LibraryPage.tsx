@@ -19,6 +19,7 @@ import {
   type LibrarySummary,
   type SuggestedBook,
 } from "@/lib/api";
+import "./LibraryPage.css";
 
 type BookDraft = {
   title: string;

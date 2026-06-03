@@ -24,6 +24,7 @@ import {
   type PendingPomodoroCompletion,
   type PersistedPomodoroSession,
 } from "@/lib/pomodoroSession";
+import "./PomodoroPage.css";
 
 type TimerMode = "focus" | "short" | "long";
 type SessionState = "idle" | "running" | "paused";

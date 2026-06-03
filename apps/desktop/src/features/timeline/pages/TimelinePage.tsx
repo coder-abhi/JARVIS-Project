@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { TaskEditor } from "@/components/TaskEditor";
 import { getProjectTasks, getProjects, updateTask, type Project, type Task, type TaskStatus, type TaskUpdate } from "@/lib/api";
+import "./TimelinePage.css";
 
 type TimelineView = "3day" | "week" | "month";
 

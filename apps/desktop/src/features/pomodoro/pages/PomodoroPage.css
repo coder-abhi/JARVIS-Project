@@ -1,0 +1,20 @@
+.focus-command-grid {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.75fr) minmax(20rem, 1.4fr) minmax(12rem, 0.75fr);
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.focus-timer-panel {
+  grid-row: span 2;
+}
+
+@media (max-width: 1100px) {
+  .focus-command-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .focus-timer-panel {
+    grid-row: auto;
+  }
+}

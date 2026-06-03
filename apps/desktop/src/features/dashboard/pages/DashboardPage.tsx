@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createProject, getProjectSummaries, type ProjectSummary, type ProjectType } from "@/lib/api";
+import "./DashboardPage.css";
 
 const projectTypes: { value: ProjectType; label: string; description: string }[] = [
   { value: "fixed", label: "Fixed", description: "Scoped mission with a defined extraction point." },
@@ -183,7 +184,7 @@ export default function DashboardPage() {
 
       {isCreateOpen ? (
         <div className="ops-modal-backdrop">
-          <form onSubmit={handleCreateProject} className="ops-modal">
+          <form onSubmit={handleCreateProject} className="dashboard-mission-modal">
             <div className="ops-modal-head">
               <div>
                 <p className="ops-kicker">MISSION REGISTRY</p>

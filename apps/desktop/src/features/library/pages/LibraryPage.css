@@ -1,0 +1,16 @@
+.domain-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.library-row {
+  grid-template-columns: minmax(0, 1.5fr) 7rem minmax(0, 1fr);
+}
+
+@media (max-width: 860px) {
+  .library-row {
+    grid-template-columns: 1fr;
+  }
+}

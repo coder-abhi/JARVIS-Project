@@ -3,6 +3,7 @@ import PomodoroCompletionToast from "@/components/PomodoroCompletionToast";
 import { authChangedEvent, clearAuthSession, getStoredUser, type AuthUser } from "@/lib/auth";
 import { sidebarItems } from "./featureRegistry";
 import { useEffect, useState } from "react";
+import "./App.css";
 
 export default function App() {
   const location = useLocation();
