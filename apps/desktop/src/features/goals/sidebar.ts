@@ -1,1 +1,1 @@
-export const goalsSidebar = [{ label: "Goals", path: "/goals", icon: "G" }];
+export const goalsSidebar = [{ label: "Mission Control", path: "/goals", icon: "MC" }];

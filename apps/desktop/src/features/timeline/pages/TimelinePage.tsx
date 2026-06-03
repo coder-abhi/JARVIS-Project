@@ -130,10 +130,13 @@ export default function TimelinePage() {
   const totalSpentMinutes = Math.round(totalSpent * 60);
   const completedTasks = timelineTasks.filter((task) => task.status === "done").length;
   const efficiency = totalPlanned === 0 ? 0 : Math.round((totalSpent / totalPlanned) * 100);
+  const completionRate = timelineTasks.length === 0 ? 0 : Math.round((completedTasks / timelineTasks.length) * 100);
   const columnWidth = viewOptions[view].columnWidth;
   const timelineWidth = timelineDates.length * columnWidth;
   const currentTimeOffset = getDayDifference(today, timelineDates[0]) * columnWidth + getDayProgress(currentTime) * columnWidth;
   const currentTimeLabel = currentTime.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const weeklyOperationDates = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(today, index)), [today]);
+  const timeAllocation = buildTimeAllocation(timelineTasks);
 
   function recalibrateToToday() {
     scrollerRef.current?.scrollTo({ left: Math.max(currentTimeOffset - 24, 0), behavior: "smooth" });
@@ -161,28 +164,58 @@ export default function TimelinePage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-5 py-8 md:py-12">
-      <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <main className="ops-screen">
+      <header className="ops-header">
         <div>
-          <p className="text-sm font-medium uppercase tracking-wide text-gray-500">Planning Dashboard</p>
-          <h1 className="mt-2 text-3xl font-semibold text-gray-950 md:text-4xl">Timeline</h1>
-              <p className="mt-3 max-w-2xl text-base text-gray-500">Plan tasks, track ETA, and compare invested minutes</p>
+          <p className="ops-kicker">MISSION SCHEDULE</p>
+          <h1>Mission Schedule</h1>
+          <p className="ops-subtitle">Operations planning board, queue state, time allocation, and efficiency report.</p>
         </div>
         <Link
           href="/"
-          className="w-fit rounded-full bg-gray-950 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-gray-800"
+          className="ops-button primary"
         >
-          + Add Task
+          Add Objective
         </Link>
       </header>
 
-      {error ? <p className="mt-6 rounded-2xl bg-red-50 p-4 text-sm text-red-700">{error}</p> : null}
+      {error ? <p className="ops-alert danger">{error}</p> : null}
 
-      <section className="mt-8 grid gap-5 lg:grid-cols-[1fr_280px]">
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <section className="ops-panel">
+        <div className="ops-panel-head">
+          <h2>Weekly Operations Grid</h2>
+          <span>{visibleTasks.length} scheduled objectives</span>
+        </div>
+        <div className="weekly-ops-grid">
+          {weeklyOperationDates.map((date) => {
+            const dayTasks = timelineTasks.filter((task) => isTaskActiveOn(task, date)).slice(0, 4);
+            return (
+              <div key={date.toISOString()} className="weekly-day">
+                <div>
+                  <strong>{date.toLocaleDateString(undefined, { weekday: "short" })}</strong>
+                  <span>{date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                </div>
+                {dayTasks.length ? (
+                  dayTasks.map((task) => (
+                    <button key={task.id} type="button" onClick={() => onTimelineTaskEdit(task)} className={`weekly-task ${task.status}`}>
+                      <span>{task.title}</span>
+                      <b>{Math.round(task.etaHours * 60)}m</b>
+                    </button>
+                  ))
+                ) : (
+                  <p className="ops-empty compact">No blocks</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="mt-4 grid gap-5 lg:grid-cols-[1fr_320px]">
+        <div className="ops-panel overflow-hidden p-0">
           <div className="flex flex-col gap-4 border-b border-gray-100 px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-950">{viewOptions[view].label} Plan</h2>
+              <h2 className="text-lg font-semibold text-gray-950">{viewOptions[view].label} Operations Plan</h2>
               <p className="mt-1 text-sm text-gray-500">{visibleTasks.length} visible tasks across {items.length} projects</p>
             </div>
             <div className="flex flex-wrap items-center gap-1">
@@ -281,25 +314,38 @@ export default function TimelinePage() {
           ) : null}
         </div>
 
-        <aside className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-950">Summary</h2>
-              <p className="mt-1 text-sm text-gray-500">Current tasks</p>
+        <aside className="grid gap-4">
+          <div className="ops-panel">
+            <div className="ops-panel-head">
+              <h2>Efficiency Report</h2>
+              <span>{efficiency}% invested/planned</span>
             </div>
-            <span className="rounded-full bg-teal-50 px-3 py-1 text-sm font-semibold text-teal-700">{efficiency}%</span>
+            <div className="mt-5 space-y-3">
+              <SummaryMetric label="Planned Hours" value={`${(totalPlannedMinutes / 60).toFixed(1)}h`} />
+              <SummaryMetric label="Actual Hours" value={`${(totalSpentMinutes / 60).toFixed(1)}h`} />
+              <SummaryMetric label="Completion Rate" value={`${completionRate}%`} tone="success" />
+            </div>
           </div>
 
-          <div className="mt-5 space-y-3">
-            <SummaryMetric label="Total planned minutes" value={`${totalPlannedMinutes} min`} />
-            <SummaryMetric label="Total invested minutes" value={`${totalSpentMinutes} min`} />
-            <SummaryMetric label="Completed tasks" value={completedTasks} />
-            <SummaryMetric label="Efficiency percentage" value={`${efficiency}%`} tone="success" />
+          <div className="ops-panel">
+            <div className="ops-panel-head">
+              <h2>Time Allocation</h2>
+              <span>mission categories</span>
+            </div>
+            <div className="allocation-list">
+              {timeAllocation.map((item) => (
+                <div key={item.label}>
+                  <span>{item.label}</span>
+                  <b>{item.minutes}m</b>
+                  <div className="ops-progress"><span style={{ width: `${item.percent}%` }} /></div>
+                </div>
+              ))}
+            </div>
           </div>
         </aside>
       </section>
 
-      <section className="mt-8 grid gap-4 md:grid-cols-3">
+      <section className="mt-4 grid gap-4 md:grid-cols-3">
         {(["todo", "in_progress", "done"] as TaskStatus[]).map((status) => (
           <StatusCard key={status} status={status} tasks={timelineTasks.filter((task) => task.status === status)} onEdit={setEditingTaskFromTimeline} />
         ))}
@@ -312,6 +358,10 @@ export default function TimelinePage() {
   function setEditingTaskFromTimeline(task: TimelineTask) {
     const fullTask = items.flatMap((item) => item.tasks).find((item) => item.id === task.id);
     if (fullTask) setEditingTask(fullTask);
+  }
+
+  function onTimelineTaskEdit(task: TimelineTask) {
+    setEditingTaskFromTimeline(task);
   }
 }
 
@@ -504,7 +554,7 @@ function SummaryMetric({
   const valueColor = tone === "danger" ? "text-red-600" : tone === "success" ? "text-teal-600" : "text-gray-950";
 
   return (
-    <div className="flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3">
+    <div className="flex items-center justify-between rounded border border-gray-200 bg-gray-50 px-4 py-3">
       <p className="text-sm text-gray-500">{label}</p>
       <p className={`text-base font-semibold ${valueColor}`}>{value}</p>
     </div>
@@ -519,10 +569,10 @@ function StatusCard({ onEdit, status, tasks }: { onEdit: (task: TimelineTask) =>
   };
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="ops-panel">
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold text-gray-950">{statusLabels[status]}</h3>
-        <span className={`rounded-full border px-3 py-1 text-sm font-semibold ${accentByStatus[status]}`}>{tasks.length}</span>
+        <h3 className="text-base font-semibold text-gray-950">Queue Status / {statusLabels[status]}</h3>
+        <span className={`rounded border px-3 py-1 text-sm font-semibold ${accentByStatus[status]}`}>{tasks.length}</span>
       </div>
       <div className="mt-4 space-y-3">
         {tasks.length === 0 ? <p className="text-sm text-gray-400">No tasks</p> : null}
@@ -534,7 +584,7 @@ function StatusCard({ onEdit, status, tasks }: { onEdit: (task: TimelineTask) =>
               key={task.id}
               type="button"
               onClick={() => onEdit(task)}
-              className="block w-full rounded-xl bg-gray-50 p-3 text-left transition hover:bg-gray-100"
+              className="block w-full rounded border border-gray-200 bg-gray-50 p-3 text-left transition hover:bg-gray-100"
             >
               <p className="text-sm font-semibold text-gray-950">{task.title}</p>
               <p className={`mt-1 text-xs font-medium ${colors.text}`}>{task.projectName}</p>
@@ -544,6 +594,26 @@ function StatusCard({ onEdit, status, tasks }: { onEdit: (task: TimelineTask) =>
       </div>
     </div>
   );
+}
+
+function buildTimeAllocation(tasks: TimelineTask[]) {
+  const buckets = [
+    { label: "Learning", match: /learn|course|study|chapter|read/i },
+    { label: "Building", match: /build|ship|code|feature|project|fix/i },
+    { label: "Reading", match: /read|book|chapter/i },
+    { label: "Health", match: /workout|health|run|gym|sleep|calorie/i },
+    { label: "Work", match: /work|client|meeting|review|email/i },
+  ];
+  const totals = buckets.map((bucket) => ({
+    label: bucket.label,
+    minutes: tasks
+      .filter((task) => bucket.match.test(`${task.title} ${task.projectName}`))
+      .reduce((sum, task) => sum + Math.round(task.etaHours * 60), 0),
+  }));
+  const fallbackMinutes = Math.max(0, tasks.reduce((sum, task) => sum + Math.round(task.etaHours * 60), 0) - totals.reduce((sum, item) => sum + item.minutes, 0));
+  if (fallbackMinutes > 0 && totals[4]) totals[4].minutes += fallbackMinutes;
+  const max = Math.max(...totals.map((item) => item.minutes), 1);
+  return totals.map((item) => ({ ...item, percent: Math.round((item.minutes / max) * 100) }));
 }
 
 function toTimelineTask(task: Task, projectName: string, colorIndex: number): TimelineTask {

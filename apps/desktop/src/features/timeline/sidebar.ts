@@ -1,1 +1,1 @@
-export const timelineSidebar = [{ label: "Timeline", path: "/timeline", icon: "T" }];
+export const timelineSidebar = [{ label: "Mission Schedule", path: "/timeline", icon: "MS" }];

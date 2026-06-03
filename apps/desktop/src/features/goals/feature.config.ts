@@ -2,8 +2,8 @@ import type { DesktopFeature } from "@/app/featureRegistry";
 
 const feature: DesktopFeature = {
   key: "goals",
-  name: "Goals",
-  sidebar: [{ label: "Goals", path: "/goals", icon: "G" }],
+  name: "Mission Control",
+  sidebar: [{ label: "Mission Control", path: "/goals", icon: "MC" }],
 };
 
 export default feature;

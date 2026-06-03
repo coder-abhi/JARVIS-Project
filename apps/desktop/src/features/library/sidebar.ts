@@ -1,1 +1,1 @@
-export const librarySidebar = [{ label: "Library", path: "/library", icon: "L" }];
+export const librarySidebar = [{ label: "Knowledge Command", path: "/library", icon: "KC" }];

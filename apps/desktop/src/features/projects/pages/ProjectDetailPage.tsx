@@ -138,17 +138,18 @@ export default function ProjectDetailPage() {
   });
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-5 py-8 md:py-12">
-      <Link href="/" className="text-sm font-medium text-gray-500 hover:text-gray-950">
-        Back to dashboard
+    <main className="ops-screen">
+      <Link href="/" className="ops-button">
+        Back to Command Overview
       </Link>
 
-      <header className="mt-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <header className="ops-header mt-4">
         <div>
-          <p className="text-sm font-medium uppercase tracking-wide text-gray-500">{project?.type ?? "Project"}</p>
-          <h1 className="mt-2 text-3xl font-semibold text-gray-950 md:text-4xl">{project?.name ?? "Project detail"}</h1>
+          <p className="ops-kicker">{project?.type ?? "MISSION"}</p>
+          <h1>{project?.name ?? "Mission Detail"}</h1>
+          <p className="ops-subtitle">Objective queue, time telemetry, and execution log.</p>
         </div>
-        <div className="grid gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:min-w-80 sm:grid-cols-[1fr_auto] sm:items-center">
+        <div className="system-metrics sm:min-w-80">
           <div>
             <p className="text-sm text-gray-500">Invested Time</p>
             <p className="mt-1 text-3xl font-semibold text-gray-950">{investedMinutes} min</p>
@@ -164,23 +165,23 @@ export default function ProjectDetailPage() {
         </div>
       </header>
 
-      {error ? <p className="mt-6 rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</p> : null}
+      {error ? <p className="ops-alert danger">{error}</p> : null}
 
-      <section className="mt-8">
+      <section className="ops-panel mt-4">
         <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
           <div>
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-xl font-semibold text-gray-950">Tasks</h2>
+              <h2 className="text-xl font-semibold text-gray-950">Objectives</h2>
               <button
                 type="button"
                 onClick={() => setIsCreateTaskOpen((current) => !current)}
                 className="rounded-md bg-gray-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-gray-800"
               >
-                {isCreateTaskOpen ? "Close" : "Add Task"}
+                {isCreateTaskOpen ? "Close" : "Add Objective"}
               </button>
             </div>
             <p className="text-sm text-gray-500">
-              {filteredTasks.length} shown of {tasks.length} total
+              {filteredTasks.length} shown of {tasks.length} total objectives
             </p>
           </div>
           <div className="grid gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-sm sm:grid-cols-2">
@@ -213,10 +214,10 @@ export default function ProjectDetailPage() {
             </label>
           </div>
         </div>
-        {isLoading ? <p className="rounded-lg bg-white p-6 text-gray-500 shadow-sm">Loading tasks...</p> : null}
+        {isLoading ? <p className="rounded-lg bg-white p-6 text-gray-500 shadow-sm">Loading objectives...</p> : null}
         {!isLoading && tasks.length === 0 ? (
           <p className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-gray-500">
-            Add your first task to see progress and timeline bars.
+            Add your first objective to see progress and timeline bars.
           </p>
         ) : null}
         {!isLoading && tasks.length > 0 && filteredTasks.length === 0 ? (

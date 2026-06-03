@@ -342,6 +342,10 @@ export default function PomodoroPage() {
   const continuousProjects = projects.filter((project) => project.type === "continuous");
   const visibleRecentLogs = useMemo(() => getVisibleRecentLogs(logs, recentEntriesFilter), [logs, recentEntriesFilter]);
   const focusTrend = useMemo(() => buildFocusTrend(logs, focusTrendRange), [logs, focusTrendRange]);
+  const focusLogs = logs.filter((log) => log.mode === "focus");
+  const sevenDayMinutes = getFocusMinutesInLastDays(focusLogs, 7);
+  const thirtyDayMinutes = getFocusMinutesInLastDays(focusLogs, 30);
+  const sessionIntel = buildSessionIntel(focusLogs);
 
   function changeMode(nextMode: TimerMode) {
     setMode(nextMode);
@@ -648,29 +652,32 @@ export default function PomodoroPage() {
   }
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#f4f6f3] text-stone-950">
-      <section className="relative border-b border-stone-200">
-        <div className="absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_18%_18%,rgba(20,184,166,0.25),transparent_28%),radial-gradient(circle_at_78%_4%,rgba(251,146,60,0.24),transparent_26%),linear-gradient(135deg,#fff8ed_0%,#eefaf7_55%,#f7edf6_100%)]" />
-        <div className="relative mx-auto grid max-w-7xl gap-6 px-5 py-8 md:grid-cols-[0.95fr_1.05fr] md:px-8 md:py-12">
-          <div className="flex min-h-[360px] flex-col justify-between">
-            <div>
-              <p className="inline-flex rounded-full border border-stone-200 bg-white/70 px-4 py-2 text-sm font-medium text-stone-700 shadow-sm backdrop-blur">
-                Pomodoro
-              </p>
-              <h1 className="mt-7 max-w-3xl text-5xl font-semibold leading-tight text-stone-950 md:text-7xl">Timebox the work. Keep the receipt.</h1>
-              <p className="mt-6 max-w-2xl text-lg leading-8 text-stone-700">
-                Run a focused sprint, then log what moved and which project earned the minutes.
-              </p>
-            </div>
+    <main className="ops-screen">
+      <section className="ops-header">
+        <div>
+          <p className="ops-kicker">FOCUS OPERATIONS</p>
+          <h1>Focus Operations</h1>
+          <p className="ops-subtitle">Timer control, focus momentum, session intelligence, and heatmap history.</p>
+        </div>
+        <button type="button" onClick={openManualSession} className="ops-button primary">
+          Add Session
+        </button>
+      </section>
 
-            <div className="mt-8 grid grid-cols-3 gap-3">
-              <HeroMetric label="Today" value={`${completedToday}`} detail="Sessions" />
-              <HeroMetric label="Focus" value={`${totalFocusMinutes}`} detail="Minutes" />
-              <HeroMetric label="Average" value={`${averageFocus}%`} detail="Focus" />
+      <section className="focus-command-grid">
+          <div className="ops-panel">
+            <div className="ops-panel-head">
+              <h2>Today</h2>
+              <span>current duty cycle</span>
+            </div>
+            <div className="briefing-grid">
+              <HeroMetric label="Sessions" value={`${completedToday}`} detail="count" />
+              <HeroMetric label="Focus Minutes" value={`${getFocusMinutesToday(focusLogs)}`} detail="today" />
+              <HeroMetric label="Average Focus" value={`${averageFocus}%`} detail="rating" />
             </div>
           </div>
 
-          <div className="rounded-lg border border-white/70 bg-white/80 p-5 shadow-xl shadow-stone-900/10 backdrop-blur">
+          <div className="ops-panel focus-timer-panel">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex rounded-full border border-stone-200 bg-stone-100 p-1">
                 {(Object.keys(activeDurations) as TimerMode[]).map((item) => (
@@ -696,14 +703,6 @@ export default function PomodoroPage() {
                 >
                   T
                 </button>
-                <button
-                  type="button"
-                  onClick={openManualSession}
-                  className="rounded-full bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700"
-                >
-                  Add Session
-                </button>
-
                 {isTimingOpen ? (
                   <div className="absolute right-0 top-12 z-20 w-[min(22rem,calc(100vw-3rem))] rounded-lg border border-stone-200 bg-white p-4 shadow-2xl shadow-stone-900/15">
                     <div className="flex flex-wrap gap-2">
@@ -793,10 +792,33 @@ export default function PomodoroPage() {
               </button>
             </div>
           </div>
-        </div>
+
+          <div className="ops-panel">
+            <div className="ops-panel-head">
+              <h2>Momentum</h2>
+              <span>7 / 30 / streak</span>
+            </div>
+            <div className="analysis-stack">
+              <div><span>7 Day</span><strong>{sevenDayMinutes}m</strong></div>
+              <div><span>30 Day</span><strong>{thirtyDayMinutes}m</strong></div>
+              <div><span>Streak</span><strong>{autoPlan.streak} days</strong></div>
+            </div>
+          </div>
+
+          <div className="ops-panel">
+            <div className="ops-panel-head">
+              <h2>Session Intelligence</h2>
+              <span>best / worst / average</span>
+            </div>
+            <div className="analysis-stack">
+              <div><span>Best Focus Hour</span><strong>{sessionIntel.bestHour}</strong></div>
+              <div><span>Worst Focus Hour</span><strong>{sessionIntel.worstHour}</strong></div>
+              <div><span>Average Session</span><strong>{sessionIntel.averageLength}m</strong></div>
+            </div>
+          </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-5 px-5 py-8 md:px-8">
+      <section className="grid gap-5">
         {sessionState !== "idle" ? (
           <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
             <div className="grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
@@ -1065,6 +1087,41 @@ function calculateAutoPlan(logs: PomodoroLog[]) {
     momentum,
     streak,
   };
+}
+
+function getFocusMinutesToday(logs: PomodoroLog[]) {
+  return logs.filter((log) => isToday(new Date(log.completedAt))).reduce((sum, log) => sum + log.minutes, 0);
+}
+
+function getFocusMinutesInLastDays(logs: PomodoroLog[], days: number) {
+  return logs.filter((log) => daysBetween(new Date(log.completedAt), new Date()) <= days - 1).reduce((sum, log) => sum + log.minutes, 0);
+}
+
+function buildSessionIntel(logs: PomodoroLog[]) {
+  if (logs.length === 0) {
+    return { averageLength: 0, bestHour: "No data", worstHour: "No data" };
+  }
+
+  const byHour = logs.reduce<Record<number, { minutes: number; focus: number; count: number }>>((acc, log) => {
+    const hour = new Date(log.startAt ?? log.completedAt).getHours();
+    acc[hour] = acc[hour] ?? { minutes: 0, focus: 0, count: 0 };
+    acc[hour].minutes += log.minutes;
+    acc[hour].focus += log.focus ?? 0;
+    acc[hour].count += 1;
+    return acc;
+  }, {});
+  const ranked = Object.entries(byHour).sort(([, a], [, b]) => b.focus / b.count - a.focus / a.count);
+  const averageLength = Math.round(logs.reduce((sum, log) => sum + log.minutes, 0) / logs.length);
+
+  return {
+    averageLength,
+    bestHour: ranked[0] ? formatHour(Number(ranked[0][0])) : "No data",
+    worstHour: ranked[ranked.length - 1] ? formatHour(Number(ranked[ranked.length - 1][0])) : "No data",
+  };
+}
+
+function formatHour(hour: number) {
+  return new Date(2024, 0, 1, hour).toLocaleTimeString(undefined, { hour: "numeric" });
 }
 
 function buildHeatmap(logs: PomodoroLog[]) {

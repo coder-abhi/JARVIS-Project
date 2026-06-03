@@ -1,1 +1,1 @@
-export const dashboardSidebar = [{ label: "Dashboard", path: "/", icon: "D", exact: true }];
+export const dashboardSidebar = [{ label: "Command Overview", path: "/", icon: "CO", exact: true }];

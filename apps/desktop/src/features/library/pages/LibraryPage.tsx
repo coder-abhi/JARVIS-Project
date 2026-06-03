@@ -343,71 +343,89 @@ export default function LibraryPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f4f6f3] text-stone-950">
-      <section className="relative overflow-hidden border-b border-stone-200">
-        <div className="absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_18%_18%,rgba(20,184,166,0.24),transparent_30%),radial-gradient(circle_at_78%_12%,rgba(251,146,60,0.24),transparent_28%),linear-gradient(135deg,#fff8ed_0%,#effbf7_58%,#f7edf6_100%)]" />
-        <div className="relative mx-auto grid max-w-7xl gap-8 px-5 pb-8 pt-8 md:grid-cols-[1.05fr_0.95fr] md:px-8 md:pb-12 md:pt-12">
-          <div className="flex min-h-[360px] flex-col justify-between">
-            <div>
-              <div className="inline-flex items-center rounded-full border border-stone-200 bg-white/70 px-4 py-2 text-sm font-medium text-stone-700 shadow-sm backdrop-blur">
-                Personal Library
-              </div>
-              <h1 className="mt-7 max-w-3xl text-5xl font-semibold leading-tight text-stone-950 md:text-7xl">
-                Track the shelf you are becoming.
-              </h1>
-              <p className="mt-6 max-w-2xl text-lg leading-8 text-stone-700">
-                Log purchases, reading momentum, resonant chapters, and the books waiting their turn.
-              </p>
-            </div>
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setIsAddOpen(true)}
-                className="rounded-full bg-stone-950 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-stone-900/20 transition hover:-translate-y-0.5 hover:bg-stone-800"
-              >
-                Add Book
-              </button>
-              <a
-                href="/library/shelf"
-                className="rounded-full border border-stone-300 bg-white/70 px-6 py-3 text-sm font-semibold text-stone-800 shadow-sm transition hover:border-stone-400 hover:bg-white"
-              >
-                View Shelf
-              </a>
-            </div>
-          </div>
+    <main className="ops-screen">
+      <section className="ops-header">
+        <div>
+          <p className="ops-kicker">KNOWLEDGE COMMAND</p>
+          <h1>Knowledge Command</h1>
+          <p className="ops-subtitle">Reading operations, domain coverage, chapter signals, and knowledge feed.</p>
+        </div>
+        <div className="ops-header-actions">
+          <button type="button" onClick={() => setIsAddOpen(true)} className="ops-button primary">
+            Add Book
+          </button>
+          <a href="/library/shelf" className="ops-button">View Shelf</a>
+        </div>
+      </section>
 
-          <div className="grid content-end gap-4">
-            <div className="rounded-lg border border-white/70 bg-white/75 p-5 shadow-xl shadow-stone-900/10 backdrop-blur">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-stone-500">Library health</p>
-                  <p className="mt-2 text-5xl font-semibold text-stone-950">{summary?.total_books ?? 0}</p>
-                </div>
-                <span className="rounded-full bg-teal-100 px-3 py-1 text-sm font-semibold text-teal-800">
-                  {summary?.reading_books ?? 0} reading
-                </span>
+      <section className="ops-grid">
+        <div className="ops-panel span-4">
+          <div className="ops-panel-head">
+            <h2>Knowledge Health</h2>
+            <span>books read / active / queued</span>
+          </div>
+          <div className="system-metrics">
+            <HeroMetric label="Books Read" value={summary?.read_books ?? 0} />
+            <HeroMetric label="Active Books" value={summary?.reading_books ?? 0} />
+            <HeroMetric label="Queued Books" value={summary?.yet_to_start_books ?? 0} />
+          </div>
+        </div>
+
+        <div className="ops-panel span-4">
+          <div className="ops-panel-head">
+            <h2>Reading Intelligence</h2>
+            <span>pace and streak</span>
+          </div>
+          <div className="analysis-stack">
+            <div><span>Pages This Week</span><strong>{summary?.pages_this_week ?? 0}</strong></div>
+            <div><span>Pages This Month</span><strong>{getCurrentMonthPages(summary)}</strong></div>
+            <div><span>Reading Streak</span><strong>{getReadingStreak(summary)} days</strong></div>
+          </div>
+        </div>
+
+        <div className="ops-panel span-4">
+          <div className="ops-panel-head">
+            <h2>Knowledge Domains</h2>
+            <span>AI / business / psychology / history / philosophy</span>
+          </div>
+          <div className="domain-grid">
+            {["AI", "Business", "Psychology", "History", "Philosophy"].map((domain) => (
+              <span key={domain} className={hasDomain(summary, domain) ? "ops-chip signal" : "ops-chip"}>{domain}</span>
+            ))}
+          </div>
+        </div>
+
+        <div className="ops-panel span-7">
+          <div className="ops-panel-head">
+            <h2>Current Operations</h2>
+            <span>currently reading / progress / next chapter</span>
+          </div>
+          <div className="ops-table">
+            <div className="ops-row ops-row-head library-row"><span>Book</span><span>Progress</span><span>Next Chapter</span></div>
+            {readingBooks.length ? readingBooks.slice(0, 5).map((book) => (
+              <div key={book.id} className="ops-row library-row">
+                <span className="truncate">{book.title}</span>
+                <span>{book.current_page || book.pages_read || 0}/{book.total_pages || "?"}</span>
+                <span className="truncate">{book.chapters.find((chapter) => !chapter.resonated)?.title ?? "Review insights"}</span>
               </div>
-              <div className="mt-6 grid grid-cols-3 gap-3">
-                <HeroMetric label="Read" value={summary?.read_books ?? 0} />
-                <HeroMetric label="Liked" value={summary?.liked_books ?? 0} />
-                <HeroMetric label="Queued" value={summary?.yet_to_start_books ?? 0} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="rounded-lg bg-stone-950 p-5 text-white shadow-xl shadow-stone-900/15">
-                <p className="text-sm text-stone-300">Pages Today</p>
-                <p className="mt-2 text-3xl font-semibold">{summary?.pages_today ?? 0}</p>
-              </div>
-              <div className="rounded-lg bg-teal-600 p-5 text-white shadow-xl shadow-teal-900/15">
-                <p className="text-sm text-teal-50">This Week</p>
-                <p className="mt-2 text-3xl font-semibold">{summary?.pages_this_week ?? 0}</p>
-              </div>
-            </div>
+            )) : <p className="ops-empty">No active reading operation.</p>}
+          </div>
+        </div>
+
+        <div className="ops-panel span-5">
+          <div className="ops-panel-head">
+            <h2>Knowledge Feed</h2>
+            <span>highlights / chapters / insights / quotes</span>
+          </div>
+          <div className="ops-feed">
+            {buildKnowledgeFeed(books).map((item) => (
+              <div key={item} className="feed-line"><span>INTEL</span><p>{item}</p></div>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-8 md:px-8 md:py-12">
+      <section className="mt-6">
         <div>
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
@@ -883,11 +901,50 @@ export default function LibraryPage() {
 
 function HeroMetric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md bg-white p-3">
+    <div className="system-metric">
       <p className="text-xs font-medium text-stone-500">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-stone-950">{value}</p>
     </div>
   );
+}
+
+function getCurrentMonthPages(summary: LibrarySummary | null) {
+  const currentMonth = new Date();
+  const key = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}`;
+  return summary?.monthly_pages.find((month) => month.month === key)?.pages ?? 0;
+}
+
+function getReadingStreak(summary: LibrarySummary | null) {
+  const pagesByDate = (summary?.daily_pages ?? summary?.daywise_pages ?? []).reduce<Record<string, number>>((acc, day) => {
+    acc[day.date] = day.pages;
+    return acc;
+  }, {});
+  let streak = 0;
+  let cursor = startOfDay(new Date());
+  while ((pagesByDate[dateKey(cursor)] ?? 0) > 0) {
+    streak += 1;
+    cursor = addDays(cursor, -1);
+  }
+  return streak;
+}
+
+function hasDomain(summary: LibrarySummary | null, domain: string) {
+  const normalized = domain.toLowerCase();
+  return (
+    summary?.categories.some((item) => item.category.toLowerCase().includes(normalized)) ||
+    summary?.current_categories.some((item) => item.toLowerCase().includes(normalized)) ||
+    false
+  );
+}
+
+function buildKnowledgeFeed(books: Book[]) {
+  const chapterSignals = books.flatMap((book) =>
+    book.chapters.filter((chapter) => chapter.resonated).map((chapter) => `${book.title}: ${chapter.title}`),
+  );
+  const activeBooks = books.filter((book) => book.status === "reading").map((book) => `Currently reading ${book.title}`);
+  const likedBooks = books.filter((book) => book.liked).map((book) => `Favorite signal logged for ${book.title}`);
+  const feed = [...chapterSignals, ...activeBooks, ...likedBooks].slice(0, 6);
+  return feed.length ? feed : ["Awaiting highlights, favorite chapters, insights, and quotes."];
 }
 
 function ReadingTrendChart({

@@ -2,8 +2,8 @@ import type { DesktopFeature } from "@/app/featureRegistry";
 
 const feature: DesktopFeature = {
   key: "dashboard",
-  name: "Dashboard",
-  sidebar: [{ label: "Dashboard", path: "/", icon: "D", exact: true }],
+  name: "Command Overview",
+  sidebar: [{ label: "Command Overview", path: "/", icon: "CO", exact: true }],
 };
 
 export default feature;

@@ -1,1 +1,1 @@
-export const pomodoroSidebar = [{ label: "Pomodoro", path: "/pomodoro", icon: "P" }];
+export const pomodoroSidebar = [{ label: "Focus Operations", path: "/pomodoro", icon: "FO" }];
