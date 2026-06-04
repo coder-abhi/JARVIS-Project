@@ -17,6 +17,7 @@ import {
   type TaskStatus,
   type TaskUpdate,
 } from "@/lib/api";
+import { dateKey, getSessionWorkDayDate } from "@/lib/workDay";
 import "./ProjectDetailPage.css";
 
 type StatusFilter = "all" | "incomplete" | TaskStatus;
@@ -469,16 +470,18 @@ function formatDeadlineState(daysUntilDeadline: number | null) {
 }
 
 function formatProjectSessionTimeline(sessions: PomodoroProjectSession[]) {
-  const grouped = sessions.reduce<Record<string, PomodoroProjectSession[]>>((acc, session) => {
-    const date = new Date(session.completed_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-    acc[date] = acc[date] ?? [];
-    acc[date].push(session);
+  const grouped = sessions.reduce<Record<string, { date: Date; sessions: PomodoroProjectSession[] }>>((acc, session) => {
+    const workDay = getSessionWorkDayDate(session);
+    const key = dateKey(workDay);
+    acc[key] = acc[key] ?? { date: workDay, sessions: [] };
+    acc[key].sessions.push(session);
     return acc;
   }, {});
 
-  return Object.entries(grouped)
-    .map(([date, daySessions]) => ({
-      date,
-      sessions: daySessions.sort((a, b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime()),
+  return Object.values(grouped)
+    .sort((a, b) => b.date.getTime() - a.date.getTime())
+    .map((group) => ({
+      date: group.date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
+      sessions: group.sessions.sort((a, b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime()),
     }));
 }

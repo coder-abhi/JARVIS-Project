@@ -26,6 +26,7 @@ import {
   type PendingPomodoroCompletion,
   type PersistedPomodoroSession,
 } from "@/lib/pomodoroSession";
+import { addCalendarDays, dateKey, getSessionWorkDayDate, getWorkDayDate, isCurrentWorkDay, startOfCalendarDay, workDaysBetween } from "@/lib/workDay";
 import "./PomodoroPage.css";
 
 type TimerMode = "focus" | "short" | "long";
@@ -361,7 +362,7 @@ export default function PomodoroPage() {
     };
   }, []);
 
-  const completedToday = logs.filter((log) => isToday(new Date(log.completedAt))).length;
+  const completedToday = logs.filter((log) => isCurrentWorkDay(new Date(log.startAt ?? log.completedAt))).length;
   const totalFocusMinutes = logs.filter((log) => log.mode === "focus").reduce((sum, log) => sum + log.minutes, 0);
   const averageFocus = getAverage(logs.map((log) => log.focus).filter(isNumber));
   const completionPercent = Math.round(((activeSessionDuration - secondsLeft) / activeSessionDuration) * 100);
@@ -1364,11 +1365,11 @@ function maxIsoDate(current: string, next: string) {
 
 function calculateAutoPlan(logs: PomodoroLog[]) {
   const focusLogs = logs.filter((log) => log.mode === "focus");
-  const today = startOfDay(new Date());
-  const windowStart = addDays(today, -6);
+  const today = getWorkDayDate(new Date());
+  const windowStart = addCalendarDays(today, -6);
   const sourceLogs = focusLogs.filter((log) => {
-    const completedAt = startOfDay(new Date(log.completedAt));
-    return completedAt >= windowStart && completedAt <= today;
+    const workDay = getSessionWorkDayDate(log);
+    return workDay >= windowStart && workDay <= today;
   });
   const streak = getCurrentStreak(logs);
   const effectiveMinutes = sourceLogs.reduce((sum, log) => sum + log.minutes * (getEffectiveFocusPercent(log) / 100), 0);
@@ -1397,11 +1398,11 @@ function calculateAutoPlan(logs: PomodoroLog[]) {
 }
 
 function getFocusMinutesToday(logs: PomodoroLog[]) {
-  return logs.filter((log) => isToday(new Date(log.completedAt))).reduce((sum, log) => sum + log.minutes, 0);
+  return logs.filter((log) => isCurrentWorkDay(new Date(log.startAt ?? log.completedAt))).reduce((sum, log) => sum + log.minutes, 0);
 }
 
 function getFocusMinutesInLastDays(logs: PomodoroLog[], days: number) {
-  return logs.filter((log) => daysBetween(new Date(log.completedAt), new Date()) <= days - 1).reduce((sum, log) => sum + log.minutes, 0);
+  return logs.filter((log) => workDaysBetween(new Date(log.startAt ?? log.completedAt), new Date()) <= days - 1).reduce((sum, log) => sum + log.minutes, 0);
 }
 
 function buildSessionIntel(logs: PomodoroLog[]) {
@@ -1433,19 +1434,19 @@ function formatHour(hour: number) {
 
 function buildHeatmap(logs: PomodoroLog[]) {
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const today = startOfDay(new Date());
-  const yearStart = startOfDay(new Date(today.getFullYear(), 0, 1));
-  const yearEnd = startOfDay(new Date(today.getFullYear(), 11, 31));
-  const start = addDays(yearStart, -yearStart.getDay());
-  const end = addDays(yearEnd, 6 - yearEnd.getDay());
-  const weekCount = Math.floor(daysBetween(start, end) / 7) + 1;
+  const today = getWorkDayDate(new Date());
+  const yearStart = startOfCalendarDay(new Date(today.getFullYear(), 0, 1));
+  const yearEnd = startOfCalendarDay(new Date(today.getFullYear(), 11, 31));
+  const start = addCalendarDays(yearStart, -yearStart.getDay());
+  const end = addCalendarDays(yearEnd, 6 - yearEnd.getDay());
+  const weekCount = Math.floor(Math.abs(end.getTime() - start.getTime()) / 86_400_000 / 7) + 1;
   const counts = logs.reduce<Record<string, { chunks: number; level: number; minutes: number; sessions: number }>>((acc, log) => {
     if (log.mode !== "focus") return acc;
 
-    const completedAt = startOfDay(new Date(log.completedAt));
-    if (completedAt < yearStart || completedAt > yearEnd) return acc;
+    const workDay = getSessionWorkDayDate(log);
+    if (workDay < yearStart || workDay > yearEnd) return acc;
 
-    const key = dateKey(completedAt);
+    const key = dateKey(workDay);
     acc[key] = acc[key] ?? { chunks: 0, level: 0, minutes: 0, sessions: 0 };
     acc[key].minutes += log.minutes;
     acc[key].sessions += 1;
@@ -1457,14 +1458,14 @@ function buildHeatmap(logs: PomodoroLog[]) {
   const totalMinutes = Object.values(counts).reduce((sum, day) => sum + day.minutes, 0);
 
   const weeks = Array.from({ length: weekCount }, (_, weekIndex) => {
-    const weekStart = addDays(start, weekIndex * 7);
+    const weekStart = addCalendarDays(start, weekIndex * 7);
     const monthDate = weekIndex === 0 ? yearStart : weekStart;
 
     return {
-      isMonthStart: weekIndex === 0 || Array.from({ length: 7 }, (_, dayIndex) => addDays(weekStart, dayIndex)).some((date) => date.getDate() === 1),
+      isMonthStart: weekIndex === 0 || Array.from({ length: 7 }, (_, dayIndex) => addCalendarDays(weekStart, dayIndex)).some((date) => date.getDate() === 1),
       monthKey: `${monthDate.getFullYear()}-${monthDate.getMonth()}`,
       days: Array.from({ length: 7 }, (_, dayIndex) => {
-      const date = addDays(start, weekIndex * 7 + dayIndex);
+      const date = addCalendarDays(start, weekIndex * 7 + dayIndex);
       const isCurrentYear = date >= yearStart && date <= yearEnd;
       const day = isCurrentYear ? counts[dateKey(date)] ?? { chunks: 0, level: 0, minutes: 0, sessions: 0 } : { chunks: 0, level: 0, minutes: 0, sessions: 0 };
 
@@ -1724,26 +1725,26 @@ const FocusTrendSection = memo(function FocusTrendSection({
 function getVisibleRecentLogs(logs: PomodoroLog[], filter: RecentEntriesFilter) {
   const orderedLogs = [...logs].sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
 
-  if (filter === "today") return orderedLogs.filter((log) => isToday(new Date(log.completedAt)));
+  if (filter === "today") return orderedLogs.filter((log) => isCurrentWorkDay(new Date(log.startAt ?? log.completedAt)));
   if (filter === "last5") return orderedLogs.slice(0, 5);
   return orderedLogs.slice(0, 10);
 }
 
 function buildFocusTrend(logs: PomodoroLog[], days: FocusTrendRange): FocusTrend {
-  const today = startOfDay(new Date());
-  const start = addDays(today, -(days - 1));
+  const today = getWorkDayDate(new Date());
+  const start = addCalendarDays(today, -(days - 1));
   const minutesByDay = logs.reduce<Record<string, number>>((acc, log) => {
     if (log.mode !== "focus") return acc;
 
-    const completedAt = startOfDay(new Date(log.completedAt));
-    if (completedAt.getTime() < start.getTime() || completedAt.getTime() > today.getTime()) return acc;
+    const workDay = getSessionWorkDayDate(log);
+    if (workDay.getTime() < start.getTime() || workDay.getTime() > today.getTime()) return acc;
 
-    const key = dateKey(completedAt);
+    const key = dateKey(workDay);
     acc[key] = (acc[key] ?? 0) + log.minutes;
     return acc;
   }, {});
   const points = Array.from({ length: days }, (_, index) => {
-    const date = addDays(start, index);
+    const date = addCalendarDays(start, index);
     const minutes = minutesByDay[dateKey(date)] ?? 0;
 
     return {
@@ -2025,7 +2026,7 @@ function RangeInput({
 
 function LogMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md bg-white p-2">
+    <div className="pomodoro-log-metric rounded-md bg-white p-2">
       <p className="text-[11px] font-medium text-stone-500">{label}</p>
       <p className="mt-1 truncate text-sm font-semibold text-stone-950">{value}</p>
     </div>
@@ -2089,11 +2090,6 @@ function isSameDate(firstDate: Date, secondDate: Date) {
   return firstDate.getFullYear() === secondDate.getFullYear() && firstDate.getMonth() === secondDate.getMonth() && firstDate.getDate() === secondDate.getDate();
 }
 
-function isToday(date: Date) {
-  const now = new Date();
-  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
-}
-
 function titleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -2129,39 +2125,19 @@ function getSavedProjectSessionIds(log: PomodoroLog | undefined) {
   return getAttachedProjectIds(log).map((projectId) => getProjectSessionId(log.id, projectId));
 }
 
-function startOfDay(date: Date) {
-  const nextDate = new Date(date);
-  nextDate.setHours(0, 0, 0, 0);
-  return nextDate;
-}
-
-function addDays(date: Date, days: number) {
-  const nextDate = new Date(date);
-  nextDate.setDate(nextDate.getDate() + days);
-  return nextDate;
-}
-
-function daysBetween(a: Date, b: Date) {
-  return Math.floor(Math.abs(startOfDay(b).getTime() - startOfDay(a).getTime()) / 86_400_000);
-}
-
-function dateKey(date: Date) {
-  return startOfDay(date).toISOString().slice(0, 10);
-}
-
 function getCurrentStreak(logs: PomodoroLog[]) {
-  const activeDays = new Set(logs.filter((log) => log.mode === "focus").map((log) => dateKey(new Date(log.completedAt))));
-  let cursor = startOfDay(new Date());
+  const activeDays = new Set(logs.filter((log) => log.mode === "focus").map((log) => dateKey(getSessionWorkDayDate(log))));
+  let cursor = getWorkDayDate(new Date());
 
   if (!activeDays.has(dateKey(cursor))) {
-    cursor = addDays(cursor, -1);
+    cursor = addCalendarDays(cursor, -1);
   }
 
   let streak = 0;
 
   while (activeDays.has(dateKey(cursor))) {
     streak += 1;
-    cursor = addDays(cursor, -1);
+    cursor = addCalendarDays(cursor, -1);
   }
 
   return streak;

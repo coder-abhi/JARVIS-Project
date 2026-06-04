@@ -97,13 +97,26 @@
 }
 
 .pomodoro-log-row.is-missing {
-  border-color: rgba(245, 158, 11, 0.48);
-  background: rgba(120, 53, 15, 0.28);
+  border-color: rgba(245, 158, 11, 0.42);
+  background: linear-gradient(135deg, rgba(41, 20, 4, 0.96), rgba(10, 10, 10, 0.94));
 }
 
 .pomodoro-log-row.is-missing:hover {
-  border-color: rgba(245, 158, 11, 0.72);
-  background: rgba(120, 53, 15, 0.36);
+  border-color: rgba(245, 158, 11, 0.68);
+  background: linear-gradient(135deg, rgba(57, 27, 5, 0.98), rgba(12, 12, 12, 0.95));
+}
+
+.pomodoro-log-row.is-missing .pomodoro-log-metric {
+  border: 1px solid rgba(245, 158, 11, 0.18);
+  background: rgba(5, 5, 5, 0.74);
+}
+
+.pomodoro-log-row.is-missing .pomodoro-log-metric p:first-child {
+  color: rgba(214, 211, 209, 0.72);
+}
+
+.pomodoro-log-row.is-missing .pomodoro-log-metric p:last-child {
+  color: rgb(253, 230, 138);
 }
 
 .session-range-input {
