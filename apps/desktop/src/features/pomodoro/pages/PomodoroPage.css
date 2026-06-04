@@ -78,12 +78,13 @@
 .pomodoro-log-row {
   display: grid;
   width: 100%;
-  grid-template-columns: 1.2fr 1.6fr 1fr;
-  gap: 1rem;
+  grid-template-columns: minmax(8rem, 0.9fr) minmax(0, 1.4fr) minmax(10rem, 14rem);
+  gap: 0.85rem;
   align-items: center;
   border: 1px solid var(--ops-border);
   background: rgba(10, 10, 10, 0.9);
-  padding: 1rem;
+  min-height: 5.75rem;
+  padding: 0.85rem 1rem;
   text-align: left;
   transition:
     border-color 160ms ease,
@@ -96,27 +97,27 @@
   background: rgba(34, 197, 94, 0.08);
 }
 
-.pomodoro-log-row.is-missing {
-  border-color: rgba(245, 158, 11, 0.42);
-  background: linear-gradient(135deg, rgba(41, 20, 4, 0.96), rgba(10, 10, 10, 0.94));
+.pomodoro-log-projects {
+  min-width: 0;
 }
 
-.pomodoro-log-row.is-missing:hover {
-  border-color: rgba(245, 158, 11, 0.68);
-  background: linear-gradient(135deg, rgba(57, 27, 5, 0.98), rgba(12, 12, 12, 0.95));
+.pomodoro-log-projects p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.pomodoro-log-row.is-missing .pomodoro-log-metric {
-  border: 1px solid rgba(245, 158, 11, 0.18);
-  background: rgba(5, 5, 5, 0.74);
-}
-
-.pomodoro-log-row.is-missing .pomodoro-log-metric p:first-child {
-  color: rgba(214, 211, 209, 0.72);
-}
-
-.pomodoro-log-row.is-missing .pomodoro-log-metric p:last-child {
-  color: rgb(253, 230, 138);
+.pomodoro-log-description {
+  display: -webkit-box;
+  min-width: 0;
+  max-height: 2.9rem;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: var(--pomodoro-log-description-size, 0.86rem);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .session-range-input {
@@ -171,5 +172,9 @@
   .pomodoro-live-session-grid,
   .pomodoro-log-row {
     grid-template-columns: 1fr;
+  }
+
+  .pomodoro-log-description {
+    max-height: 2.7rem;
   }
 }

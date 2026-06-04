@@ -50,7 +50,6 @@ type PomodoroLog = {
   taskId?: string;
   taskTitle: string;
   done?: string;
-  energy?: number | null;
   focus?: number | null;
   investedTaskId?: string;
   investedMinutes?: number;
@@ -83,7 +82,6 @@ type SessionDraft = {
   projectId: string;
   taskId: string;
   done: string;
-  energy: number;
   focus: number;
 };
 
@@ -175,7 +173,7 @@ export default function PomodoroPage() {
     }
 
     try {
-      setLogs(JSON.parse(savedLogs) as PomodoroLog[]);
+      setLogs(normalizeStoredPomodoroLogs(JSON.parse(savedLogs)));
     } catch {
       setLogs([]);
     } finally {
@@ -185,7 +183,7 @@ export default function PomodoroPage() {
 
   useEffect(() => {
     if (!hasLoadedLogs) return;
-    window.localStorage.setItem(getScopedStorageKey(storageKey), JSON.stringify(logs));
+    window.localStorage.setItem(getScopedStorageKey(storageKey), JSON.stringify(normalizeStoredPomodoroLogs(logs)));
   }, [hasLoadedLogs, logs]);
 
   useEffect(() => {
@@ -560,7 +558,6 @@ export default function PomodoroPage() {
       projectId: log.projectId ?? "",
       taskId: log.taskId ?? "",
       done: log.done ?? "",
-      energy: log.energy ?? 7,
       focus: log.focus ?? 80,
     });
   }, []);
@@ -590,7 +587,7 @@ export default function PomodoroPage() {
   async function saveDraftWithoutDetails() {
     if (!draft) return;
 
-    const nextLog = draftToLog({ ...draft, done: "", energy: 0, focus: 0 });
+    const nextLog = draftToLog({ ...draft, done: "", focus: 0 });
     try {
       nextLog.savedProjectSessionIds = await saveProjectTimeLogs(undefined, nextLog);
       setLogs((current) => [nextLog, ...current].slice(0, 80));
@@ -642,7 +639,6 @@ export default function PomodoroPage() {
       taskId: nextDraft.taskId || undefined,
       taskTitle: continuousProject?.name ?? "No Continuous Project",
       done: nextDraft.done.trim() || undefined,
-      energy: nextDraft.energy || null,
       focus: nextDraft.focus || null,
       isManual: nextDraft.source === "manual",
     };
@@ -1030,8 +1026,7 @@ function SessionModal({
           />
         </label>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <RangeInput label="Energy" max={10} min={1} suffix="/10" value={draft.energy} onChange={(value) => onChange({ ...draft, energy: value })} />
+        <div className="mt-5">
           <RangeInput label="Focus" max={100} min={0} step={5} suffix="%" value={draft.focus} onChange={(value) => onChange({ ...draft, focus: value })} />
         </div>
 
@@ -1271,7 +1266,6 @@ function createDraft(source: SessionDraft["source"], seed: Pick<SessionDraft, "m
     source,
     ...seed,
     done,
-    energy: 7,
     focus: 80,
   };
 }
@@ -1294,7 +1288,6 @@ function projectSessionsToLogs(sessions: PomodoroProjectSession[], projects: Pro
       projectName: "No Fixed Project",
       taskTitle: "No Continuous Project",
       done: session.description?.trim() || undefined,
-      energy: null,
       focus: null,
       savedProjectSessionIds: [],
     };
@@ -1633,6 +1626,7 @@ const RecentWorkEntries = memo(function RecentWorkEntries({
 
         {visibleLogs.map((log) => {
           const missingDetails = isMissingDetails(log);
+          const description = log.done || "Missing Log Details. Click To Add What Got Done.";
 
           return (
             <button
@@ -1641,18 +1635,19 @@ const RecentWorkEntries = memo(function RecentWorkEntries({
               onClick={() => onEditSession(log)}
               className={`pomodoro-log-row ${missingDetails ? "is-missing" : ""}`}
             >
-              <div>
+              <div className="pomodoro-log-projects">
                 <p className="text-sm font-semibold text-stone-950">{log.taskTitle}</p>
                 <p className="mt-1 text-xs font-medium text-teal-700">{log.projectName}</p>
-                <p className="mt-2 text-xs text-stone-500">
-                  {new Date(log.completedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })} | {log.minutes} Min
-                </p>
+                <p className="mt-2 text-xs text-stone-500">{new Date(log.completedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</p>
               </div>
-              <p className={`text-sm leading-6 ${missingDetails ? "font-medium text-amber-200" : "text-stone-700"}`}>
-                {log.done || "Missing Log Details. Click To Add What Got Done."}
+              <p
+                className={`pomodoro-log-description ${missingDetails ? "font-medium text-amber-200" : "text-stone-700"}`}
+                style={{ "--pomodoro-log-description-size": `${getDescriptionFontSize(description)}rem` } as CSSProperties}
+              >
+                {description}
               </p>
               <div className="grid grid-cols-2 gap-2 text-center">
-                <LogMetric label="Energy" value={isNumber(log.energy) ? `${log.energy}/10` : "Missing"} />
+                <LogMetric label="Minutes" value={`${log.minutes} Min`} />
                 <LogMetric label="Focus" value={isNumber(log.focus) ? `${log.focus}%` : "Missing"} />
               </div>
             </button>
@@ -2051,7 +2046,26 @@ function heatClass(level: number) {
 }
 
 function isMissingDetails(log: PomodoroLog) {
-  return !log.done || !isNumber(log.energy) || !isNumber(log.focus);
+  return !log.done || !isNumber(log.focus);
+}
+
+function getDescriptionFontSize(description: string) {
+  if (description.length > 180) return 0.66;
+  if (description.length > 120) return 0.72;
+  if (description.length > 80) return 0.78;
+  return 0.86;
+}
+
+function normalizeStoredPomodoroLogs(value: unknown): PomodoroLog[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((log): log is PomodoroLog => Boolean(log && typeof log === "object" && "id" in log))
+    .map((log) => {
+      const nextLog = { ...(log as PomodoroLog & { energy?: unknown }) };
+      delete nextLog.energy;
+      return nextLog;
+    });
 }
 
 function formatSeconds(totalSeconds: number) {

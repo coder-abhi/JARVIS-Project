@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 import { getScopedStorageKey } from "@/lib/auth";
+import "./PomodoroPage.css";
 
 type TimerMode = "focus" | "short" | "long";
 
@@ -16,7 +17,6 @@ type PomodoroLog = {
   projectName: string;
   taskTitle: string;
   done?: string;
-  energy?: number | null;
   focus?: number | null;
 };
 
@@ -30,7 +30,7 @@ export default function PomodoroHistoryPage() {
     if (!savedLogs) return;
 
     try {
-      setLogs(JSON.parse(savedLogs) as PomodoroLog[]);
+      setLogs(normalizeStoredPomodoroLogs(JSON.parse(savedLogs)));
     } catch {
       setLogs([]);
     }
@@ -64,27 +64,27 @@ export default function PomodoroHistoryPage() {
             ) : null}
 
             {logs.map((log) => {
-              const missingDetails = !log.done || !isNumber(log.energy) || !isNumber(log.focus);
+              const missingDetails = !log.done || !isNumber(log.focus);
+              const description = log.done || "Missing Log Details. Click To Add What Got Done.";
 
               return (
                 <article
                   key={log.id}
-                  className={`grid gap-4 rounded-lg border p-4 md:grid-cols-[1.1fr_1.5fr_1fr] md:items-center ${
-                    missingDetails ? "border-orange-200 bg-orange-50/80" : "border-stone-200 bg-stone-50/70"
-                  }`}
+                  className={`pomodoro-log-row ${missingDetails ? "is-missing" : ""}`}
                 >
-                  <div>
+                  <div className="pomodoro-log-projects">
                     <p className="text-sm font-semibold text-stone-950">{log.taskTitle}</p>
                     <p className="mt-1 text-xs font-medium text-teal-700">{log.projectName}</p>
-                    <p className="mt-2 text-xs text-stone-500">
-                      {new Date(log.completedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })} | {log.minutes} min
-                    </p>
+                    <p className="mt-2 text-xs text-stone-500">{new Date(log.completedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</p>
                   </div>
-                  <p className={`text-sm leading-6 ${missingDetails ? "font-medium text-orange-800" : "text-stone-700"}`}>
-                    {log.done || "Missing log details"}
+                  <p
+                    className={`pomodoro-log-description ${missingDetails ? "font-medium text-amber-200" : "text-stone-700"}`}
+                    style={{ "--pomodoro-log-description-size": `${getDescriptionFontSize(description)}rem` } as CSSProperties}
+                  >
+                    {description}
                   </p>
                   <div className="grid grid-cols-2 gap-2 text-center">
-                    <LogMetric label="Energy" value={isNumber(log.energy) ? `${log.energy}/10` : "Missing"} />
+                    <LogMetric label="Minutes" value={`${log.minutes} Min`} />
                     <LogMetric label="Focus" value={isNumber(log.focus) ? `${log.focus}%` : "Missing"} />
                   </div>
                 </article>
@@ -99,7 +99,7 @@ export default function PomodoroHistoryPage() {
 
 function LogMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md bg-white p-2">
+    <div className="pomodoro-log-metric rounded-md bg-white p-2">
       <p className="text-[11px] font-medium text-stone-500">{label}</p>
       <p className="mt-1 truncate text-sm font-semibold text-stone-950">{value}</p>
     </div>
@@ -108,4 +108,23 @@ function LogMetric({ label, value }: { label: string; value: string }) {
 
 function isNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function getDescriptionFontSize(description: string) {
+  if (description.length > 180) return 0.66;
+  if (description.length > 120) return 0.72;
+  if (description.length > 80) return 0.78;
+  return 0.86;
+}
+
+function normalizeStoredPomodoroLogs(value: unknown): PomodoroLog[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((log): log is PomodoroLog => Boolean(log && typeof log === "object" && "id" in log))
+    .map((log) => {
+      const nextLog = { ...(log as PomodoroLog & { energy?: unknown }) };
+      delete nextLog.energy;
+      return nextLog;
+    });
 }

@@ -91,7 +91,6 @@ export default function DashboardPage() {
   const completion = completionBasis === 0 ? 0 : Math.min(Math.round((stats.completedHours / completionBasis) * 100), 100);
   const focusScore = Math.min(99, Math.round((stats.spentMinutes / Math.max(stats.spentMinutes + stats.fixedRemainingMinutes, 1)) * 100));
   const consistency = Math.min(99, Math.round((stats.completedTasks / Math.max(stats.totalTasks, 1)) * 100));
-  const energy = stats.overdueTasks > 0 ? 62 : stats.activeTasks > 0 ? 81 : 74;
   const streak = Math.max(0, Math.min(99, stats.completedTasks + Math.round(stats.spentMinutes / 120)));
 
   const activeMissions = [...projects].sort((a, b) => getMissionRisk(b) - getMissionRisk(a));
@@ -155,7 +154,6 @@ export default function DashboardPage() {
             <SignalMetric label="Momentum" value={`${completion}%`} active={completion >= 50} />
             <SignalMetric label="Focus Score" value={`${focusScore}%`} active={focusScore >= 40} />
             <SignalMetric label="Consistency" value={`${consistency}%`} active={consistency >= 50} />
-            <SignalMetric label="Energy" value={`${energy}%`} active={energy >= 70} />
             <SignalMetric label="Current Streak" value={`${streak}`} active={streak > 0} />
           </div>
         </div>
