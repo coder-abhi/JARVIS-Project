@@ -1,13 +1,15 @@
 "use client";
 
-import { type CSSProperties, FormEvent, Fragment, memo, useCallback, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, FormEvent, Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   deleteProjectPomodoroSession,
+  getProjectPomodoroSessions,
   getProjectTasks,
   getProjects,
   matchPomodoroAssignment,
   saveProjectPomodoroSession,
+  type PomodoroProjectSession,
   type Project,
   type Task,
 } from "@/lib/api";
@@ -134,6 +136,7 @@ export default function PomodoroPage() {
   const [sessionDurationSeconds, setSessionDurationSeconds] = useState<number | null>(null);
   const [logs, setLogs] = useState<PomodoroLog[]>([]);
   const [hasLoadedLogs, setHasLoadedLogs] = useState(false);
+  const [hasLoadedPersistedSessions, setHasLoadedPersistedSessions] = useState(false);
   const [hasSyncedProjectSessions, setHasSyncedProjectSessions] = useState(false);
   const [recentEntriesFilter, setRecentEntriesFilter] = useState<RecentEntriesFilter>("today");
   const [focusTrendRange, setFocusTrendRange] = useState<FocusTrendRange>(7);
@@ -183,6 +186,31 @@ export default function PomodoroPage() {
     if (!hasLoadedLogs) return;
     window.localStorage.setItem(getScopedStorageKey(storageKey), JSON.stringify(logs));
   }, [hasLoadedLogs, logs]);
+
+  useEffect(() => {
+    if (isLoading || hasLoadedPersistedSessions || projects.length === 0) return;
+
+    let isCancelled = false;
+
+    async function loadPersistedProjectSessions() {
+      const sessionGroups = await Promise.all(projects.map((project) => getProjectPomodoroSessions(project.id)));
+      if (isCancelled) return;
+
+      const persistedLogs = projectSessionsToLogs(sessionGroups.flat(), projects);
+      setLogs((current) => mergePomodoroLogs(current, persistedLogs));
+      setHasLoadedPersistedSessions(true);
+    }
+
+    loadPersistedProjectSessions().catch((err: Error) => {
+      if (isCancelled) return;
+      setError(err.message);
+      setHasLoadedPersistedSessions(true);
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [hasLoadedPersistedSessions, isLoading, projects]);
 
   useEffect(() => {
     if (!hasLoadedLogs || isLoading || hasSyncedProjectSessions) return;
@@ -1061,11 +1089,103 @@ function createDraft(source: SessionDraft["source"], seed: Pick<SessionDraft, "m
   };
 }
 
+function projectSessionsToLogs(sessions: PomodoroProjectSession[], projects: Project[]): PomodoroLog[] {
+  const projectById = new Map(projects.map((project) => [project.id, project]));
+  const logsById = new Map<string, PomodoroLog>();
+
+  sessions.forEach((session) => {
+    const project = projectById.get(session.project_id);
+    const logId = getLogIdFromProjectSession(session);
+    const existingLog = logsById.get(logId);
+    const nextLog: PomodoroLog = existingLog ?? {
+      id: logId,
+      completedAt: session.completed_at,
+      startAt: session.started_at,
+      endAt: session.completed_at,
+      minutes: session.minutes,
+      mode: normalizeTimerMode(session.mode),
+      projectName: "No Fixed Project",
+      taskTitle: "No Continuous Project",
+      done: session.description?.trim() || undefined,
+      energy: null,
+      focus: null,
+      savedProjectSessionIds: [],
+    };
+
+    nextLog.completedAt = maxIsoDate(nextLog.completedAt, session.completed_at);
+    nextLog.startAt = minIsoDate(nextLog.startAt ?? session.started_at, session.started_at);
+    nextLog.endAt = maxIsoDate(nextLog.endAt ?? session.completed_at, session.completed_at);
+    nextLog.minutes = Math.max(nextLog.minutes, session.minutes);
+    nextLog.mode = normalizeTimerMode(session.mode);
+    nextLog.done = nextLog.done ?? (session.description?.trim() || undefined);
+    nextLog.savedProjectSessionIds = Array.from(new Set([...(nextLog.savedProjectSessionIds ?? []), session.id]));
+
+    if (project?.type === "continuous") {
+      nextLog.taskId = session.project_id;
+      nextLog.taskTitle = project.name;
+    } else {
+      nextLog.projectId = session.project_id;
+      nextLog.projectName = project?.name ?? "Unknown Project";
+    }
+
+    logsById.set(logId, nextLog);
+  });
+
+  return Array.from(logsById.values()).sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
+}
+
+function mergePomodoroLogs(localLogs: PomodoroLog[], persistedLogs: PomodoroLog[]) {
+  const mergedById = new Map<string, PomodoroLog>();
+
+  persistedLogs.forEach((log) => mergedById.set(log.id, log));
+  localLogs.forEach((log) => {
+    const persistedLog = mergedById.get(log.id);
+    mergedById.set(log.id, persistedLog ? mergePomodoroLog(persistedLog, log) : log);
+  });
+
+  return Array.from(mergedById.values()).sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()).slice(0, 160);
+}
+
+function mergePomodoroLog(persistedLog: PomodoroLog, localLog: PomodoroLog): PomodoroLog {
+  return {
+    ...persistedLog,
+    ...localLog,
+    savedProjectSessionIds: Array.from(new Set([...(persistedLog.savedProjectSessionIds ?? []), ...(localLog.savedProjectSessionIds ?? [])])),
+    projectId: localLog.projectId ?? persistedLog.projectId,
+    projectName: localLog.projectName === "No Fixed Project" ? persistedLog.projectName : localLog.projectName,
+    taskId: localLog.taskId ?? persistedLog.taskId,
+    taskTitle: localLog.taskTitle === "No Continuous Project" ? persistedLog.taskTitle : localLog.taskTitle,
+  };
+}
+
+function getLogIdFromProjectSession(session: PomodoroProjectSession) {
+  const suffix = `:${session.project_id}`;
+  return session.id.endsWith(suffix) ? session.id.slice(0, -suffix.length) : session.id;
+}
+
+function normalizeTimerMode(mode: string): TimerMode {
+  if (mode === "short" || mode === "long") return mode;
+  return "focus";
+}
+
+function minIsoDate(current: string, next: string) {
+  return new Date(next).getTime() < new Date(current).getTime() ? next : current;
+}
+
+function maxIsoDate(current: string, next: string) {
+  return new Date(next).getTime() > new Date(current).getTime() ? next : current;
+}
+
 function calculateAutoPlan(logs: PomodoroLog[]) {
   const focusLogs = logs.filter((log) => log.mode === "focus");
-  const sourceLogs = focusLogs.filter((log) => daysBetween(new Date(log.completedAt), new Date()) <= 6);
+  const today = startOfDay(new Date());
+  const windowStart = addDays(today, -6);
+  const sourceLogs = focusLogs.filter((log) => {
+    const completedAt = startOfDay(new Date(log.completedAt));
+    return completedAt >= windowStart && completedAt <= today;
+  });
   const streak = getCurrentStreak(logs);
-  const effectiveMinutes = sourceLogs.reduce((sum, log) => sum + log.minutes * ((log.focus ?? 0) / 100), 0);
+  const effectiveMinutes = sourceLogs.reduce((sum, log) => sum + log.minutes * (getEffectiveFocusPercent(log) / 100), 0);
   const momentum = clamp(Math.round((effectiveMinutes / 1200) * 100), 0, 100);
   const focusMinutes = clamp(Math.round((15 + momentum * 0.35) / 5) * 5, 15, 50);
   const breakMinutes = focusMinutes >= 45 ? 10 : focusMinutes >= 30 ? 7 : 5;
@@ -1126,34 +1246,46 @@ function formatHour(hour: number) {
 }
 
 function buildHeatmap(logs: PomodoroLog[]) {
-  const weekCount = 52;
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const today = startOfDay(new Date());
-  const end = addDays(today, 6 - today.getDay());
-  const start = addDays(end, -(weekCount * 7 - 1));
-  const counts = logs.reduce<Record<string, { count: number; minutes: number }>>((acc, log) => {
+  const yearStart = startOfDay(new Date(today.getFullYear(), 0, 1));
+  const yearEnd = startOfDay(new Date(today.getFullYear(), 11, 31));
+  const start = addDays(yearStart, -yearStart.getDay());
+  const end = addDays(yearEnd, 6 - yearEnd.getDay());
+  const weekCount = Math.floor(daysBetween(start, end) / 7) + 1;
+  const counts = logs.reduce<Record<string, { chunks: number; level: number; minutes: number; sessions: number }>>((acc, log) => {
     if (log.mode !== "focus") return acc;
 
-    const key = dateKey(new Date(log.completedAt));
-    acc[key] = acc[key] ?? { count: 0, minutes: 0 };
+    const completedAt = startOfDay(new Date(log.completedAt));
+    if (completedAt < yearStart || completedAt > yearEnd) return acc;
+
+    const key = dateKey(completedAt);
+    acc[key] = acc[key] ?? { chunks: 0, level: 0, minutes: 0, sessions: 0 };
     acc[key].minutes += log.minutes;
-    acc[key].count = Math.floor(acc[key].minutes / 25);
+    acc[key].sessions += 1;
+    acc[key].chunks = getFocusChunks(acc[key].minutes);
+    acc[key].level = Math.min(acc[key].chunks, 4);
     return acc;
   }, {});
+  const activeDays = Object.values(counts).filter((day) => day.minutes > 0).length;
+  const totalMinutes = Object.values(counts).reduce((sum, day) => sum + day.minutes, 0);
 
   const weeks = Array.from({ length: weekCount }, (_, weekIndex) => {
     const weekStart = addDays(start, weekIndex * 7);
+    const monthDate = weekIndex === 0 ? yearStart : weekStart;
 
     return {
       isMonthStart: weekIndex === 0 || Array.from({ length: 7 }, (_, dayIndex) => addDays(weekStart, dayIndex)).some((date) => date.getDate() === 1),
-      monthKey: `${weekStart.getFullYear()}-${weekStart.getMonth()}`,
+      monthKey: `${monthDate.getFullYear()}-${monthDate.getMonth()}`,
       days: Array.from({ length: 7 }, (_, dayIndex) => {
       const date = addDays(start, weekIndex * 7 + dayIndex);
-      const day = counts[dateKey(date)] ?? { count: 0, minutes: 0 };
+      const isCurrentYear = date >= yearStart && date <= yearEnd;
+      const day = isCurrentYear ? counts[dateKey(date)] ?? { chunks: 0, level: 0, minutes: 0, sessions: 0 } : { chunks: 0, level: 0, minutes: 0, sessions: 0 };
 
       return {
         ...day,
         iso: date.toISOString(),
+        isCurrentYear,
         label: date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
       };
     }),
@@ -1181,10 +1313,18 @@ function buildHeatmap(logs: PomodoroLog[]) {
     };
   });
 
-  return { monthSpans: shiftedMonthSpans, weekdays, weeks };
+  return { activeDays, monthSpans: shiftedMonthSpans, totalMinutes, weekdays, weeks };
 }
 
 const FocusCalendar = memo(function FocusCalendar({ error, heatmap, streak }: { error: string | null; heatmap: ReturnType<typeof buildHeatmap>; streak: number }) {
+  const calendarScrollerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const scroller = calendarScrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollLeft = 0;
+  }, [heatmap]);
+
   return (
     <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
@@ -1193,16 +1333,15 @@ const FocusCalendar = memo(function FocusCalendar({ error, heatmap, streak }: { 
           <h2 className="mt-2 text-2xl font-semibold text-stone-950">Focus Calendar</h2>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="w-fit rounded-full bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">{streak} Day Streak</span>
-          <span className="w-fit rounded-full bg-teal-50 px-3 py-1 text-sm font-semibold text-teal-700">Last 52 Weeks | 25 Min Blocks</span>
+          <span className="w-fit rounded-full bg-transparent px-0 py-1 text-sm font-semibold text-stone-950">🔥 {streak}</span>
         </div>
       </div>
 
       {error ? <p className="mt-5 rounded-lg bg-red-50 p-4 text-sm font-medium text-red-700">{error}</p> : null}
 
-      <div className="mt-6 overflow-x-auto">
-        <div className="min-w-[980px]">
-          <div className="mb-1 grid gap-1" style={{ gridTemplateColumns: `3rem repeat(${heatmap.weeks.length}, minmax(0, 1fr))` }}>
+      <div ref={calendarScrollerRef} className="mt-6 overflow-x-auto">
+        <div className="min-w-[46rem]">
+          <div className="mb-1 grid gap-1" style={{ gridTemplateColumns: `2.5rem repeat(${heatmap.weeks.length}, minmax(0, 1fr))` }}>
             <div />
             {heatmap.monthSpans.map((month) => (
               <div
@@ -1215,7 +1354,7 @@ const FocusCalendar = memo(function FocusCalendar({ error, heatmap, streak }: { 
             ))}
           </div>
 
-          <div className="grid gap-1" style={{ gridTemplateColumns: `3rem repeat(${heatmap.weeks.length}, minmax(0, 1fr))` }}>
+          <div className="grid gap-1" style={{ gridTemplateColumns: `2.5rem repeat(${heatmap.weeks.length}, minmax(0, 1fr))` }}>
             {heatmap.weekdays.map((weekday, dayIndex) => (
               <Fragment key={weekday}>
                 <div className="flex items-center text-xs font-medium text-stone-400">{weekday}</div>
@@ -1223,10 +1362,10 @@ const FocusCalendar = memo(function FocusCalendar({ error, heatmap, streak }: { 
                   const day = week.days[dayIndex];
 
                   return (
-                    <div key={day.iso} className={`relative ${week.isMonthStart && weekIndex > 0 ? "before:absolute before:-left-0.5 before:inset-y-0 before:w-px before:bg-stone-400" : ""}`}>
+                    <div key={day.iso} className="relative">
                       <div
-                        title={`${day.count} Sessions Logged On ${day.label}`}
-                        className={`aspect-square w-full rounded-sm border border-white ${heatClass(day.count)}`}
+                        title={`${day.chunks} focus chunk${day.chunks === 1 ? "" : "s"} (${day.minutes} min) across ${day.sessions} session${day.sessions === 1 ? "" : "s"} on ${day.label}`}
+                        className={`aspect-square w-full rounded-sm ${day.isCurrentYear ? heatClass(day.level) : "bg-transparent"}`}
                       />
                     </div>
                   );
@@ -1709,12 +1848,21 @@ function LogMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function heatClass(count: number) {
-  if (count >= 4) return "bg-teal-700";
-  if (count === 3) return "bg-teal-500";
-  if (count === 2) return "bg-teal-300";
-  if (count === 1) return "bg-teal-100";
-  return "bg-stone-100";
+function getFocusChunks(minutes: number) {
+  return Math.floor(minutes / 25);
+}
+
+function getEffectiveFocusPercent(log: PomodoroLog) {
+  if (typeof log.focus === "number" && Number.isFinite(log.focus)) return clamp(log.focus, 0, 100);
+  return 100;
+}
+
+function heatClass(level: number) {
+  if (level >= 4) return "bg-[#39d353]";
+  if (level === 3) return "bg-[#26a641]";
+  if (level === 2) return "bg-[#006d32]";
+  if (level === 1) return "bg-[#0e4429]";
+  return "bg-[#161b22]";
 }
 
 function isMissingDetails(log: PomodoroLog) {
@@ -1793,8 +1941,13 @@ function dateKey(date: Date) {
 }
 
 function getCurrentStreak(logs: PomodoroLog[]) {
-  const activeDays = new Set(logs.map((log) => dateKey(new Date(log.completedAt))));
+  const activeDays = new Set(logs.filter((log) => log.mode === "focus").map((log) => dateKey(new Date(log.completedAt))));
   let cursor = startOfDay(new Date());
+
+  if (!activeDays.has(dateKey(cursor))) {
+    cursor = addDays(cursor, -1);
+  }
+
   let streak = 0;
 
   while (activeDays.has(dateKey(cursor))) {
