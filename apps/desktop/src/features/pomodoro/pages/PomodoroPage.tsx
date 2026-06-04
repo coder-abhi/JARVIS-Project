@@ -456,7 +456,6 @@ export default function PomodoroPage() {
     }
 
     setDraft(nextDraft);
-    setSessionNote("");
   }
 
   async function completePendingSession(pendingCompletion: PendingPomodoroCompletion) {
@@ -466,7 +465,7 @@ export default function PomodoroPage() {
     setSessionStartedAt(null);
     setSessionEndsAt(null);
     setSessionDurationSeconds(null);
-    setSessionNote("");
+    setSessionNote(pendingCompletion.note);
     setFixedProjectId(pendingCompletion.fixedProjectId);
     setContinuousProjectId(pendingCompletion.continuousProjectId);
 
@@ -849,9 +848,9 @@ export default function PomodoroPage() {
 
       <section className="grid gap-5">
         {sessionState !== "idle" ? (
-          <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-            <div className="grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
-              <div className="grid gap-4">
+          <div className="pomodoro-live-session">
+            <div className="pomodoro-live-session-grid">
+              <div className="pomodoro-live-projects">
                 <ProjectSelect
                   label="Fixed Project"
                   projects={fixedProjects}
@@ -865,14 +864,14 @@ export default function PomodoroPage() {
                   onChange={setContinuousProjectId}
                 />
               </div>
-              <label className="block text-sm font-medium text-stone-700">
+              <label className="pomodoro-field">
                 Session Note
                 <textarea
                   value={sessionNote}
                   onChange={(event) => setSessionNote(event.target.value)}
                   rows={5}
                   placeholder="Drafted API route, reviewed task card, fixed timer state..."
-                  className="mt-2 w-full resize-none rounded-md border border-stone-300 bg-white px-4 py-3 outline-none ring-teal-600/15 transition focus:border-teal-600 focus:ring-4"
+                  className="pomodoro-session-note"
                 />
               </label>
             </div>
@@ -1589,7 +1588,7 @@ const RecentWorkEntries = memo(function RecentWorkEntries({
   visibleLogs: PomodoroLog[];
 }) {
   return (
-    <aside className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+    <aside className="pomodoro-recent-panel">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-teal-700">Recent Work</p>
@@ -1639,9 +1638,7 @@ const RecentWorkEntries = memo(function RecentWorkEntries({
               key={log.id}
               type="button"
               onClick={() => onEditSession(log)}
-              className={`grid w-full gap-4 rounded-lg border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-sm md:grid-cols-[1.2fr_1.6fr_1fr] md:items-center ${
-                missingDetails ? "border-orange-200 bg-orange-50/80" : "border-stone-200 bg-stone-50/70 hover:bg-stone-50"
-              }`}
+              className={`pomodoro-log-row ${missingDetails ? "is-missing" : ""}`}
             >
               <div>
                 <p className="text-sm font-semibold text-stone-950">{log.taskTitle}</p>
@@ -1650,7 +1647,7 @@ const RecentWorkEntries = memo(function RecentWorkEntries({
                   {new Date(log.completedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })} | {log.minutes} Min
                 </p>
               </div>
-              <p className={`text-sm leading-6 ${missingDetails ? "font-medium text-orange-800" : "text-stone-700"}`}>
+              <p className={`text-sm leading-6 ${missingDetails ? "font-medium text-amber-200" : "text-stone-700"}`}>
                 {log.done || "Missing Log Details. Click To Add What Got Done."}
               </p>
               <div className="grid grid-cols-2 gap-2 text-center">
@@ -1915,12 +1912,12 @@ function ProjectSelect({
   value: string;
 }) {
   return (
-    <label className="block text-sm font-medium text-stone-700">
+    <label className="pomodoro-field">
       {label}
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-2 w-full rounded-md border border-stone-300 bg-white px-4 py-3 outline-none ring-teal-600/15 transition focus:border-teal-600 focus:ring-4"
+        className="pomodoro-project-select"
       >
         <option value="">None</option>
         {projects.map((project) => (
