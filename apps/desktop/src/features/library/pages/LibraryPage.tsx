@@ -190,6 +190,16 @@ export default function LibraryPage() {
   );
   const readingTrend = useMemo(() => buildReadingTrend(summary, readingTrendRange), [summary, readingTrendRange]);
 
+  useEffect(() => {
+    if (!selectedProgressBook || progressDraft.startPage) return;
+
+    setProgressDraft((current) =>
+      current.bookId === selectedProgressBook.id && !current.startPage
+        ? { ...current, startPage: String(getNextStartPage(selectedProgressBook)) }
+        : current,
+    );
+  }, [selectedProgressBook, progressDraft.startPage]);
+
   async function handleCreateBook(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft.title.trim() || isSaving) return;
@@ -272,7 +282,7 @@ export default function LibraryPage() {
     const book = fallbackBook ?? selectedProgressBook;
     if (!book || isLogging) return;
 
-    const startPage = Number(progressDraft.startPage || getNextStartPage(book));
+    const startPage = Number(progressDraft.startPage);
     const endPage = Number(progressDraft.endPage);
     if (!startPage || !endPage || startPage < 1 || endPage < startPage) {
       setError("Choose a valid start and end page.");
@@ -447,23 +457,23 @@ export default function LibraryPage() {
             trend={readingTrend}
           />
 
-          <section className="mt-5 rounded-lg border border-stone-200 bg-white/80 p-5 shadow-sm">
-            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <section className="reading-log-panel mt-5">
+            <div className="reading-log-head">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-wide text-teal-700">Reading log</p>
-                <h2 className="mt-1 text-2xl font-semibold text-stone-950">Log progress</h2>
+                <p className="ops-kicker">Reading log</p>
+                <h2>Log progress</h2>
               </div>
               {selectedProgressBook ? (
-                <p className="text-sm text-stone-600">
-                  <span className="font-semibold text-stone-950">{selectedProgressBook.title}</span>
+                <p className="reading-log-status">
+                  <span>{selectedProgressBook.title}</span>
                   {" - "}
                   Page {selectedProgressBook.current_page || selectedProgressBook.pages_read || 0}
                   {selectedProgressBook.total_pages ? ` of ${selectedProgressBook.total_pages}` : ""} logged.
                 </p>
               ) : null}
             </div>
-            <form onSubmit={logProgress} className="mt-4 grid gap-3 lg:grid-cols-[minmax(220px,1.5fr)_170px_120px_120px_auto] lg:items-end">
-              <Field label="Book">
+            <form onSubmit={logProgress} className="reading-log-form">
+              <Field label="Book name">
                 <select
                   value={progressDraft.bookId}
                   onChange={(event) => {
@@ -475,7 +485,7 @@ export default function LibraryPage() {
                       endPage: "",
                     }));
                   }}
-                  className="field-input py-2.5"
+                  className="reading-log-input"
                   disabled={books.length === 0}
                 >
                   {books.length === 0 ? <option value="">No books yet</option> : null}
@@ -492,16 +502,16 @@ export default function LibraryPage() {
                   type="date"
                   value={progressDraft.readDate}
                   onChange={(event) => setProgressDraft((current) => ({ ...current, readDate: event.target.value }))}
-                  className="field-input py-2.5"
+                  className="reading-log-input"
                 />
               </Field>
 
               <Field label="Start page">
                 <input
                   inputMode="numeric"
-                  value={progressDraft.startPage || (selectedProgressBook ? String(getNextStartPage(selectedProgressBook)) : "")}
+                  value={progressDraft.startPage}
                   onChange={(event) => setProgressDraft((current) => ({ ...current, startPage: event.target.value }))}
-                  className="field-input py-2.5"
+                  className="reading-log-input"
                   disabled={!selectedProgressBook}
                 />
               </Field>
@@ -511,14 +521,14 @@ export default function LibraryPage() {
                   inputMode="numeric"
                   value={progressDraft.endPage}
                   onChange={(event) => setProgressDraft((current) => ({ ...current, endPage: event.target.value }))}
-                  className="field-input py-2.5"
+                  className="reading-log-input"
                   disabled={!selectedProgressBook}
                 />
               </Field>
 
               <button
                 disabled={!selectedProgressBook || !progressDraft.endPage || isLogging}
-                className="h-[42px] rounded-full bg-teal-600 px-5 text-sm font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-stone-300 lg:min-w-[8.5rem]"
+                className="ops-button primary reading-log-button"
               >
                 {isLogging ? "Logging..." : "Log Progress"}
               </button>
