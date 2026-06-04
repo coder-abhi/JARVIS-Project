@@ -1,3 +1,5 @@
+import { getScopedStorageKey } from "@/lib/auth";
+
 export type PersistedPomodoroSession = {
   id: string;
   mode: "focus" | "short" | "long";
@@ -26,6 +28,11 @@ export const activePomodoroSessionKey = "personal-project-manager:active-pomodor
 export const pendingPomodoroCompletionKey = "personal-project-manager:pending-pomodoro-completion";
 export const pomodoroSessionCompletedEvent = "personal-project-manager:pomodoro-session-completed";
 export const pomodoroSessionUpdatedEvent = "personal-project-manager:pomodoro-session-updated";
+const completionSoundPath = "/Level_Complete_Theme.mp3";
+const completionNotificationIconPath = "/pomodoro-notification.svg";
+const completionSoundVolume = 0.65;
+
+let completionSound: HTMLAudioElement | null = null;
 
 export function getActivePomodoroSessionKey() {
   return getScopedStorageKey(activePomodoroSessionKey);
@@ -61,18 +68,40 @@ export async function requestPomodoroNotificationPermission() {
   }
 }
 
+export function playPomodoroCompletionSound() {
+  const audio = getCompletionSound();
+  if (!audio) return;
+
+  audio.pause();
+  audio.loop = false;
+  audio.currentTime = 0;
+  audio.volume = completionSoundVolume;
+  void audio.play().catch(() => {
+    // Browsers may block sound if the page has not had a user gesture yet.
+  });
+}
+
 export function showPomodoroBrowserNotification(completion: PendingPomodoroCompletion) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
 
   const minutes = Math.max(1, Math.round(completion.durationSeconds / 60));
-  const notification = new Notification("Pomodoro session complete", {
-    body: `${minutes} minutes are ready to log.`,
+  const modeLabel = completion.mode === "focus" ? "Focus sprint" : completion.mode === "short" ? "Short break" : "Long break";
+  const completedAt = new Date(completion.completedAt);
+  const timeLabel = completedAt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const notification = new Notification(`${modeLabel} complete`, {
+    body: `${minutes} min wrapped at ${timeLabel}. Open Jarvis to capture the result.`,
+    badge: completionNotificationIconPath,
+    icon: completionNotificationIconPath,
     tag: `pomodoro-session-${completion.id}`,
+    requireInteraction: true,
+    silent: true,
   });
 
   notification.onclick = () => {
     window.focus();
-    window.location.assign("/pomodoro");
+    if (window.location.pathname !== "/pomodoro") {
+      window.location.assign("/pomodoro");
+    }
     notification.close();
   };
 }
@@ -88,4 +117,12 @@ function readPomodoroValue<T>(key: string) {
     return null;
   }
 }
-import { getScopedStorageKey } from "@/lib/auth";
+
+function getCompletionSound() {
+  if (!("Audio" in window)) return null;
+  completionSound ??= new Audio(completionSoundPath);
+  completionSound.loop = false;
+  completionSound.preload = "auto";
+  completionSound.volume = completionSoundVolume;
+  return completionSound;
+}

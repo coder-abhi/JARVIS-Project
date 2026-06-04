@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   announcePomodoroSessionUpdate,
   getActivePomodoroSessionKey,
   getPendingPomodoroCompletionKey,
   pomodoroSessionCompletedEvent,
   pomodoroSessionUpdatedEvent,
+  playPomodoroCompletionSound,
   readActivePomodoroSession,
   readPendingPomodoroCompletion,
   showPomodoroBrowserNotification,
@@ -23,8 +24,17 @@ const modeLabels: Record<PendingPomodoroCompletion["mode"], string> = {
 export default function PomodoroCompletionToast() {
   const [completion, setCompletion] = useState<PendingPomodoroCompletion | null>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const dismissedCompletionIdRef = useRef<string | null>(null);
+  const notifiedCompletionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    function displayCompletion(nextCompletion: PendingPomodoroCompletion) {
+      setCompletion(nextCompletion);
+      if (dismissedCompletionIdRef.current !== nextCompletion.id) {
+        setIsVisible(true);
+      }
+    }
+
     function completeSession() {
       const session = readActivePomodoroSession();
       if (!session || session.state !== "running" || !session.endsAt) return;
@@ -46,16 +56,14 @@ export default function PomodoroCompletionToast() {
       window.localStorage.removeItem(getActivePomodoroSessionKey());
       window.localStorage.setItem(getPendingPomodoroCompletionKey(), JSON.stringify(pendingCompletion));
       announcePomodoroSessionUpdate();
-      setCompletion(pendingCompletion);
-      setIsVisible(true);
+      displayCompletion(pendingCompletion);
     }
 
     function syncCompletion() {
       completeSession();
       const pendingCompletion = readPendingPomodoroCompletion();
       if (pendingCompletion) {
-        setCompletion(pendingCompletion);
-        setIsVisible(true);
+        displayCompletion(pendingCompletion);
       }
     }
 
@@ -63,8 +71,7 @@ export default function PomodoroCompletionToast() {
     const timer = window.setInterval(syncCompletion, 1000);
     function showCompletion(event: Event) {
       const completionEvent = event as CustomEvent<PendingPomodoroCompletion>;
-      setCompletion(completionEvent.detail);
-      setIsVisible(true);
+      displayCompletion(completionEvent.detail);
     }
 
     window.addEventListener("storage", syncCompletion);
@@ -82,20 +89,27 @@ export default function PomodoroCompletionToast() {
   useEffect(() => {
     if (!isVisible) return;
 
-    const timer = window.setTimeout(() => setIsVisible(false), 9000);
+    const timer = window.setTimeout(() => {
+      if (completion) dismissedCompletionIdRef.current = completion.id;
+      setIsVisible(false);
+    }, 9000);
     return () => window.clearTimeout(timer);
   }, [isVisible, completion?.id]);
 
   useEffect(() => {
     if (!completion || !isVisible) return;
+    if (notifiedCompletionIdRef.current === completion.id) return;
 
+    const notificationStorageKey = `${getPendingPomodoroCompletionKey()}:notified:${completion.id}`;
+    if (window.localStorage.getItem(notificationStorageKey)) {
+      notifiedCompletionIdRef.current = completion.id;
+      return;
+    }
+
+    notifiedCompletionIdRef.current = completion.id;
+    window.localStorage.setItem(notificationStorageKey, new Date().toISOString());
     showPomodoroBrowserNotification(completion);
-
-    const audio = new Audio("/Level_Complete_Theme.mp3");
-    audio.volume = 0.65;
-    void audio.play().catch(() => {
-      // Browsers may block sound if the page has not had a user gesture yet.
-    });
+    playPomodoroCompletionSound();
   }, [completion?.id, isVisible]);
 
   if (!completion || !isVisible) return null;
@@ -111,7 +125,10 @@ export default function PomodoroCompletionToast() {
           </div>
           <button
             type="button"
-            onClick={() => setIsVisible(false)}
+            onClick={() => {
+              dismissedCompletionIdRef.current = completion.id;
+              setIsVisible(false);
+            }}
             className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-stone-200 text-lg leading-none text-stone-500 transition hover:bg-stone-50 hover:text-stone-950"
             aria-label="Dismiss Pomodoro notification"
           >
