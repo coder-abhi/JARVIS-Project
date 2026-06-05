@@ -23,7 +23,10 @@ async def create_project(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    return crud.create_project(db, project, current_user)
+    try:
+        return crud.create_project(db, project, current_user)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.get("/{project_id}/tasks", response_model=list[schemas.TaskRead])

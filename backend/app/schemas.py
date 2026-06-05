@@ -34,8 +34,24 @@ class ProjectBase(BaseModel):
     type: ProjectType
 
 
+class LinkedGoalRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    category: GoalCategory
+    title: str
+
+
+class LinkedProjectRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    type: ProjectType
+
+
 class ProjectCreate(ProjectBase):
-    pass
+    linked_goal_ids: list[str] = Field(default_factory=list)
 
 
 class ProjectRead(ProjectBase):
@@ -43,6 +59,7 @@ class ProjectRead(ProjectBase):
 
     id: str
     created_at: datetime
+    linked_goals: list[LinkedGoalRead] = Field(default_factory=list)
 
 
 class ProjectSummary(ProjectRead):
@@ -59,7 +76,6 @@ class ProjectSummary(ProjectRead):
 
 class TaskBase(BaseModel):
     project_id: str
-    goal_id: str | None = None
     title: str = Field(min_length=1, max_length=220)
     description: str | None = None
     status: TaskStatus = TaskStatus.todo
@@ -76,7 +92,6 @@ class TaskCreate(TaskBase):
 
 
 class TaskUpdate(BaseModel):
-    goal_id: str | None = None
     title: str | None = Field(default=None, min_length=1, max_length=220)
     description: str | None = None
     status: TaskStatus | None = None
@@ -141,7 +156,7 @@ class GoalBase(BaseModel):
 
 
 class GoalCreate(GoalBase):
-    pass
+    linked_project_ids: list[str] = Field(default_factory=list)
 
 
 class GoalUpdate(BaseModel):
@@ -149,6 +164,7 @@ class GoalUpdate(BaseModel):
     target_value: float | None = Field(default=None, ge=0)
     current_value: float | None = Field(default=None, ge=0)
     unit: str | None = Field(default=None, max_length=40)
+    linked_project_ids: list[str] | None = None
 
 
 class GoalRead(GoalBase):
@@ -158,15 +174,14 @@ class GoalRead(GoalBase):
     created_at: datetime
     measurable: bool
     progress_percentage: int | None
+    linked_projects: list[LinkedProjectRead] = Field(default_factory=list)
 
 
 class GoalTaskRead(BaseModel):
     id: str
     project_id: str
     project_name: str
-    goal_id: str | None
-    goal_title: str | None
-    goal_category: GoalCategory | None
+    linked_goals: list[LinkedGoalRead] = Field(default_factory=list)
     title: str
     status: TaskStatus
     priority: TaskPriority

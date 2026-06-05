@@ -6,11 +6,24 @@ export type TaskPriority = "high" | "medium" | "low";
 export type BookStatus = "yet_to_start" | "reading" | "read";
 export type GoalCategory = "monthly" | "quarterly" | "yearly" | "five_year";
 
+export type LinkedGoal = {
+  id: string;
+  category: GoalCategory;
+  title: string;
+};
+
+export type LinkedProject = {
+  id: string;
+  name: string;
+  type: ProjectType;
+};
+
 export type Project = {
   id: string;
   name: string;
   type: ProjectType;
   created_at: string;
+  linked_goals: LinkedGoal[];
 };
 
 export type ProjectSummary = Project & {
@@ -28,7 +41,6 @@ export type ProjectSummary = Project & {
 export type Task = {
   id: string;
   project_id: string;
-  goal_id?: string | null;
   title: string;
   description?: string | null;
   status: TaskStatus;
@@ -41,9 +53,10 @@ export type Task = {
   created_at: string;
 };
 
-export type ProjectInput = Pick<Project, "name" | "type">;
-export type TaskInput = Omit<Task, "id" | "created_at" | "goal_id" | "importance_rating"> & {
-  goal_id?: string | null;
+export type ProjectInput = Pick<Project, "name" | "type"> & {
+  linked_goal_ids?: string[];
+};
+export type TaskInput = Omit<Task, "id" | "created_at" | "importance_rating"> & {
   importance_rating?: number;
 };
 export type TaskUpdate = Partial<Omit<Task, "id" | "project_id" | "created_at">>;
@@ -58,17 +71,21 @@ export type Goal = {
   created_at: string;
   measurable: boolean;
   progress_percentage?: number | null;
+  linked_projects: LinkedProject[];
 };
 
-export type GoalUpdate = Partial<Pick<Goal, "title" | "target_value" | "current_value" | "unit">>;
+export type GoalInput = Omit<Goal, "id" | "created_at" | "measurable" | "progress_percentage" | "linked_projects"> & {
+  linked_project_ids?: string[];
+};
+export type GoalUpdate = Partial<Pick<Goal, "title" | "target_value" | "current_value" | "unit">> & {
+  linked_project_ids?: string[];
+};
 
 export type GoalTask = {
   id: string;
   project_id: string;
   project_name: string;
-  goal_id?: string | null;
-  goal_title?: string | null;
-  goal_category?: GoalCategory | null;
+  linked_goals: LinkedGoal[];
   title: string;
   status: TaskStatus;
   priority: TaskPriority;
@@ -400,7 +417,7 @@ export function getGoalsOverview() {
   return request<GoalsOverview>("/goals/overview");
 }
 
-export function createGoal(goal: Omit<Goal, "id" | "created_at" | "measurable" | "progress_percentage">) {
+export function createGoal(goal: GoalInput) {
   return request<Goal>("/goals", {
     method: "POST",
     body: JSON.stringify(goal),

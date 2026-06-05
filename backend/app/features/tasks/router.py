@@ -15,8 +15,6 @@ async def create_task(
 ):
     if crud.get_project(db, task.project_id, current_user) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    if task.goal_id is not None and crud.get_goal(db, task.goal_id, current_user) is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
     return crud.create_task(db, task)
 
 
@@ -36,8 +34,6 @@ async def update_task(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    if task.goal_id is not None and crud.get_goal(db, task.goal_id, current_user) is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
     db_task = crud.update_task(db, task_id, task, current_user)
     if db_task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")

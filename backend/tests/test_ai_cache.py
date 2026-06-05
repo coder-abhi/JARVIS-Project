@@ -318,11 +318,11 @@ class AiResponseCacheTests(unittest.TestCase):
             name="Project",
             type=models.ProjectType.fixed,
             created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            linked_goals=[goal],
         )
         task = models.Task(
             id="task-1",
             project_id=project.id,
-            goal_id=goal.id,
             title="Initial task",
             description="Original",
             status=models.TaskStatus.todo,
@@ -332,7 +332,6 @@ class AiResponseCacheTests(unittest.TestCase):
             time_spent_hours=0,
             created_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
             project=project,
-            goal=goal,
         )
         completion = models.CompletedGoalLog(
             id="completion-1",

@@ -281,7 +281,9 @@ export default function GoalsPage() {
                     <p className="min-w-0 truncate font-semibold text-stone-950">{task.title}</p>
                     <span className="text-stone-600">{task.time_required_minutes || 0} min</span>
                     <span className="font-semibold text-teal-800">{task.importance_rating}/5</span>
-                    <span className="min-w-0 truncate text-amber-800">{task.goal_title ?? "General Mission"}</span>
+                    <span className="min-w-0 truncate text-amber-800">
+                      {task.linked_goals.map((goal) => goal.title).join(", ") || "General Mission"}
+                    </span>
                     <span className="min-w-0 truncate text-stone-500">{task.project_name}</span>
                   </div>
                 ))}
@@ -655,7 +657,7 @@ function MissionAnalysis({ actions, openTasks, overdueTasks }: { actions: GoalNe
 }
 
 function goalSortLabel(task: GoalTask) {
-  return task.goal_category ? categoryLabels[task.goal_category] : "General";
+  return task.linked_goals[0] ? categoryLabels[task.linked_goals[0].category] : "General";
 }
 
 function formatDate(value: string) {

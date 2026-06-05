@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -42,6 +42,14 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+goal_projects = Table(
+    "goal_projects",
+    Base.metadata,
+    Column("goal_id", ForeignKey("goals.id"), primary_key=True),
+    Column("project_id", ForeignKey("projects.id"), primary_key=True),
+)
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -76,6 +84,11 @@ class Project(Base):
         cascade="all, delete-orphan",
         order_by="PomodoroSessionLog.completed_at.desc()",
     )
+    linked_goals: Mapped[list["Goal"]] = relationship(
+        secondary=goal_projects,
+        back_populates="linked_projects",
+        order_by="Goal.created_at",
+    )
 
 
 class Task(Base):
@@ -83,7 +96,6 @@ class Task(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
-    goal_id: Mapped[str | None] = mapped_column(ForeignKey("goals.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(220), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[TaskStatus] = mapped_column(Enum(TaskStatus), default=TaskStatus.todo, nullable=False)
@@ -96,7 +108,6 @@ class Task(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     project: Mapped[Project] = relationship(back_populates="tasks")
-    goal: Mapped["Goal | None"] = relationship(back_populates="tasks")
 
 
 class Goal(Base):
@@ -114,8 +125,12 @@ class Goal(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     user: Mapped[User] = relationship(back_populates="goals")
-    tasks: Mapped[list[Task]] = relationship(back_populates="goal")
     completed_logs: Mapped[list["CompletedGoalLog"]] = relationship(back_populates="goal")
+    linked_projects: Mapped[list[Project]] = relationship(
+        secondary=goal_projects,
+        back_populates="linked_goals",
+        order_by="Project.created_at",
+    )
 
     @property
     def measurable(self) -> bool:

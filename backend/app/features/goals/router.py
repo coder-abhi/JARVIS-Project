@@ -21,7 +21,10 @@ async def create_goal(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    return crud.create_goal(db, goal, current_user)
+    try:
+        return crud.create_goal(db, goal, current_user)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.put("/{goal_id}", response_model=schemas.GoalRead)
@@ -31,7 +34,10 @@ async def update_goal(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    db_goal = crud.update_goal(db, goal_id, goal, current_user)
+    try:
+        db_goal = crud.update_goal(db, goal_id, goal, current_user)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     if db_goal is None:
         raise HTTPException(status_code=404, detail="Goal not found")
     return db_goal
