@@ -19,7 +19,6 @@ type TimelineTask = {
   startDate: Date | null;
   createdAt: Date;
   deadline: Date | null;
-  color: "blue" | "purple" | "pink" | "yellow" | "teal";
 };
 
 type ProjectWithTasks = {
@@ -28,50 +27,11 @@ type ProjectWithTasks = {
 };
 
 const dayMs = 86_400_000;
-const colors: TimelineTask["color"][] = ["blue", "purple", "pink", "yellow", "teal"];
 
 const viewOptions: Record<TimelineView, { label: string; days: number; columnWidth: number }> = {
   "3day": { label: "3 day", days: 3, columnWidth: 176 },
   week: { label: "Week", days: 7, columnWidth: 112 },
   month: { label: "Month", days: 30, columnWidth: 44 },
-};
-
-const colorClasses = {
-  blue: {
-    track: "bg-blue-100",
-    fill: "bg-blue-500",
-    text: "text-blue-700",
-    dot: "bg-blue-500",
-    handle: "border-blue-600 bg-blue-600",
-  },
-  purple: {
-    track: "bg-purple-100",
-    fill: "bg-purple-500",
-    text: "text-purple-700",
-    dot: "bg-purple-500",
-    handle: "border-purple-600 bg-purple-600",
-  },
-  pink: {
-    track: "bg-pink-100",
-    fill: "bg-pink-500",
-    text: "text-pink-700",
-    dot: "bg-pink-500",
-    handle: "border-pink-600 bg-pink-600",
-  },
-  yellow: {
-    track: "bg-yellow-100",
-    fill: "bg-yellow-400",
-    text: "text-yellow-700",
-    dot: "bg-yellow-400",
-    handle: "border-yellow-500 bg-yellow-500",
-  },
-  teal: {
-    track: "bg-teal-100",
-    fill: "bg-teal-500",
-    text: "text-teal-700",
-    dot: "bg-teal-500",
-    handle: "border-teal-600 bg-teal-600",
-  },
 };
 
 const statusLabels: Record<TaskStatus, string> = {
@@ -113,9 +73,7 @@ export default function TimelinePage() {
   const today = useMemo(() => startOfDay(currentTime), [currentTime]);
   const timelineTasks = useMemo(
     () =>
-      items.flatMap((item, projectIndex) =>
-        item.tasks.map((task, taskIndex) => toTimelineTask(task, item.project.name, projectIndex + taskIndex)),
-      ),
+      items.flatMap((item) => item.tasks.map((task) => toTimelineTask(task, item.project.name))),
     [items],
   );
 
@@ -138,6 +96,8 @@ export default function TimelinePage() {
   const currentTimeLabel = currentTime.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   const weeklyOperationDates = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(today, index)), [today]);
   const timeAllocation = buildTimeAllocation(timelineTasks);
+  const fixedProjects = items.filter((item) => item.project.type === "fixed");
+  const continuousProjects = items.filter((item) => item.project.type === "continuous");
 
   function recalibrateToToday() {
     scrollerRef.current?.scrollTo({ left: Math.max(currentTimeOffset - 24, 0), behavior: "smooth" });
@@ -184,7 +144,7 @@ export default function TimelinePage() {
 
       <section className="ops-panel">
         <div className="ops-panel-head">
-          <h2>Weekly Operations Grid</h2>
+          <h2>Weekly Operations Summary</h2>
           <span>{visibleTasks.length} scheduled objectives</span>
         </div>
         <div className="weekly-ops-grid">
@@ -213,67 +173,64 @@ export default function TimelinePage() {
       </section>
 
       <section className="mt-4 grid gap-5 lg:grid-cols-[1fr_320px]">
-        <div className="ops-panel overflow-hidden p-0">
-          <div className="flex flex-col gap-4 border-b border-gray-100 px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="ops-panel timeline-plan">
+          <div className="timeline-plan-head">
             <div>
-              <h2 className="text-lg font-semibold text-gray-950">{viewOptions[view].label} Operations Plan</h2>
-              <p className="mt-1 text-sm text-gray-500">{visibleTasks.length} visible tasks across {items.length} projects</p>
+              <h2>{viewOptions[view].label} Operations Plan</h2>
+              <p>{visibleTasks.length} visible tasks across {items.length} projects</p>
             </div>
-            <div className="flex flex-wrap items-center gap-1">
-              <div className="flex rounded-full border border-gray-200 bg-gray-50 p-0.5">
+            <div className="timeline-controls">
+              <div className="timeline-view-switcher">
                 {(Object.keys(viewOptions) as TimelineView[]).map((option) => (
                   <button
                     key={option}
                     type="button"
                     onClick={() => setView(option)}
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold transition ${
-                      view === option ? "bg-gray-950 text-white shadow-sm" : "text-gray-500 hover:text-gray-950"
-                    }`}
+                    className={view === option ? "active" : ""}
                   >
                     {viewOptions[option].label}
                   </button>
                 ))}
               </div>
-              <label className="flex h-7 items-center gap-1.5 rounded-full border border-gray-200 px-3 text-xs font-semibold text-gray-600">
+              <label className="timeline-filter">
                 <input
                   type="checkbox"
                   checked={activeTodayOnly}
                   onChange={(event) => setActiveTodayOnly(event.target.checked)}
-                  className="h-3.5 w-3.5 accent-gray-950"
                 />
                 Active
               </label>
               <button
                 type="button"
                 onClick={recalibrateToToday}
-                className="h-6 rounded-full border border-gray-200 px-2.5 text-[11px] font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
+                className="timeline-today-button"
               >
                 Today
               </button>
             </div>
           </div>
 
-          {isLoading ? <p className="p-6 text-sm text-gray-500">Loading timeline...</p> : null}
+          {isLoading ? <p className="timeline-message">Loading timeline...</p> : null}
 
           {!isLoading && timelineTasks.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-base font-semibold text-gray-950">No tasks yet</p>
-              <p className="mt-2 text-sm text-gray-500">Create tasks inside a project and they will appear here automatically.</p>
+            <div className="timeline-message">
+              <strong>No tasks yet</strong>
+              <p>Create tasks inside a project and they will appear here automatically.</p>
             </div>
           ) : null}
 
           {!isLoading && timelineTasks.length > 0 && visibleTasks.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-base font-semibold text-gray-950">No active tasks today</p>
-              <p className="mt-2 text-sm text-gray-500">Turn off the filter to see the full timeline.</p>
+            <div className="timeline-message">
+              <strong>No active tasks today</strong>
+              <p>Turn off the filter to see the full timeline.</p>
             </div>
           ) : null}
 
           {!isLoading && visibleTasks.length > 0 ? (
-            <div ref={scrollerRef} className="overflow-x-auto">
+            <div ref={scrollerRef} className="timeline-scroller">
               <div className="min-w-full" style={{ width: 260 + timelineWidth }}>
-                <div className="grid grid-cols-[260px_1fr] border-b border-gray-100 bg-gray-50/80">
-                  <div className="px-5 py-4 text-sm font-semibold text-gray-500">Tasks</div>
+                <div className="timeline-grid timeline-grid-head">
+                  <div className="timeline-task-column">Tasks</div>
                   <TimelineGrid
                     columnWidth={columnWidth}
                     dates={timelineDates}
@@ -285,8 +242,8 @@ export default function TimelinePage() {
 
                 {groupedTasks.map(([projectName, projectTasks]) => (
                   <div key={projectName}>
-                    <div className="grid grid-cols-[260px_1fr] bg-gray-50/60">
-                      <div className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">{projectName}</div>
+                    <div className="timeline-grid timeline-project-row">
+                      <div>{projectName}</div>
                       <TimelineGrid
                         columnWidth={columnWidth}
                         compact
@@ -321,10 +278,10 @@ export default function TimelinePage() {
               <h2>Efficiency Report</h2>
               <span>{efficiency}% invested/planned</span>
             </div>
-            <div className="mt-5 space-y-3">
+            <div className="timeline-text-list">
               <SummaryMetric label="Planned Hours" value={`${(totalPlannedMinutes / 60).toFixed(1)}h`} />
               <SummaryMetric label="Actual Hours" value={`${(totalSpentMinutes / 60).toFixed(1)}h`} />
-              <SummaryMetric label="Completion Rate" value={`${completionRate}%`} tone="success" />
+              <SummaryMetric label="Completion Rate" value={`${completionRate}%`} />
             </div>
           </div>
 
@@ -333,13 +290,9 @@ export default function TimelinePage() {
               <h2>Time Allocation</h2>
               <span>mission categories</span>
             </div>
-            <div className="allocation-list">
+            <div className="timeline-text-list">
               {timeAllocation.map((item) => (
-                <div key={item.label}>
-                  <span>{item.label}</span>
-                  <b>{item.minutes}m</b>
-                  <div className="ops-progress"><span style={{ width: `${item.percent}%` }} /></div>
-                </div>
+                <SummaryMetric key={item.label} label={item.label} value={`${item.minutes}m / ${item.percent}%`} />
               ))}
             </div>
           </div>
@@ -350,6 +303,11 @@ export default function TimelinePage() {
         {(["todo", "in_progress", "done"] as TaskStatus[]).map((status) => (
           <StatusCard key={status} status={status} tasks={timelineTasks.filter((task) => task.status === status)} onEdit={setEditingTaskFromTimeline} />
         ))}
+      </section>
+
+      <section className="timeline-project-register">
+        <ProjectRegister title="Fixed Projects" items={fixedProjects} emptyText="No fixed projects" />
+        <ProjectRegister title="Continuous Projects" items={continuousProjects} emptyText="No continuous projects" />
       </section>
 
       <TaskEditor task={editingTask} onClose={() => setEditingTask(null)} onSave={handleTaskSave} />
@@ -383,28 +341,26 @@ function TimelineGrid({
 }) {
   return (
     <div className="relative" style={{ width: timelineWidth }}>
-      <div className="pointer-events-none absolute inset-y-0 z-10 w-0.5 bg-red-500" style={{ left: currentTimeOffset }}>
+      <div className="timeline-current-time" style={{ left: currentTimeOffset }}>
         {currentTimeLabel ? (
-          <span className="absolute left-1/2 top-1 z-20 -translate-x-1/2 whitespace-nowrap rounded bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm">
-            {currentTimeLabel}
-          </span>
+          <span>{currentTimeLabel}</span>
         ) : null}
       </div>
       <div className="flex">
         {dates.map((date) => (
           <div
             key={date.toISOString()}
-            className={`border-l border-gray-100 text-center ${compact ? "h-full" : "px-2 py-3"}`}
+            className={`timeline-date-column ${compact ? "compact" : ""}`}
             style={{ width: columnWidth }}
           >
             {!compact ? (
               <>
-                <p className="text-xs font-semibold uppercase text-gray-400">
+                <p>
                   {date.toLocaleDateString(undefined, { weekday: "short" })}
                 </p>
-                <p className="mt-1 text-sm font-semibold text-gray-700">
+                <strong>
                   {date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                </p>
+                </strong>
               </>
             ) : null}
           </div>
@@ -435,8 +391,6 @@ function TimelineRow({
   const dragStartRef = useRef<{ clientX: number; baseDays: number; minDays: number } | null>(null);
   const dragDaysRef = useRef<number | null>(null);
   const progress = getTaskProgress(task);
-  const colors = colorClasses[task.color];
-  const percentageTextColor = progress > 45 ? "text-white" : colors.text;
   const firstDate = dates[0];
   const lastDate = dates[dates.length - 1];
   const taskStart = maxDate(startOfDay(task.startDate ?? task.createdAt), firstDate);
@@ -493,33 +447,31 @@ function TimelineRow({
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") onEdit(task.raw);
       }}
-      className="grid cursor-pointer grid-cols-[260px_1fr] border-t border-gray-100 transition hover:bg-gray-50/70"
+      className="timeline-grid timeline-task-row"
     >
-      <div className="flex items-center gap-3 px-5 py-4">
-        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${colors.dot}`} />
+      <div className="timeline-task-details">
+        <span className={`timeline-status-mark ${task.status}`} />
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-gray-950">{task.title}</p>
-          <p className="mt-1 text-xs text-gray-500">
+          <p>{task.title}</p>
+          <span>
             {Math.round(task.timeSpentHours * 60)} min invested / {Math.round(task.etaHours * 60)} min ETA
-          </p>
+          </span>
         </div>
       </div>
       <div className="relative min-h-16" style={{ width: timelineWidth }}>
-        <div className="pointer-events-none absolute inset-y-0 z-10 w-0.5 bg-red-500" style={{ left: currentTimeOffset }} />
+        <div className="timeline-current-time" style={{ left: currentTimeOffset }} />
         <div className="absolute inset-0 flex">
           {dates.map((date) => (
-            <div key={date.toISOString()} className="h-full border-l border-gray-100" style={{ width: columnWidth }} />
+            <div key={date.toISOString()} className="timeline-date-column compact" style={{ width: columnWidth }} />
           ))}
         </div>
         {!visibleRangeEnded ? (
           <div
-            className={`absolute top-1/2 h-9 -translate-y-1/2 overflow-hidden rounded-full ${colors.track} shadow-sm`}
+            className={`timeline-task-track ${task.status}`}
             style={{ left, width }}
           >
-            <div className={`absolute inset-y-0 left-0 rounded-full ${colors.fill}`} style={{ width: `${progress}%` }} />
-            <div className={`absolute inset-0 flex items-center justify-center px-3 text-xs font-bold ${percentageTextColor}`}>
-              {progress}%
-            </div>
+            <div className="timeline-task-fill" style={{ width: `${progress}%` }} />
+            <div className="timeline-task-percent">{progress}%</div>
             <button
               type="button"
               aria-label={`Adjust deadline for ${task.title}`}
@@ -534,7 +486,7 @@ function TimelineRow({
                 dragDaysRef.current = null;
                 setDragDays(null);
               }}
-              className={`absolute right-0 top-0 h-full w-4 cursor-ew-resize border-l-2 ${colors.handle}`}
+              className="timeline-deadline-handle"
             />
           </div>
         ) : null}
@@ -546,54 +498,79 @@ function TimelineRow({
 function SummaryMetric({
   label,
   value,
-  tone = "default",
 }: {
   label: string;
   value: string | number;
-  tone?: "default" | "danger" | "success";
 }) {
-  const valueColor = tone === "danger" ? "text-red-600" : tone === "success" ? "text-teal-600" : "text-gray-950";
-
   return (
-    <div className="flex items-center justify-between rounded border border-gray-200 bg-gray-50 px-4 py-3">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className={`text-base font-semibold ${valueColor}`}>{value}</p>
+    <div className="timeline-text-row">
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }
 
 function StatusCard({ onEdit, status, tasks }: { onEdit: (task: TimelineTask) => void; status: TaskStatus; tasks: TimelineTask[] }) {
-  const accentByStatus: Record<TaskStatus, string> = {
-    todo: "border-blue-100 bg-blue-50/60 text-blue-700",
-    in_progress: "border-purple-100 bg-purple-50/60 text-purple-700",
-    done: "border-teal-100 bg-teal-50/60 text-teal-700",
-  };
-
   return (
     <div className="ops-panel">
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold text-gray-950">Queue Status / {statusLabels[status]}</h3>
-        <span className={`rounded border px-3 py-1 text-sm font-semibold ${accentByStatus[status]}`}>{tasks.length}</span>
+      <div className="ops-panel-head">
+        <h2>Queue / {statusLabels[status]}</h2>
+        <span>{tasks.length} tasks</span>
       </div>
-      <div className="mt-4 space-y-3">
-        {tasks.length === 0 ? <p className="text-sm text-gray-400">No tasks</p> : null}
+      <div className="timeline-queue-list">
+        {tasks.length === 0 ? <p className="ops-empty compact">No tasks</p> : null}
         {tasks.slice(0, 3).map((task) => {
-          const colors = colorClasses[task.color];
-
           return (
             <button
               key={task.id}
               type="button"
               onClick={() => onEdit(task)}
-              className="block w-full rounded border border-gray-200 bg-gray-50 p-3 text-left transition hover:bg-gray-100"
+              className="timeline-queue-row"
             >
-              <p className="text-sm font-semibold text-gray-950">{task.title}</p>
-              <p className={`mt-1 text-xs font-medium ${colors.text}`}>{task.projectName}</p>
+              <span>{task.title}</span>
+              <small>{task.projectName}</small>
             </button>
           );
         })}
       </div>
     </div>
+  );
+}
+
+function ProjectRegister({
+  emptyText,
+  items,
+  title,
+}: {
+  emptyText: string;
+  items: ProjectWithTasks[];
+  title: string;
+}) {
+  return (
+    <section className="ops-panel">
+      <div className="ops-panel-head">
+        <h2>{title}</h2>
+        <span>{items.length} projects</span>
+      </div>
+      <div className="timeline-project-list">
+        {items.length === 0 ? <p className="ops-empty compact">{emptyText}</p> : null}
+        {items.map(({ project, tasks }) => {
+          const completed = tasks.filter((task) => task.status === "done").length;
+          const active = tasks.filter((task) => task.status === "in_progress").length;
+          const investedMinutes = Math.round(tasks.reduce((sum, task) => sum + task.time_spent_hours, 0) * 60);
+
+          return (
+            <Link key={project.id} href={`/project/${project.id}`} className="timeline-project-link">
+              <strong>{project.name}</strong>
+              <span>{tasks.length} tasks</span>
+              <span>{active} active</span>
+              <span>{completed} done</span>
+              <span>{investedMinutes}m invested</span>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -617,7 +594,7 @@ function buildTimeAllocation(tasks: TimelineTask[]) {
   return totals.map((item) => ({ ...item, percent: Math.round((item.minutes / max) * 100) }));
 }
 
-function toTimelineTask(task: Task, projectName: string, colorIndex: number): TimelineTask {
+function toTimelineTask(task: Task, projectName: string): TimelineTask {
   return {
     id: task.id,
     raw: task,
@@ -629,7 +606,6 @@ function toTimelineTask(task: Task, projectName: string, colorIndex: number): Ti
     startDate: task.start_date ? new Date(task.start_date) : null,
     createdAt: new Date(task.created_at),
     deadline: task.deadline ? new Date(task.deadline) : null,
-    color: colors[colorIndex % colors.length],
   };
 }
 
