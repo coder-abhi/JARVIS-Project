@@ -2,11 +2,13 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
+from time import perf_counter
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from . import models, schemas
+from .features.ai import service as ai_service
 from .prompts import (
     BOOK_METADATA_SYSTEM_PROMPT,
     BOOK_METADATA_USER_PROMPT,
@@ -218,7 +220,7 @@ def match_pomodoro_assignment(db: Session, request: schemas.PomodoroAssignmentRe
     if not candidates:
         return schemas.PomodoroAssignmentRead(assigned=False, confidence=0, reason="No active candidate tasks.")
 
-    data = resolve_pomodoro_assignment(note=note, candidates=candidates)
+    data = resolve_pomodoro_assignment(note=note, candidates=candidates, user_id=user.id, usage_db=db)
     confidence = _as_float(data.get("confidence"))
     project_id = _clean_text(data.get("project_id"))
     task_id = _clean_text(data.get("task_id"))
@@ -404,7 +406,7 @@ def log_goal_entry(db: Session, request: schemas.GoalLogRequest, user: models.Us
     marker = raw_text[0]
     body = raw_text[1:].strip() if marker in {"+", "-"} else raw_text
     goals = ensure_default_goals(db, user)
-    classification = classify_goal_log(body, goals)
+    classification = classify_goal_log(body, goals, user_id=user.id, usage_db=db)
     corrected_text = str(classification.get("corrected_text") or body).strip()[:220]
     goal_id = _clean_text(classification.get("goal_id"))
     db_goal = get_goal(db, goal_id, user) if goal_id else None
@@ -566,7 +568,7 @@ def create_goal_completion_log(
 def refresh_personality_insight(db: Session, user: models.User) -> schemas.PersonalityInsightRead:
     goals = ensure_default_goals(db, user)
     completions = list_recent_goal_completions(db, user, limit=20)
-    insight = generate_personality_insight(goals, completions)
+    insight = generate_personality_insight(goals, completions, user_id=user.id, usage_db=db)
     now = datetime.now(timezone.utc)
     for goal in goals:
         goal.personality_insight = insight
@@ -579,11 +581,16 @@ def suggest_goal_next_actions(db: Session, user: models.User) -> list[schemas.Go
     goals = ensure_default_goals(db, user)
     completions = list_recent_goal_completions(db, user, limit=20)
     active_tasks = list_goal_active_tasks(db, user)
-    actions = generate_goal_next_actions(goals, completions, active_tasks)
+    actions = generate_goal_next_actions(goals, completions, active_tasks, user_id=user.id, usage_db=db)
     return [schemas.GoalNextActionRead(**action) for action in actions[:5]]
 
 
-def classify_goal_log(text: str, goals: list[models.Goal]) -> dict:
+def classify_goal_log(
+    text: str,
+    goals: list[models.Goal],
+    user_id: str | None = None,
+    usage_db: Session | None = None,
+) -> dict:
     fallback = _fallback_goal_log_classification(text, goals)
     context = {
         "text": text,
@@ -599,7 +606,14 @@ def classify_goal_log(text: str, goals: list[models.Goal]) -> dict:
             for goal in goals
         ],
     }
-    data = _call_openai_json(GOAL_LOG_SYSTEM_PROMPT, f"{GOAL_LOG_USER_PROMPT} Context: {json.dumps(context)}", max_tokens=700)
+    data = _call_openai_json(
+        GOAL_LOG_SYSTEM_PROMPT,
+        f"{GOAL_LOG_USER_PROMPT} Context: {json.dumps(context)}",
+        max_tokens=700,
+        feature="goal_log_classification",
+        user_id=user_id,
+        usage_db=usage_db,
+    )
     if not isinstance(data, dict):
         return fallback
     if _clean_text(data.get("goal_id")) and _clean_text(data.get("goal_id")) not in {goal.id for goal in goals}:
@@ -618,6 +632,8 @@ def generate_goal_next_actions(
     goals: list[models.Goal],
     completions: list[models.CompletedGoalLog],
     active_tasks: list[models.Task],
+    user_id: str | None = None,
+    usage_db: Session | None = None,
 ) -> list[dict]:
     fallback = _fallback_goal_next_actions(goals, active_tasks)
     context = {
@@ -631,6 +647,9 @@ def generate_goal_next_actions(
         GOAL_NEXT_ACTIONS_SYSTEM_PROMPT,
         f"{GOAL_NEXT_ACTIONS_USER_PROMPT} Context: {json.dumps(context)}",
         max_tokens=900,
+        feature="goal_next_actions",
+        user_id=user_id,
+        usage_db=usage_db,
     )
     items = data.get("actions") if isinstance(data, dict) else None
     if not isinstance(items, list):
@@ -653,7 +672,12 @@ def generate_goal_next_actions(
     return cleaned or fallback
 
 
-def generate_personality_insight(goals: list[models.Goal], completions: list[models.CompletedGoalLog]) -> str:
+def generate_personality_insight(
+    goals: list[models.Goal],
+    completions: list[models.CompletedGoalLog],
+    user_id: str | None = None,
+    usage_db: Session | None = None,
+) -> str:
     fallback = (
         "Your goals suggest a builder's personality: you respond well to clear execution targets, but you also keep a "
         "longer horizon in view. Recent completions will make this sharper over time. Right now, the useful pattern is "
@@ -671,6 +695,9 @@ def generate_personality_insight(goals: list[models.Goal], completions: list[mod
         PERSONALITY_INSIGHT_SYSTEM_PROMPT,
         f"{PERSONALITY_INSIGHT_USER_PROMPT} Context: {json.dumps(context)}",
         max_tokens=700,
+        feature="personality_insight",
+        user_id=user_id,
+        usage_db=usage_db,
     )
     insight = _clean_text(data.get("insight")) if isinstance(data, dict) else None
     return (insight or fallback)[:1200]
@@ -947,6 +974,8 @@ def enrich_book_metadata(db: Session, book_id: str, replace_chapters: bool = Fal
         title=db_book.title,
         author=db_book.author,
         category=db_book.category if db_book.category != "Uncategorized" else None,
+        user_id=db_book.user_id,
+        usage_db=db,
     )
     if metadata["title"]:
         db_book.title = str(metadata["title"])
@@ -1087,17 +1116,23 @@ def suggest_books(db: Session, user: models.User) -> list[schemas.SuggestedBook]
         for book in books
         if book.purchase_date is not None and _as_aware(book.purchase_date) >= three_months_ago
     ]
-    suggestions = generate_book_suggestions(recent_books or books)
+    suggestions = generate_book_suggestions(recent_books or books, user_id=user.id, usage_db=db)
     return [schemas.SuggestedBook(**suggestion) for suggestion in suggestions]
 
 
 def suggest_next_owned_books(db: Session, user: models.User) -> list[schemas.OwnedBookRecommendation]:
     candidates = [book for book in list_books(db, user) if book.status != models.BookStatus.read]
-    recommendations = generate_next_owned_book_suggestions(candidates)
+    recommendations = generate_next_owned_book_suggestions(candidates, user_id=user.id, usage_db=db)
     return [schemas.OwnedBookRecommendation(**recommendation) for recommendation in recommendations]
 
 
-def resolve_book_metadata(title: str, author: str | None, category: str | None) -> dict[str, str | None | list[str]]:
+def resolve_book_metadata(
+    title: str,
+    author: str | None,
+    category: str | None,
+    user_id: str | None = None,
+    usage_db: Session | None = None,
+) -> dict[str, str | None | list[str]]:
     provided_author = _clean_text(author)
     provided_category = _clean_text(category)
     metadata = {
@@ -1106,7 +1141,13 @@ def resolve_book_metadata(title: str, author: str | None, category: str | None) 
         "category": provided_category or "Uncategorized",
         "chapters": [],
     }
-    data = fetch_book_metadata(title=title, author=provided_author, category=provided_category)
+    data = fetch_book_metadata(
+        title=title,
+        author=provided_author,
+        category=provided_category,
+        user_id=user_id,
+        usage_db=usage_db,
+    )
     if not data:
         return metadata
 
@@ -1134,14 +1175,39 @@ def resolve_book_metadata(title: str, author: str | None, category: str | None) 
     return metadata
 
 
-def fetch_book_metadata(title: str, author: str | None, category: str | None) -> dict:
+def fetch_book_metadata(
+    title: str,
+    author: str | None,
+    category: str | None,
+    user_id: str | None = None,
+    usage_db: Session | None = None,
+) -> dict:
     prompt = f"{BOOK_METADATA_USER_PROMPT} Context: {json.dumps({'title': title, 'author': author, 'category': category})}"
-    return _call_openai_json(BOOK_METADATA_SYSTEM_PROMPT, prompt, max_tokens=1200)
+    return _call_openai_json(
+        BOOK_METADATA_SYSTEM_PROMPT,
+        prompt,
+        max_tokens=1200,
+        feature="book_metadata",
+        user_id=user_id,
+        usage_db=usage_db,
+    )
 
 
-def resolve_pomodoro_assignment(note: str, candidates: list[dict]) -> dict:
+def resolve_pomodoro_assignment(
+    note: str,
+    candidates: list[dict],
+    user_id: str | None = None,
+    usage_db: Session | None = None,
+) -> dict:
     prompt = f"{POMODORO_ASSIGNMENT_USER_PROMPT} Context: {json.dumps({'note': note, 'candidates': candidates})}"
-    return _call_openai_json(POMODORO_ASSIGNMENT_SYSTEM_PROMPT, prompt, max_tokens=700)
+    return _call_openai_json(
+        POMODORO_ASSIGNMENT_SYSTEM_PROMPT,
+        prompt,
+        max_tokens=700,
+        feature="pomodoro_assignment",
+        user_id=user_id,
+        usage_db=usage_db,
+    )
 
 
 def _clean_text(value: object) -> str | None:
@@ -1158,7 +1224,11 @@ def _as_float(value: object) -> float:
         return 0
 
 
-def generate_book_suggestions(books: list[models.Book]) -> list[dict[str, str | None]]:
+def generate_book_suggestions(
+    books: list[models.Book],
+    user_id: str | None = None,
+    usage_db: Session | None = None,
+) -> list[dict[str, str | None]]:
     fallback = _fallback_suggestions(books)
     if not books:
         return fallback
@@ -1176,7 +1246,14 @@ def generate_book_suggestions(books: list[models.Book]) -> list[dict[str, str | 
     prompt = (
         f"{BOOK_RECOMMENDATIONS_USER_PROMPT} History: {json.dumps(recent_context)}"
     )
-    data = _call_openai_json(BOOK_RECOMMENDATIONS_SYSTEM_PROMPT, prompt, max_tokens=900)
+    data = _call_openai_json(
+        BOOK_RECOMMENDATIONS_SYSTEM_PROMPT,
+        prompt,
+        max_tokens=900,
+        feature="book_recommendations",
+        user_id=user_id,
+        usage_db=usage_db,
+    )
     suggestions = data.get("suggestions") if isinstance(data, dict) else None
     if not isinstance(suggestions, list):
         return fallback
@@ -1197,7 +1274,11 @@ def generate_book_suggestions(books: list[models.Book]) -> list[dict[str, str | 
     return cleaned or fallback
 
 
-def generate_next_owned_book_suggestions(books: list[models.Book]) -> list[dict[str, str | None]]:
+def generate_next_owned_book_suggestions(
+    books: list[models.Book],
+    user_id: str | None = None,
+    usage_db: Session | None = None,
+) -> list[dict[str, str | None]]:
     fallback = _fallback_owned_book_suggestions(books)
     if not books:
         return fallback
@@ -1218,7 +1299,14 @@ def generate_next_owned_book_suggestions(books: list[models.Book]) -> list[dict[
         for book in books[:30]
     ]
     prompt = f"{OWNED_BOOK_NEXT_READ_USER_PROMPT} Candidates: {json.dumps(candidates)}"
-    data = _call_openai_json(OWNED_BOOK_NEXT_READ_SYSTEM_PROMPT, prompt, max_tokens=900)
+    data = _call_openai_json(
+        OWNED_BOOK_NEXT_READ_SYSTEM_PROMPT,
+        prompt,
+        max_tokens=900,
+        feature="next_reading_recommendations",
+        user_id=user_id,
+        usage_db=usage_db,
+    )
     items = data.get("recommendations") if isinstance(data, dict) else None
     if not isinstance(items, list):
         return fallback
@@ -1241,7 +1329,15 @@ def generate_next_owned_book_suggestions(books: list[models.Book]) -> list[dict[
     return cleaned or fallback
 
 
-def _call_openai_json(system_prompt: str, user_prompt: str, max_tokens: int) -> dict:
+def _call_openai_json(
+    system_prompt: str,
+    user_prompt: str,
+    max_tokens: int,
+    *,
+    feature: str,
+    user_id: str | None = None,
+    usage_db: Session | None = None,
+) -> dict:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         logger.warning("OPENAI_API_KEY is not set. Skipping OpenAI LLM call.")
@@ -1252,10 +1348,12 @@ def _call_openai_json(system_prompt: str, user_prompt: str, max_tokens: int) -> 
         return {}
 
     client = OpenAI(api_key=api_key)
+    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    started_at = perf_counter()
 
     try:
         response = client.responses.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+            model=model,
             input=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -1264,16 +1362,63 @@ def _call_openai_json(system_prompt: str, user_prompt: str, max_tokens: int) -> 
             max_output_tokens=max_tokens,
         )
     except (OpenAIError, OSError) as err:
+        ai_service.record_ai_usage(
+            db=usage_db,
+            user_id=user_id,
+            feature=feature,
+            model=model,
+            response_id=None,
+            status="failed",
+            latency_ms=round((perf_counter() - started_at) * 1000),
+        )
         logger.warning("OpenAI LLM call failed: %s", err)
         return {}
 
     text = getattr(response, "output_text", None) or _extract_response_text(response)
+    usage = getattr(response, "usage", None)
+    input_details = getattr(usage, "input_tokens_details", None)
+    output_details = getattr(usage, "output_tokens_details", None)
+    input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
+    cached_input_tokens = int(getattr(input_details, "cached_tokens", 0) or 0)
+    output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
+    reasoning_tokens = int(getattr(output_details, "reasoning_tokens", 0) or 0)
+    total_tokens = int(getattr(usage, "total_tokens", input_tokens + output_tokens) or 0)
 
     try:
-        return json.loads(text)
+        data = json.loads(text)
     except (TypeError, json.JSONDecodeError):
+        ai_service.record_ai_usage(
+            db=usage_db,
+            user_id=user_id,
+            feature=feature,
+            model=str(getattr(response, "model", model) or model),
+            response_id=getattr(response, "id", None),
+            input_tokens=input_tokens,
+            cached_input_tokens=cached_input_tokens,
+            output_tokens=output_tokens,
+            reasoning_tokens=reasoning_tokens,
+            total_tokens=total_tokens,
+            status="invalid_json",
+            latency_ms=round((perf_counter() - started_at) * 1000),
+        )
         logger.warning("OpenAI LLM returned non-JSON content.")
         return {}
+
+    ai_service.record_ai_usage(
+        db=usage_db,
+        user_id=user_id,
+        feature=feature,
+        model=str(getattr(response, "model", model) or model),
+        response_id=getattr(response, "id", None),
+        input_tokens=input_tokens,
+        cached_input_tokens=cached_input_tokens,
+        output_tokens=output_tokens,
+        reasoning_tokens=reasoning_tokens,
+        total_tokens=total_tokens,
+        status="success",
+        latency_ms=round((perf_counter() - started_at) * 1000),
+    )
+    return data
 
 
 def _extract_response_text(response: object) -> str:

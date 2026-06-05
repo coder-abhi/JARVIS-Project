@@ -30,7 +30,7 @@ FEATURES: tuple[FeatureDefinition, ...] = (
     FeatureDefinition("pomodoro", "Pomodoro desktop workflow", pomodoro_router, depends_on=("auth", "projects", "tasks")),
     FeatureDefinition("goals", "Goals cockpit", goals_router, depends_on=("auth", "projects", "tasks")),
     FeatureDefinition("library", "Reading library", library_router, depends_on=("auth",)),
-    FeatureDefinition("ai", "AI wrapper status", ai_router),
+    FeatureDefinition("ai", "AI cost surveillance", ai_router),
 )
 
 

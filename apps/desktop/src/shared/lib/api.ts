@@ -211,6 +211,59 @@ export type AiStatus = {
   message: string;
 };
 
+export type AiFeatureCost = {
+  feature: string;
+  label: string;
+  cost_cents: number;
+  share_percentage: number;
+  requests: number;
+  input_tokens: number;
+  cached_input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  average_cost_cents: number;
+};
+
+export type AiDailyCost = {
+  date: string;
+  cost_cents: number;
+  requests: number;
+  total_tokens: number;
+};
+
+export type AiRecentRequest = {
+  id: string;
+  feature: string;
+  label: string;
+  model: string;
+  cost_cents: number;
+  total_tokens: number;
+  status: string;
+  latency_ms: number;
+  pricing_available: boolean;
+  created_at: string;
+};
+
+export type AiCostSummary = {
+  period_days?: number | null;
+  period_start?: string | null;
+  total_cost_cents: number;
+  today_cost_cents: number;
+  month_cost_cents: number;
+  total_requests: number;
+  successful_requests: number;
+  failed_requests: number;
+  unpriced_requests: number;
+  input_tokens: number;
+  cached_input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  average_cost_cents: number;
+  by_feature: AiFeatureCost[];
+  daily: AiDailyCost[];
+  recent_requests: AiRecentRequest[];
+};
+
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -318,6 +371,11 @@ export function deleteProjectPomodoroSession(sessionId: string) {
 
 export function getAiStatus() {
   return request<AiStatus>("/ai/status");
+}
+
+export function getAiCosts(days = 30) {
+  const timezoneOffsetMinutes = new Date().getTimezoneOffset();
+  return request<AiCostSummary>(`/ai/costs?days=${days}&timezone_offset_minutes=${timezoneOffsetMinutes}`);
 }
 
 export function getGoalsOverview() {

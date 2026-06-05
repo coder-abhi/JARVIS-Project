@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import App from "./App";
+import AiCostPage from "@/features/ai-cost/pages/AiCostPage";
 import LoginPage from "@/features/auth/pages/LoginPage";
 import SignupPage from "@/features/auth/pages/SignupPage";
 import DashboardPage from "@/features/dashboard/pages/DashboardPage";
@@ -25,6 +26,7 @@ export const router = createBrowserRouter([
       { path: "pomodoro/history", element: <PomodoroHistoryPage /> },
       { path: "library", element: <LibraryPage /> },
       { path: "library/shelf", element: <ShelfPage /> },
+      { path: "ai-cost", element: <AiCostPage /> },
       { path: "login", element: <LoginPage /> },
       { path: "signup", element: <SignupPage /> },
       { path: "*", element: <Navigate to="/" replace /> }

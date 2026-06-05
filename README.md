@@ -18,7 +18,7 @@ The app follows `code_structure.md`: frontend and backend are organized by featu
 - Pomodoro: persistent local timer, manual sessions, history, task assignment
 - Goals: goal overview, goal log, completions, AI-backed suggestions
 - Library: book shelf, reading logs, chapters, recommendations
-- AI: `/ai/status` and optional OpenAI wrappers
+- AI: `/ai/status`, per-feature cost surveillance, and optional OpenAI wrappers
 
 ## Run Locally
 
