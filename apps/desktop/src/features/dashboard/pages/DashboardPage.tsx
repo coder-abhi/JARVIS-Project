@@ -1,13 +1,29 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getAiStatus, getProjectSummaries, type AiStatus, type ProjectSummary } from "@/lib/api";
+import {
+  getAiCosts,
+  getAiStatus,
+  getProjectSummaries,
+  type AiCostSummary,
+  type AiStatus,
+  type ProjectSummary,
+} from "@/lib/api";
+import {
+  getFocusMinutesToday,
+  getFocusMomentum,
+  readStoredPomodoroLogs,
+  type FocusMetricLog,
+} from "@/lib/focusMetrics";
+import { pomodoroSessionCompletedEvent, pomodoroSessionUpdatedEvent } from "@/lib/pomodoroSession";
 import "./DashboardPage.css";
 
 let cachedAiConnectivity: { status: AiStatus | null; reachable: boolean } | null = null;
 
 export default function DashboardPage() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [aiCosts, setAiCosts] = useState<AiCostSummary | null>(null);
+  const [focusLogs, setFocusLogs] = useState<FocusMetricLog[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
   const [isAiReachable, setIsAiReachable] = useState(true);
@@ -15,8 +31,9 @@ export default function DashboardPage() {
 
   async function loadDashboard() {
     setError(null);
-    const summaries = await getProjectSummaries();
+    const [summaries, costs] = await Promise.all([getProjectSummaries(), getAiCosts(0)]);
     setProjects(summaries);
+    setAiCosts(costs);
   }
 
   useEffect(() => {
@@ -27,6 +44,22 @@ export default function DashboardPage() {
   useEffect(() => {
     const tick = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(tick);
+  }, []);
+
+  useEffect(() => {
+    function refreshFocusLogs() {
+      setFocusLogs(readStoredPomodoroLogs());
+    }
+
+    refreshFocusLogs();
+    window.addEventListener("storage", refreshFocusLogs);
+    window.addEventListener(pomodoroSessionCompletedEvent, refreshFocusLogs);
+    window.addEventListener(pomodoroSessionUpdatedEvent, refreshFocusLogs);
+    return () => {
+      window.removeEventListener("storage", refreshFocusLogs);
+      window.removeEventListener(pomodoroSessionCompletedEvent, refreshFocusLogs);
+      window.removeEventListener(pomodoroSessionUpdatedEvent, refreshFocusLogs);
+    };
   }, []);
 
   useEffect(() => {
@@ -65,7 +98,7 @@ export default function DashboardPage() {
       totalProjects: projects.length,
       totalTasks: projects.reduce((sum, project) => sum + project.total_tasks, 0),
       completedTasks: projects.reduce((sum, project) => sum + project.completed_tasks, 0),
-      activeTasks: projects.reduce((sum, project) => sum + project.in_progress_tasks, 0),
+      activeTasks: projects.reduce((sum, project) => sum + project.total_tasks - project.completed_tasks, 0),
       overdueTasks: projects.reduce((sum, project) => sum + project.overdue_tasks, 0),
       todoTasks: projects.reduce((sum, project) => sum + Math.max(project.total_tasks - project.completed_tasks - project.in_progress_tasks, 0), 0),
       fixedRemainingMinutes: Math.round(projects.reduce((sum, project) => (project.type === "fixed" ? sum + project.remaining_hours : sum), 0) * 60),
@@ -74,6 +107,17 @@ export default function DashboardPage() {
     [projects],
   );
 
+  const focusMetrics = useMemo(() => {
+    const { momentum } = getFocusMomentum(focusLogs, now);
+    return {
+      minutesToday: getFocusMinutesToday(focusLogs),
+      momentum,
+    };
+  }, [focusLogs, now]);
+  const projectedMonthlyCost = useMemo(() => {
+    if (!aiCosts?.daily.length) return 0;
+    return (aiCosts.total_cost_cents / aiCosts.daily.length) * 30;
+  }, [aiCosts]);
   const liveFeed = buildLiveFeed(projects);
   const isLlmConnected = Boolean(isAiReachable && aiStatus?.connected);
   const timeLabel = now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: true });
@@ -107,18 +151,17 @@ export default function DashboardPage() {
       {error ? <p className="ops-alert danger">{error}</p> : null}
 
       <section className="ops-grid overview-grid">
-        <div className="ops-panel span-6">
+        <div className="ops-panel span-4">
           <PanelHeader label="Today's Briefing" detail={new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} />
           <div className="dashboard-text-list">
-            <TextMetric label="Focus Hours" value={(stats.spentMinutes / 60).toFixed(1)} signal />
-            <TextMetric label="Tasks Complete" value={stats.completedTasks} signal />
-            <TextMetric label="Reading" value="Standby" muted />
-            <TextMetric label="Workout" value="Unlinked" muted />
-            <TextMetric label="Calories" value="Unlinked" muted />
+            <TextMetric label="Active Tasks" value={stats.activeTasks} signal />
+            <TextMetric label="Overdue Tasks" value={stats.overdueTasks} danger={stats.overdueTasks > 0} />
+            <TextMetric label="Today's Focus Time" value={`${focusMetrics.minutesToday}m`} signal />
+            <TextMetric label="Current Momentum" value={`${focusMetrics.momentum}%`} signal />
           </div>
         </div>
 
-        <div className="ops-panel span-6">
+        <div className="ops-panel span-4">
           <PanelHeader label="System Metrics" detail="Current project inventory" />
           <div className="dashboard-text-list">
             <TextMetric label="Total Missions" value={stats.totalProjects} />
@@ -129,6 +172,14 @@ export default function DashboardPage() {
             <TextMetric label="Overdue" value={stats.overdueTasks} danger={stats.overdueTasks > 0} />
             <TextMetric label="Time Invested" value={`${stats.spentMinutes}m`} />
             <TextMetric label="Fixed Remaining" value={`${stats.fixedRemainingMinutes}m`} />
+          </div>
+        </div>
+
+        <div className="ops-panel span-4">
+          <PanelHeader label="💰 LLM Usage" detail="Cost projection" />
+          <div className="dashboard-text-list">
+            <TextMetric label="Today Cost" value={formatCents(aiCosts?.today_cost_cents ?? 0)} signal />
+            <TextMetric label="Monthly Cost" value={formatCents(projectedMonthlyCost)} />
           </div>
         </div>
 
@@ -205,4 +256,11 @@ function buildLiveFeed(projects: ProjectSummary[]) {
 
 function timeBack(date: Date, minutes: number) {
   return new Date(date.getTime() - minutes * 60_000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatCents(value: number) {
+  return `${value.toLocaleString(undefined, {
+    minimumFractionDigits: value > 0 && value < 0.01 ? 4 : 2,
+    maximumFractionDigits: 6,
+  })}¢`;
 }

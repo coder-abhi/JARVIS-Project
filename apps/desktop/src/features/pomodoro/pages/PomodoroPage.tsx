@@ -27,6 +27,7 @@ import {
   type PendingPomodoroCompletion,
   type PersistedPomodoroSession,
 } from "@/lib/pomodoroSession";
+import { getFocusMinutesToday, getFocusMomentum, pomodoroLogsStorageKey } from "@/lib/focusMetrics";
 import { calculateRangeAverage } from "@/lib/chartAverage";
 import { addCalendarDays, dateKey, getSessionWorkDayDate, getWorkDayDate, isCurrentWorkDay, startOfCalendarDay, workDaysBetween } from "@/lib/workDay";
 import "./PomodoroPage.css";
@@ -78,7 +79,6 @@ type FocusTrend = {
 
 type SessionDraft = PomodoroSessionDraft;
 
-const storageKey = "personal-project-manager:pomodoro-logs";
 const standardDurations: DurationSet = {
   focus: 25 * 60,
   short: 5 * 60,
@@ -159,7 +159,7 @@ export default function PomodoroPage() {
   }, []);
 
   useEffect(() => {
-    const savedLogs = window.localStorage.getItem(getScopedStorageKey(storageKey));
+    const savedLogs = window.localStorage.getItem(getScopedStorageKey(pomodoroLogsStorageKey));
     if (!savedLogs) {
       setHasLoadedLogs(true);
       return;
@@ -176,7 +176,7 @@ export default function PomodoroPage() {
 
   useEffect(() => {
     if (!hasLoadedLogs) return;
-    window.localStorage.setItem(getScopedStorageKey(storageKey), JSON.stringify(normalizeStoredPomodoroLogs(logs)));
+    window.localStorage.setItem(getScopedStorageKey(pomodoroLogsStorageKey), JSON.stringify(normalizeStoredPomodoroLogs(logs)));
   }, [hasLoadedLogs, logs]);
 
   useEffect(() => {
@@ -1002,21 +1002,12 @@ function maxIsoDate(current: string, next: string) {
 }
 
 function calculateAutoPlan(logs: PomodoroLog[]) {
-  const focusLogs = logs.filter((log) => log.mode === "focus");
-  const today = getWorkDayDate(new Date());
-  const windowStart = addCalendarDays(today, -6);
-  const sourceLogs = focusLogs.filter((log) => {
-    const workDay = getSessionWorkDayDate(log);
-    return workDay >= windowStart && workDay <= today;
-  });
   const streak = getCurrentStreak(logs);
-  const effectiveMinutes = sourceLogs.reduce((sum, log) => sum + log.minutes * (getEffectiveFocusPercent(log) / 100), 0);
-  const momentum = clamp(Math.round((effectiveMinutes / 1200) * 100), 0, 100);
+  const { effectiveMinutes, momentum } = getFocusMomentum(logs);
   const focusMinutes = clamp(Math.round((15 + momentum * 0.35) / 5) * 5, 15, 50);
   const breakMinutes = focusMinutes >= 45 ? 10 : focusMinutes >= 30 ? 7 : 5;
-  const roundedEffectiveMinutes = Math.round(effectiveMinutes);
 
-  if (sourceLogs.length === 0) {
+  if (effectiveMinutes === 0) {
     return {
       breakMinutes: 5,
       focusMinutes: 15,
@@ -1028,15 +1019,11 @@ function calculateAutoPlan(logs: PomodoroLog[]) {
 
   return {
     breakMinutes,
-    effectiveMinutes: roundedEffectiveMinutes,
+    effectiveMinutes,
     focusMinutes,
     momentum,
     streak,
   };
-}
-
-function getFocusMinutesToday(logs: PomodoroLog[]) {
-  return logs.filter((log) => isCurrentWorkDay(new Date(log.startAt ?? log.completedAt))).reduce((sum, log) => sum + log.minutes, 0);
 }
 
 function getFocusMinutesInLastDays(logs: PomodoroLog[], days: number) {
@@ -1645,10 +1632,6 @@ function LogMetric({ label, value }: { label: string; value: string }) {
 
 function getFocusChunks(minutes: number) {
   return Math.floor(minutes / 25);
-}
-
-function getEffectiveFocusPercent(log: PomodoroLog) {
-  return getDefaultFocusPercent(log.focus);
 }
 
 function heatClass(level: number) {

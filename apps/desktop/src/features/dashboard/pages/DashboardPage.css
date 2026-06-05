@@ -119,18 +119,18 @@
 }
 
 .dashboard-text-list {
+  display: grid;
+  gap: 0.22rem;
   margin-top: 0.75rem;
-  border-top: 1px solid var(--ops-border);
 }
 
 .dashboard-text-metric {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(4.75rem, auto);
   align-items: baseline;
-  gap: 1rem;
+  column-gap: 0.75rem;
   min-height: 2rem;
-  border-bottom: 1px solid var(--ops-border);
-  padding: 0.45rem 0;
+  padding: 0.35rem 0.1rem;
 }
 
 .dashboard-text-metric span {
@@ -142,12 +142,19 @@
 }
 
 .dashboard-text-metric strong {
+  min-width: 0;
   overflow-wrap: anywhere;
   color: var(--ops-text);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 0.8rem;
   font-weight: 700;
   text-align: right;
+}
+
+.overview-grid .feed-line {
+  border: 0;
+  background: transparent;
+  padding: 0.35rem 0.1rem;
 }
 
 .dashboard-text-metric.signal strong {
