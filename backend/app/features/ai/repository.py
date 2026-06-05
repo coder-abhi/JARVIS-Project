@@ -1,7 +1,7 @@
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from .models import AiResponseCache, AiUsageEvent
+from .models import AiFeatureSetting, AiResponseCache, AiUsageEvent
 
 
 def list_usage_events(db: Session, user_id: str) -> list[AiUsageEvent]:
@@ -89,3 +89,41 @@ def prune_cached_responses(
         return
     db.execute(delete(AiResponseCache).where(AiResponseCache.id.in_(stale_ids)))
     db.commit()
+
+
+def list_feature_settings(db: Session, user_id: str) -> list[AiFeatureSetting]:
+    return list(
+        db.scalars(
+            select(AiFeatureSetting)
+            .where(AiFeatureSetting.user_id == user_id)
+            .order_by(AiFeatureSetting.feature.asc())
+        )
+    )
+
+
+def get_feature_setting(db: Session, *, user_id: str, feature: str) -> AiFeatureSetting | None:
+    return db.scalar(
+        select(AiFeatureSetting).where(
+            AiFeatureSetting.user_id == user_id,
+            AiFeatureSetting.feature == feature,
+        )
+    )
+
+
+def set_feature_enabled(
+    db: Session,
+    *,
+    user_id: str,
+    feature: str,
+    enabled: bool,
+) -> AiFeatureSetting:
+    setting = get_feature_setting(db, user_id=user_id, feature=feature)
+    if setting is None:
+        setting = AiFeatureSetting(user_id=user_id, feature=feature, enabled=enabled)
+        db.add(setting)
+    else:
+        setting.enabled = enabled
+
+    db.commit()
+    db.refresh(setting)
+    return setting

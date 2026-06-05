@@ -40,6 +40,18 @@ FEATURE_LABELS = {
     "pomodoro_assignment": "Pomodoro assignment",
 }
 
+FEATURE_DESCRIPTIONS = {
+    "book_metadata": "Corrects book details and generates chapters when a book is added or chapters are regenerated.",
+    "book_recommendations": "Suggests new books to buy from your reading history.",
+    "next_reading_recommendations": "Prioritizes which already-owned unread book to read next.",
+    "goal_log_classification": "Corrects goal log text, links it to a goal, and estimates effort and importance.",
+    "goal_next_actions": "Generates mission analysis and recommended next actions from goals and tasks.",
+    "personality_insight": "Generates the working-style insight shown on the Goals page.",
+    "pomodoro_assignment": "Matches a completed Pomodoro note to the most relevant project and task.",
+}
+
+FEATURE_KEYS = tuple(FEATURE_LABELS)
+
 # USD per one million tokens. The app's default model and snapshot share these rates.
 MODEL_PRICING_PER_MILLION = {
     "gpt-4.1-mini": (0.40, 0.10, 1.60),
@@ -54,6 +66,56 @@ def ai_status() -> dict[str, str | bool]:
         "model": os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
         "message": "OpenAI API key is configured." if has_api_key else "OPENAI_API_KEY is not configured.",
     }
+
+
+def list_ai_feature_settings(db: Session, *, user_id: str) -> list[dict[str, str | bool]]:
+    saved_settings = {
+        setting.feature: setting.enabled
+        for setting in repository.list_feature_settings(db, user_id)
+    }
+    return [
+        {
+            "feature": feature,
+            "label": FEATURE_LABELS[feature],
+            "description": FEATURE_DESCRIPTIONS[feature],
+            "enabled": saved_settings.get(feature, True),
+        }
+        for feature in FEATURE_KEYS
+    ]
+
+
+def update_ai_feature_setting(
+    db: Session,
+    *,
+    user_id: str,
+    feature: str,
+    enabled: bool,
+) -> dict[str, str | bool] | None:
+    if feature not in FEATURE_LABELS:
+        return None
+    setting = repository.set_feature_enabled(
+        db,
+        user_id=user_id,
+        feature=feature,
+        enabled=enabled,
+    )
+    return {
+        "feature": feature,
+        "label": FEATURE_LABELS[feature],
+        "description": FEATURE_DESCRIPTIONS[feature],
+        "enabled": setting.enabled,
+    }
+
+
+def is_ai_feature_enabled(*, user_id: str | None, feature: str) -> bool:
+    if user_id is None or feature not in FEATURE_LABELS:
+        return True
+    session = SessionLocal()
+    try:
+        setting = repository.get_feature_setting(session, user_id=user_id, feature=feature)
+        return setting.enabled if setting is not None else True
+    finally:
+        session.close()
 
 
 def build_cache_fingerprint(

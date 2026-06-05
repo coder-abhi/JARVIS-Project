@@ -75,6 +75,111 @@
   margin-top: 0.75rem;
 }
 
+.ai-feature-controls {
+  margin-top: 0.75rem;
+}
+
+.ai-feature-controls-copy {
+  margin-top: 0.6rem;
+  color: var(--ops-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.ai-feature-control-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+
+.ai-feature-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--ops-border);
+  background: #000;
+  padding: 0.75rem;
+}
+
+.ai-feature-control.enabled {
+  border-color: rgba(34, 197, 94, 0.38);
+}
+
+.ai-feature-control > div {
+  min-width: 0;
+}
+
+.ai-feature-control > div > strong {
+  color: var(--ops-text);
+  font-size: 0.82rem;
+}
+
+.ai-feature-control > div > p {
+  margin-top: 0.28rem;
+  color: var(--ops-muted);
+  font-size: 0.67rem;
+  line-height: 1.45;
+}
+
+.ai-feature-toggle {
+  display: grid;
+  grid-template-columns: 2rem auto;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--ops-border-strong);
+  background: #080808;
+  color: var(--ops-muted);
+  padding: 0.42rem 0.52rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  text-transform: uppercase;
+}
+
+.ai-feature-toggle > span {
+  position: relative;
+  display: block;
+  width: 2rem;
+  height: 1rem;
+  border: 1px solid var(--ops-border-strong);
+  background: #111;
+}
+
+.ai-feature-toggle > span::after {
+  position: absolute;
+  top: 0.12rem;
+  left: 0.14rem;
+  width: 0.62rem;
+  height: 0.62rem;
+  background: var(--ops-muted);
+  content: "";
+  transition: transform 140ms ease, background 140ms ease;
+}
+
+.ai-feature-toggle > strong {
+  font-size: 0.64rem;
+}
+
+.ai-feature-toggle.enabled {
+  border-color: rgba(34, 197, 94, 0.7);
+  color: var(--ops-signal);
+}
+
+.ai-feature-toggle.enabled > span {
+  border-color: rgba(34, 197, 94, 0.65);
+}
+
+.ai-feature-toggle.enabled > span::after {
+  background: var(--ops-signal);
+  transform: translateX(0.96rem);
+}
+
+.ai-feature-toggle:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
 .ai-cost-grid {
   align-items: stretch;
 }
@@ -313,6 +418,10 @@
 
   .ai-cost-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ai-feature-control-list {
+    grid-template-columns: 1fr;
   }
 
   .ai-feature-bar-row {

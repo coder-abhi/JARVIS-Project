@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ... import auth, models as root_models
@@ -26,3 +26,29 @@ async def ai_costs(
         days=days,
         timezone_offset_minutes=timezone_offset_minutes,
     )
+
+
+@router.get("/features", response_model=list[schemas.AiFeatureSettingRead])
+async def ai_features(
+    db: Session = Depends(get_db),
+    current_user: root_models.User = Depends(auth.get_current_user),
+):
+    return service.list_ai_feature_settings(db, user_id=current_user.id)
+
+
+@router.put("/features/{feature}", response_model=schemas.AiFeatureSettingRead)
+async def update_ai_feature(
+    feature: str,
+    setting: schemas.AiFeatureSettingUpdate,
+    db: Session = Depends(get_db),
+    current_user: root_models.User = Depends(auth.get_current_user),
+):
+    updated = service.update_ai_feature_setting(
+        db,
+        user_id=current_user.id,
+        feature=feature,
+        enabled=setting.enabled,
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="AI feature not found")
+    return updated

@@ -167,6 +167,57 @@ class AiResponseCacheTests(unittest.TestCase):
         self.assertEqual(self.count_rows(ai_models.AiResponseCache), 1)
         self.assertEqual(self.usage_statuses(), ["failed", "success"])
 
+    def test_ai_feature_settings_default_on_and_persist_per_user(self) -> None:
+        with self.session_factory() as session:
+            defaults = ai_service.list_ai_feature_settings(session, user_id="user-1")
+            updated = ai_service.update_ai_feature_setting(
+                session,
+                user_id="user-1",
+                feature="book_recommendations",
+                enabled=False,
+            )
+            user_one = ai_service.list_ai_feature_settings(session, user_id="user-1")
+            user_two = ai_service.list_ai_feature_settings(session, user_id="user-2")
+
+        self.assertEqual(len(defaults), len(ai_service.FEATURE_KEYS))
+        self.assertTrue(all(setting["enabled"] for setting in defaults))
+        self.assertIsNotNone(updated)
+        self.assertFalse(next(setting["enabled"] for setting in user_one if setting["feature"] == "book_recommendations"))
+        self.assertTrue(next(setting["enabled"] for setting in user_two if setting["feature"] == "book_recommendations"))
+
+    def test_unknown_ai_feature_setting_is_rejected(self) -> None:
+        with self.session_factory() as session:
+            updated = ai_service.update_ai_feature_setting(
+                session,
+                user_id="user-1",
+                feature="unknown",
+                enabled=False,
+            )
+
+        self.assertIsNone(updated)
+        self.assertEqual(self.count_rows(ai_models.AiFeatureSetting), 0)
+
+    def test_disabled_feature_blocks_cached_and_forced_openai_results(self) -> None:
+        FakeOpenAI.configure({"value": "cached"}, {"value": "should-not-run"})
+        first = self.call_ai(feature="book_recommendations")
+
+        with self.session_factory() as session:
+            ai_service.update_ai_feature_setting(
+                session,
+                user_id="user-1",
+                feature="book_recommendations",
+                enabled=False,
+            )
+
+        cached_attempt = self.call_ai(feature="book_recommendations")
+        forced_attempt = self.call_ai(feature="book_recommendations", force_refresh=True)
+
+        self.assertEqual(first, {"value": "cached"})
+        self.assertEqual(cached_attempt, {})
+        self.assertEqual(forced_attempt, {})
+        self.assertEqual(FakeOpenAI.calls, 1)
+        self.assertEqual(self.count_rows(ai_models.AiUsageEvent), 1)
+
     def test_invalid_json_is_not_cached(self) -> None:
         FakeOpenAI.configure("not-json", {"value": "valid"})
 

@@ -54,3 +54,14 @@ class AiCostSummary(BaseModel):
     by_feature: list[AiFeatureCost]
     daily: list[AiDailyCost]
     recent_requests: list[AiRecentRequest]
+
+
+class AiFeatureSettingRead(BaseModel):
+    feature: str
+    label: str
+    description: str
+    enabled: bool
+
+
+class AiFeatureSettingUpdate(BaseModel):
+    enabled: bool

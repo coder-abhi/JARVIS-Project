@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { getAiCosts, type AiCostSummary } from "../api";
+import {
+  getAiCosts,
+  getAiFeatureSettings,
+  updateAiFeatureSetting,
+  type AiCostSummary,
+  type AiFeatureSetting,
+} from "../api";
 import "./AiCostPage.css";
 
 type CostRange = 7 | 30 | 90 | 0;
@@ -15,9 +21,11 @@ const rangeOptions: { value: CostRange; label: string }[] = [
 
 export default function AiCostPage() {
   const [summary, setSummary] = useState<AiCostSummary | null>(null);
+  const [features, setFeatures] = useState<AiFeatureSetting[]>([]);
   const [range, setRange] = useState<CostRange>(30);
   const [view, setView] = useState<CostView>("overview");
   const [isLoading, setIsLoading] = useState(true);
+  const [savingFeature, setSavingFeature] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -26,9 +34,11 @@ export default function AiCostPage() {
     setIsLoading(true);
     setError(null);
 
-    getAiCosts(range)
-      .then((data) => {
-        if (active) setSummary(data);
+    Promise.all([getAiCosts(range), getAiFeatureSettings()])
+      .then(([costData, featureData]) => {
+        if (!active) return;
+        setSummary(costData);
+        setFeatures(featureData);
       })
       .catch((err: Error) => {
         if (active) setError(err.message);
@@ -48,6 +58,21 @@ export default function AiCostPage() {
   );
   const rangeLabel = range === 0 ? "All recorded usage" : `Last ${range} days`;
   const hasUsage = Boolean(summary?.total_requests);
+  const enabledFeatureCount = features.filter((feature) => feature.enabled).length;
+
+  async function toggleFeature(feature: AiFeatureSetting) {
+    if (savingFeature) return;
+    setSavingFeature(feature.feature);
+    setError(null);
+    try {
+      const updated = await updateAiFeatureSetting(feature.feature, !feature.enabled);
+      setFeatures((current) => current.map((item) => (item.feature === updated.feature ? updated : item)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update AI feature");
+    } finally {
+      setSavingFeature(null);
+    }
+  }
 
   return (
     <main className="ops-screen ai-cost-screen">
@@ -82,6 +107,45 @@ export default function AiCostPage() {
           {summary.unpriced_requests} request{summary.unpriced_requests === 1 ? "" : "s"} use a model without configured pricing and are excluded from cost totals.
         </p>
       ) : null}
+
+      <section className="ops-panel ai-feature-controls">
+        <PanelHeader
+          label="OpenAI Feature Controls"
+          detail={`${enabledFeatureCount} of ${features.length || 7} enabled`}
+        />
+        <p className="ai-feature-controls-copy">
+          Disabled features never call OpenAI and use their local fallback behavior until you turn them on again.
+        </p>
+        {features.length ? (
+          <div className="ai-feature-control-list">
+            {features.map((feature) => {
+              const isSaving = savingFeature === feature.feature;
+              return (
+                <div className={feature.enabled ? "ai-feature-control enabled" : "ai-feature-control"} key={feature.feature}>
+                  <div>
+                    <strong>{feature.label}</strong>
+                    <p>{feature.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={feature.enabled}
+                    aria-label={`${feature.enabled ? "Disable" : "Enable"} ${feature.label}`}
+                    className={feature.enabled ? "ai-feature-toggle enabled" : "ai-feature-toggle"}
+                    disabled={Boolean(savingFeature)}
+                    onClick={() => void toggleFeature(feature)}
+                  >
+                    <span aria-hidden="true" />
+                    <strong>{isSaving ? "Saving" : feature.enabled ? "On" : "Off"}</strong>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="ops-empty">{isLoading ? "Loading OpenAI feature controls..." : "Feature controls are unavailable."}</p>
+        )}
+      </section>
 
       <section className="ai-cost-metrics">
         <CostMetric label={`${rangeLabel} spend`} value={formatCents(summary?.total_cost_cents ?? 0)} signal />

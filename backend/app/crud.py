@@ -1384,6 +1384,9 @@ def _call_openai_json(
     use_cache: bool = True,
     force_refresh: bool = False,
 ) -> dict:
+    if not ai_service.is_ai_feature_enabled(user_id=user_id, feature=feature):
+        return {}
+
     model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
     input_fingerprint = ai_service.build_cache_fingerprint(
         feature=feature,

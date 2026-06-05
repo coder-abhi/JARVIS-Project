@@ -211,6 +211,13 @@ export type AiStatus = {
   message: string;
 };
 
+export type AiFeatureSetting = {
+  feature: string;
+  label: string;
+  description: string;
+  enabled: boolean;
+};
+
 export type AiFeatureCost = {
   feature: string;
   label: string;
@@ -376,6 +383,17 @@ export function getAiStatus() {
 export function getAiCosts(days = 30) {
   const timezoneOffsetMinutes = new Date().getTimezoneOffset();
   return request<AiCostSummary>(`/ai/costs?days=${days}&timezone_offset_minutes=${timezoneOffsetMinutes}`);
+}
+
+export function getAiFeatureSettings() {
+  return request<AiFeatureSetting[]>("/ai/features");
+}
+
+export function updateAiFeatureSetting(feature: string, enabled: boolean) {
+  return request<AiFeatureSetting>(`/ai/features/${encodeURIComponent(feature)}`, {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
 }
 
 export function getGoalsOverview() {
