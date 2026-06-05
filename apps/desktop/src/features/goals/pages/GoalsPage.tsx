@@ -3,9 +3,11 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   completeGoalTask,
+  createProject,
   createGoal,
   getGoalNextActions,
   getGoalsOverview,
+  getProjectSummaries,
   logGoalEntry,
   refreshPersonalityInsight,
   restoreCompletedGoal,
@@ -16,7 +18,10 @@ import {
   type GoalTask,
   type GoalsOverview,
   type PersonalityInsight,
+  type ProjectSummary,
+  type ProjectType,
 } from "@/lib/api";
+import "./GoalsPage.css";
 
 const categoryLabels: Record<GoalCategory, string> = {
   monthly: "Monthly Mission Plan",
@@ -26,10 +31,15 @@ const categoryLabels: Record<GoalCategory, string> = {
 };
 
 const categoryOrder: GoalCategory[] = ["monthly", "quarterly", "yearly", "five_year"];
+const projectTypes: { value: ProjectType; label: string; description: string }[] = [
+  { value: "fixed", label: "Fixed", description: "Scoped mission with a defined extraction point." },
+  { value: "continuous", label: "Continuous", description: "Persistent operating loop or habit system." },
+];
 type SortMode = "importance" | "time" | "goal";
 
 export default function GoalsPage() {
   const [overview, setOverview] = useState<GoalsOverview | null>(null);
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [nextActions, setNextActions] = useState<GoalNextAction[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("importance");
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
@@ -43,6 +53,10 @@ export default function GoalsPage() {
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [creatingGoalCategory, setCreatingGoalCategory] = useState<GoalCategory | null>(null);
   const [restoringCompletionId, setRestoringCompletionId] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState("");
+  const [projectType, setProjectType] = useState<ProjectType>("fixed");
+  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
+  const [isSavingProject, setIsSavingProject] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,11 +71,21 @@ export default function GoalsPage() {
     setNextActions(actions);
   }
 
+  async function loadProjects() {
+    const summaries = await getProjectSummaries();
+    setProjects(summaries);
+  }
+
   useEffect(() => {
-    Promise.all([loadGoals(), loadNextActions()])
+    Promise.all([loadGoals(), loadNextActions(), loadProjects()])
       .catch((err: Error) => setError(err.message))
       .finally(() => setIsLoading(false));
   }, []);
+
+  const activeMissions = useMemo(
+    () => [...projects].sort((a, b) => getMissionRisk(b) - getMissionRisk(a)),
+    [projects],
+  );
 
   const sortedTasks = useMemo(() => {
     const tasks = [...(overview?.active_tasks ?? [])];
@@ -224,6 +248,26 @@ export default function GoalsPage() {
     }
   }
 
+  async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!projectName.trim() || isSavingProject) return;
+
+    setIsSavingProject(true);
+    setError(null);
+    try {
+      await createProject({ name: projectName.trim(), type: projectType });
+      await loadProjects();
+      setProjectName("");
+      setProjectType("fixed");
+      setIsCreateProjectOpen(false);
+      setMessage("Mission initialized.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create mission");
+    } finally {
+      setIsSavingProject(false);
+    }
+  }
+
   return (
     <main className="ops-screen pb-36">
       <section className="ops-header">
@@ -234,7 +278,8 @@ export default function GoalsPage() {
         </div>
         <div className="ops-mini-metrics">
           <Metric label="Open Tasks" value={overview?.active_tasks.length ?? 0} />
-          <Metric label="Missions" value={overview?.goals.length ?? 0} />
+          <Metric label="Projects" value={projects.length} />
+          <Metric label="Goals" value={overview?.goals.length ?? 0} />
           <Metric label="Completed" value={overview?.recent_completed_tasks.length ?? 0} />
         </div>
       </section>
@@ -242,6 +287,56 @@ export default function GoalsPage() {
       <div className="ops-grid">
         {error ? <p className="ops-alert danger span-12">{error}</p> : null}
         {message ? <p className="ops-alert signal span-12">{message}</p> : null}
+
+        <section className="ops-panel span-12">
+          <div className="mission-control-section-head">
+            <div>
+              <p className="ops-kicker">PROJECT MISSIONS</p>
+              <h2>Active Missions</h2>
+            </div>
+            <div className="mission-control-section-actions">
+              <span>{activeMissions.length} tracked operations</span>
+              <button type="button" onClick={() => setIsCreateProjectOpen(true)} className="ops-button primary">
+                New Mission
+              </button>
+            </div>
+          </div>
+          <div className="ops-table">
+            <div className="ops-row ops-row-head mission-control-row">
+              <span>Mission</span>
+              <span>Progress</span>
+              <span>Status</span>
+              <span>ETA</span>
+            </div>
+            {isLoading ? <p className="ops-empty">Loading mission telemetry...</p> : null}
+            {!isLoading && activeMissions.length === 0 ? (
+              <button type="button" onClick={() => setIsCreateProjectOpen(true)} className="ops-empty action">
+                No active missions. Initialize first mission.
+              </button>
+            ) : null}
+            {activeMissions.map((project) => {
+              const progress = getProjectProgress(project);
+              return (
+                <a key={project.id} href={`/project/${project.id}`} className="ops-row mission-control-row">
+                  <span className="truncate">
+                    <span className="ops-dot" />
+                    {project.name}
+                  </span>
+                  <span>
+                    <span className="ops-progress">
+                      <span style={{ width: `${progress}%` }} />
+                    </span>
+                    <b>{progress}%</b>
+                  </span>
+                  <span className={project.overdue_tasks > 0 ? "ops-status danger" : project.in_progress_tasks > 0 ? "ops-status signal" : "ops-status"}>
+                    {project.overdue_tasks > 0 ? "RISK" : project.in_progress_tasks > 0 ? "ACTIVE" : "QUEUED"}
+                  </span>
+                  <span>{formatProjectEta(project)}</span>
+                </a>
+              );
+            })}
+          </div>
+        </section>
 
         <section className="ops-panel span-8">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -424,6 +519,45 @@ export default function GoalsPage() {
           </div>
         </section>
       </div>
+
+      {isCreateProjectOpen ? (
+        <div className="mission-modal-backdrop">
+          <form onSubmit={handleCreateProject} className="mission-control-modal">
+            <div className="mission-modal-head">
+              <div>
+                <p className="ops-kicker">MISSION REGISTRY</p>
+                <h2>Initialize Mission</h2>
+              </div>
+              <button type="button" onClick={() => setIsCreateProjectOpen(false)} className="mission-modal-close" aria-label="Close">
+                x
+              </button>
+            </div>
+
+            <label className="mission-modal-field" htmlFor="project-name">
+              Mission name
+              <input id="project-name" value={projectName} onChange={(event) => setProjectName(event.target.value)} autoFocus />
+            </label>
+
+            <div className="mission-type-grid">
+              {projectTypes.map((item) => (
+                <button key={item.value} type="button" onClick={() => setProjectType(item.value)} className={projectType === item.value ? "mission-type-choice active" : "mission-type-choice"}>
+                  <strong>{item.label}</strong>
+                  <span>{item.description}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="mission-modal-actions">
+              <button type="button" onClick={() => setIsCreateProjectOpen(false)} className="ops-button">
+                Cancel
+              </button>
+              <button disabled={isSavingProject || !projectName.trim()} className="ops-button primary">
+                {isSavingProject ? "Creating..." : "Create Mission"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
 
       <form onSubmit={handleLogSubmit} className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-[#f4f6f3]/95 px-4 py-2.5 shadow-2xl shadow-stone-950/20 backdrop-blur">
         <div className="mx-auto flex max-w-4xl items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 shadow-lg shadow-stone-900/10">
@@ -666,4 +800,23 @@ function formatDate(value: string) {
 
 function formatNumber(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function getProjectProgress(project: ProjectSummary) {
+  const progressBasis = project.completed_hours + project.remaining_hours;
+  if (project.type === "continuous") {
+    const spentMinutes = Math.round(project.time_spent_hours * 60);
+    return Math.min(Math.round(((spentMinutes % 6000) / 6000) * 100), 100);
+  }
+  return progressBasis === 0 ? 0 : Math.min(Math.round((project.completed_hours / progressBasis) * 100), 100);
+}
+
+function getMissionRisk(project: ProjectSummary) {
+  return project.overdue_tasks * 10 + project.in_progress_tasks + project.remaining_hours;
+}
+
+function formatProjectEta(project: ProjectSummary) {
+  if (project.next_deadline) return new Date(project.next_deadline).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (project.type === "continuous") return `${Math.round(project.time_spent_hours * 60)}m logged`;
+  return `${Math.round(project.remaining_hours * 60)}m rem`;
 }

@@ -118,22 +118,22 @@
   }
 }
 
-.health-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-  gap: 0.5rem;
+.dashboard-text-list {
   margin-top: 0.75rem;
+  border-top: 1px solid var(--ops-border);
 }
 
-.signal-metric {
-  min-width: 0;
-  border: 1px solid var(--ops-border);
-  background: #000;
-  padding: 0.65rem;
+.dashboard-text-metric {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 1rem;
+  min-height: 2rem;
+  border-bottom: 1px solid var(--ops-border);
+  padding: 0.45rem 0;
 }
 
-.signal-metric p {
-  display: block;
+.dashboard-text-metric span {
   color: var(--ops-muted);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 0.64rem;
@@ -141,102 +141,25 @@
   text-transform: uppercase;
 }
 
-.signal-metric strong {
-  display: block;
-  margin-top: 0.25rem;
+.dashboard-text-metric strong {
   overflow-wrap: anywhere;
   color: var(--ops-text);
-  font-size: 1.05rem;
-  font-weight: 700;
-}
-
-.mission-row {
-  grid-template-columns: minmax(0, 1.7fr) minmax(8rem, 1fr) 5rem 6rem;
-}
-
-.dashboard-mission-modal {
-  width: min(34rem, 100%);
-  border: 1px solid var(--ops-border-strong);
-  background: #000;
-  padding: 1rem;
-}
-
-.dashboard-mission-modal h2 {
-  margin: 0;
-  color: var(--ops-text);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 1rem;
+  font-size: 0.8rem;
   font-weight: 700;
-  letter-spacing: 0;
-  text-transform: uppercase;
+  text-align: right;
 }
 
-.ops-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: grid;
-  place-items: center;
-  overflow-y: auto;
-  background: rgba(0, 0, 0, 0.82);
-  padding: 1rem;
+.dashboard-text-metric.signal strong {
+  color: var(--ops-signal);
 }
 
-.ops-modal-head,
-.ops-modal-actions {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 0.75rem;
+.dashboard-text-metric.danger strong {
+  color: var(--ops-danger);
 }
 
-.ops-modal-actions {
-  justify-content: end;
-  margin-top: 1rem;
-}
-
-.ops-icon-button {
-  width: 2rem;
-  height: 2rem;
-  border: 1px solid var(--ops-border);
-  background: #000;
-  color: var(--ops-muted);
-}
-
-.ops-field {
-  display: grid;
-  gap: 0.35rem;
-  margin-top: 1rem;
-  color: var(--ops-muted);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.ops-choice-grid {
-  display: grid;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-.ops-choice {
-  border: 1px solid var(--ops-border);
-  background: #000;
-  color: var(--ops-text);
-  padding: 0.65rem;
-  text-align: left;
-}
-
-.ops-choice.active {
-  border-color: rgba(34, 197, 94, 0.7);
-}
-
-.ops-choice span {
-  display: block;
-  margin-top: 0.25rem;
-  color: var(--ops-muted);
-  font-size: 0.72rem;
+.dashboard-text-metric.muted strong {
+  color: var(--ops-dim);
 }
 
 @media (max-width: 860px) {
@@ -256,9 +179,5 @@
 
   .llm-status-tile {
     min-width: 0;
-  }
-
-  .mission-row {
-    grid-template-columns: 1fr;
   }
 }

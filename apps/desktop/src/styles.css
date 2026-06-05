@@ -137,6 +137,7 @@ option {
 
 .span-4 { grid-column: span 4; }
 .span-5 { grid-column: span 5; }
+.span-6 { grid-column: span 6; }
 .span-7 { grid-column: span 7; }
 .span-8 { grid-column: span 8; }
 .span-12 { grid-column: span 12; }
@@ -613,6 +614,7 @@ option {
 @media (max-width: 1100px) {
   .span-4,
   .span-5,
+  .span-6,
   .span-7,
   .span-8 {
     grid-column: span 12;
