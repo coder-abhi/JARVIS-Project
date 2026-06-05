@@ -129,7 +129,7 @@ export default function LibraryPage() {
   const [queuedBookIds, setQueuedBookIds] = useState<Record<string, boolean>>({});
   const [expandedBookId, setExpandedBookId] = useState<string | null>(null);
   const [readingTrendMode, setReadingTrendMode] = useState<ReadingTrendMode>("regular");
-  const [readingTrendRange, setReadingTrendRange] = useState<ReadingTrendRange>(365);
+  const [readingTrendRange, setReadingTrendRange] = useState<ReadingTrendRange>(7);
   const [error, setError] = useState<string | null>(null);
 
   async function loadLocalLibraryData() {
