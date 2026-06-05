@@ -7,6 +7,7 @@ import SignupPage from "@/features/auth/pages/SignupPage";
 import DashboardPage from "@/features/dashboard/pages/DashboardPage";
 import GoalsPage from "@/features/goals/pages/GoalsPage";
 import LibraryPage from "@/features/library/pages/LibraryPage";
+import MoneyPage from "@/features/money/pages/MoneyPage";
 import ShelfPage from "@/features/library/pages/ShelfPage";
 import PomodoroHistoryPage from "@/features/pomodoro/pages/PomodoroHistoryPage";
 import PomodoroPage from "@/features/pomodoro/pages/PomodoroPage";
@@ -26,6 +27,7 @@ export const router = createBrowserRouter([
       { path: "pomodoro/history", element: <PomodoroHistoryPage /> },
       { path: "library", element: <LibraryPage /> },
       { path: "library/shelf", element: <ShelfPage /> },
+      { path: "money", element: <MoneyPage /> },
       { path: "ai-cost", element: <AiCostPage /> },
       { path: "login", element: <LoginPage /> },
       { path: "signup", element: <SignupPage /> },

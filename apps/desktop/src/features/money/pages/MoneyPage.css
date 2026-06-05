@@ -1,0 +1,620 @@
+.money-screen {
+  padding-bottom: 4rem;
+}
+
+.money-header-actions,
+.money-panel-head > div,
+.money-row-actions,
+.money-card-title,
+.money-goal-head,
+.money-card-meta,
+.money-chart-legend {
+  display: flex;
+  align-items: center;
+}
+
+.money-header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.money-currency {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--ops-dim);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.money-currency select {
+  min-height: 2.1rem;
+  border: 1px solid var(--ops-border);
+  padding: 0.35rem 0.5rem;
+  font-size: 0.7rem;
+}
+
+.money-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.money-summary-card {
+  min-width: 0;
+  border: 1px solid var(--ops-border);
+  background: rgba(3, 3, 3, 0.96);
+  padding: 0.85rem;
+}
+
+.money-summary-card > span,
+.money-summary-card > small,
+.money-account-card span,
+.money-credit-card span,
+.money-goal span,
+.money-intelligence span,
+.money-radar-row span,
+.money-list-row small,
+.money-income-list span,
+.money-income-list small,
+.money-category-list span,
+.money-category-list small {
+  color: var(--ops-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+}
+
+.money-summary-card > strong {
+  display: block;
+  margin-top: 0.45rem;
+  overflow-wrap: anywhere;
+  color: var(--ops-text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 1.25rem;
+}
+
+.money-summary-card.signal > strong,
+.money-positive {
+  color: var(--ops-signal) !important;
+}
+
+.money-summary-card.danger > strong,
+.money-negative {
+  color: #f87171 !important;
+}
+
+.money-summary-card > small {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--ops-dim);
+  line-height: 1.4;
+}
+
+.money-panel-head > div {
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.money-add-button,
+.money-row-actions button {
+  border: 0;
+  background: transparent;
+  color: var(--ops-signal);
+  cursor: pointer;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.money-row-actions {
+  justify-content: flex-end;
+  gap: 0.55rem;
+  white-space: nowrap;
+}
+
+.money-row-actions button.danger {
+  color: #f87171;
+}
+
+.money-chart {
+  min-height: 15rem;
+  margin-top: 0.65rem;
+}
+
+.money-chart svg {
+  display: block;
+  width: 100%;
+  height: 13rem;
+  overflow: visible;
+}
+
+.money-chart text {
+  fill: var(--ops-dim);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+}
+
+.money-chart-gridline {
+  stroke: rgba(229, 231, 235, 0.12);
+  stroke-width: 1;
+}
+
+.money-chart-income {
+  fill: rgba(34, 197, 94, 0.78);
+}
+
+.money-chart-expense {
+  fill: rgba(248, 113, 113, 0.68);
+}
+
+.money-chart-legend {
+  justify-content: flex-end;
+  gap: 1rem;
+  color: var(--ops-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+}
+
+.money-chart-legend span {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.money-chart-legend i {
+  width: 0.55rem;
+  height: 0.55rem;
+  background: var(--ops-signal);
+}
+
+.money-chart-legend i.expense {
+  background: #f87171;
+}
+
+.money-category-list,
+.money-intelligence,
+.money-radar,
+.money-card-list,
+.money-goals,
+.money-income-list {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.7rem;
+}
+
+.money-category-list > div {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.money-category-list > div > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.money-category-list strong {
+  color: var(--ops-text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.67rem;
+}
+
+.money-category-list small {
+  color: var(--ops-dim);
+  font-size: 0.56rem;
+}
+
+.money-category-bar,
+.money-progress {
+  height: 0.28rem;
+  overflow: hidden;
+  background: rgba(229, 231, 235, 0.12);
+}
+
+.money-category-bar span,
+.money-progress span {
+  display: block;
+  height: 100%;
+  background: var(--ops-signal);
+}
+
+.money-intelligence > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--ops-border);
+  padding: 0.55rem 0.1rem;
+}
+
+.money-intelligence > div:last-child {
+  border-bottom: 0;
+}
+
+.money-intelligence strong {
+  color: var(--ops-text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.72rem;
+  text-align: right;
+}
+
+.money-radar-row {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  border-bottom: 1px solid var(--ops-border);
+  padding: 0.45rem 0;
+}
+
+.money-radar-row:last-child {
+  border-bottom: 0;
+}
+
+.money-radar-row div {
+  min-width: 0;
+}
+
+.money-radar-row strong,
+.money-radar-row small {
+  display: block;
+}
+
+.money-radar-row strong {
+  overflow: hidden;
+  color: var(--ops-text);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.money-radar-row small {
+  margin-top: 0.16rem;
+  color: var(--ops-dim);
+  font-size: 0.62rem;
+}
+
+.money-radar-type {
+  border: 1px solid var(--ops-border);
+  padding: 0.3rem;
+  text-align: center;
+}
+
+.money-radar-type.signal {
+  border-color: rgba(34, 197, 94, 0.65);
+  color: var(--ops-signal);
+}
+
+.money-radar-type.danger {
+  border-color: rgba(239, 68, 68, 0.65);
+  color: #f87171;
+}
+
+.money-account-card,
+.money-credit-card,
+.money-goal {
+  border: 1px solid var(--ops-border);
+  background: #000;
+  padding: 0.7rem;
+}
+
+.money-account-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.money-account-card h3,
+.money-credit-card h3,
+.money-goal h3 {
+  margin: 0.2rem 0 0;
+  color: var(--ops-text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+}
+
+.money-account-card > strong,
+.money-card-title > strong,
+.money-goal-head > strong {
+  color: var(--ops-text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.82rem;
+}
+
+.money-card-title,
+.money-goal-head,
+.money-card-meta {
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.money-progress {
+  margin-top: 0.65rem;
+}
+
+.money-credit-card .money-progress span {
+  background: #f59e0b;
+}
+
+.money-card-meta {
+  margin-top: 0.4rem;
+}
+
+.money-credit-card .money-row-actions,
+.money-goal .money-row-actions {
+  margin-top: 0.6rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--ops-border);
+}
+
+.money-table-wrap {
+  overflow-x: auto;
+}
+
+.money-table {
+  margin-top: 0.7rem;
+}
+
+.money-table-row {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(10rem, 1.4fr) 7rem minmax(9rem, 1fr) 7rem 6.5rem;
+  gap: 0.65rem;
+  align-items: center;
+  min-width: 58rem;
+  border-bottom: 1px solid var(--ops-border);
+  padding: 0.55rem 0.45rem;
+  color: var(--ops-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.64rem;
+}
+
+.money-table-row > strong {
+  color: var(--ops-text);
+  font-size: 0.67rem;
+}
+
+.money-table-head {
+  background: #050505;
+  color: var(--ops-dim);
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.money-list-row {
+  display: grid;
+  grid-template-columns: 5.4rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.65rem;
+  border-bottom: 1px solid var(--ops-border);
+  padding: 0.6rem 0.15rem;
+}
+
+.money-list-row:last-child {
+  border-bottom: 0;
+}
+
+.money-list-row strong,
+.money-list-row small {
+  display: block;
+}
+
+.money-list-row strong {
+  color: var(--ops-text);
+  font-size: 0.72rem;
+}
+
+.money-direction,
+.money-investment-type {
+  border: 1px solid var(--ops-border);
+  color: var(--ops-muted);
+  padding: 0.3rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.56rem;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.money-direction.given {
+  border-color: rgba(34, 197, 94, 0.6);
+  color: var(--ops-signal);
+}
+
+.money-direction.taken {
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #f87171;
+}
+
+.money-list-amount {
+  text-align: right;
+}
+
+.money-income-list article {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.55rem;
+  border-bottom: 1px solid var(--ops-border);
+  padding: 0.55rem 0;
+}
+
+.money-income-list article:last-child {
+  border-bottom: 0;
+}
+
+.money-income-list strong,
+.money-income-list small {
+  display: block;
+}
+
+.money-income-list strong {
+  color: var(--ops-text);
+  font-size: 0.7rem;
+}
+
+.money-empty {
+  margin: 0.7rem 0 0;
+  border: 1px dashed var(--ops-border);
+  color: var(--ops-dim);
+  padding: 1rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.64rem;
+  line-height: 1.5;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.money-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.86);
+  padding: 1rem;
+}
+
+.money-modal {
+  width: min(44rem, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  border: 1px solid var(--ops-border-strong);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.024) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.024) 1px, transparent 1px),
+    #000;
+  background-size: 24px 24px;
+  padding: 1rem;
+}
+
+.money-modal-head,
+.money-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.money-modal h2 {
+  margin: 0.25rem 0 0;
+  color: var(--ops-text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 1rem;
+  text-transform: uppercase;
+}
+
+.money-close {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--ops-border);
+  background: #000;
+  color: var(--ops-muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+}
+
+.money-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.money-field {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.money-field.wide {
+  grid-column: span 2;
+}
+
+.money-field > span {
+  color: var(--ops-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.money-field input,
+.money-field select,
+.money-field textarea {
+  width: 100%;
+  min-height: 2.35rem;
+  border: 1px solid var(--ops-border);
+  border-radius: 0;
+  padding: 0.5rem 0.6rem;
+  outline: none;
+}
+
+.money-field textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+.money-field select:disabled {
+  opacity: 0.45;
+}
+
+.money-modal-actions {
+  justify-content: flex-end;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--ops-border);
+}
+
+@media (max-width: 1120px) {
+  .money-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .money-grid > .span-4,
+  .money-grid > .span-5,
+  .money-grid > .span-6,
+  .money-grid > .span-7,
+  .money-grid > .span-8 {
+    grid-column: span 12;
+  }
+}
+
+@media (max-width: 720px) {
+  .money-header,
+  .money-header-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .money-summary-grid,
+  .money-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .money-field.wide {
+    grid-column: auto;
+  }
+
+  .money-account-card,
+  .money-list-row,
+  .money-income-list article,
+  .money-radar-row {
+    grid-template-columns: 1fr;
+  }
+
+  .money-account-card > strong,
+  .money-list-amount,
+  .money-row-actions {
+    text-align: left;
+    justify-content: flex-start;
+  }
+}
