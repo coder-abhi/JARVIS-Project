@@ -52,8 +52,8 @@ export default function GoalsPage() {
     setOverview(data);
   }
 
-  async function loadNextActions() {
-    const actions = await getGoalNextActions();
+  async function loadNextActions(refresh = false) {
+    const actions = await getGoalNextActions(refresh);
     setNextActions(actions);
   }
 
@@ -215,7 +215,7 @@ export default function GoalsPage() {
     setIsRefreshingNextActions(true);
     setError(null);
     try {
-      await loadNextActions();
+      await loadNextActions(true);
       setMessage("AI next goals refreshed.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not refresh AI next goals");

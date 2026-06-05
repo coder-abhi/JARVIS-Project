@@ -568,7 +568,13 @@ def create_goal_completion_log(
 def refresh_personality_insight(db: Session, user: models.User) -> schemas.PersonalityInsightRead:
     goals = ensure_default_goals(db, user)
     completions = list_recent_goal_completions(db, user, limit=20)
-    insight = generate_personality_insight(goals, completions, user_id=user.id, usage_db=db)
+    insight = generate_personality_insight(
+        goals,
+        completions,
+        user_id=user.id,
+        usage_db=db,
+        force_refresh=True,
+    )
     now = datetime.now(timezone.utc)
     for goal in goals:
         goal.personality_insight = insight
@@ -577,11 +583,23 @@ def refresh_personality_insight(db: Session, user: models.User) -> schemas.Perso
     return schemas.PersonalityInsightRead(text=insight, refreshed_at=now)
 
 
-def suggest_goal_next_actions(db: Session, user: models.User) -> list[schemas.GoalNextActionRead]:
+def suggest_goal_next_actions(
+    db: Session,
+    user: models.User,
+    *,
+    force_refresh: bool = False,
+) -> list[schemas.GoalNextActionRead]:
     goals = ensure_default_goals(db, user)
     completions = list_recent_goal_completions(db, user, limit=20)
     active_tasks = list_goal_active_tasks(db, user)
-    actions = generate_goal_next_actions(goals, completions, active_tasks, user_id=user.id, usage_db=db)
+    actions = generate_goal_next_actions(
+        goals,
+        completions,
+        active_tasks,
+        user_id=user.id,
+        usage_db=db,
+        force_refresh=force_refresh,
+    )
     return [schemas.GoalNextActionRead(**action) for action in actions[:5]]
 
 
@@ -608,7 +626,7 @@ def classify_goal_log(
     }
     data = _call_openai_json(
         GOAL_LOG_SYSTEM_PROMPT,
-        f"{GOAL_LOG_USER_PROMPT} Context: {json.dumps(context)}",
+        f"{GOAL_LOG_USER_PROMPT} Context: {_canonical_json(context)}",
         max_tokens=700,
         feature="goal_log_classification",
         user_id=user_id,
@@ -634,6 +652,7 @@ def generate_goal_next_actions(
     active_tasks: list[models.Task],
     user_id: str | None = None,
     usage_db: Session | None = None,
+    force_refresh: bool = False,
 ) -> list[dict]:
     fallback = _fallback_goal_next_actions(goals, active_tasks)
     context = {
@@ -642,14 +661,31 @@ def generate_goal_next_actions(
             {"title": completion.title, "goal": completion.goal_label, "created_at": completion.created_at.isoformat()}
             for completion in completions
         ],
+        "active_tasks": [
+            {
+                "task_id": task.id,
+                "title": task.title,
+                "project_id": task.project_id,
+                "project_name": task.project.name if task.project else "Unknown",
+                "goal_id": task.goal_id,
+                "goal_title": task.goal.title if task.goal else None,
+                "status": task.status.value,
+                "priority": task.priority.value,
+                "importance": task.importance_rating,
+                "estimated_minutes": round(task.eta_hours * 60),
+                "created_at": task.created_at.isoformat(),
+            }
+            for task in active_tasks
+        ],
     }
     data = _call_openai_json(
         GOAL_NEXT_ACTIONS_SYSTEM_PROMPT,
-        f"{GOAL_NEXT_ACTIONS_USER_PROMPT} Context: {json.dumps(context)}",
+        f"{GOAL_NEXT_ACTIONS_USER_PROMPT} Context: {_canonical_json(context)}",
         max_tokens=900,
         feature="goal_next_actions",
         user_id=user_id,
         usage_db=usage_db,
+        force_refresh=force_refresh,
     )
     items = data.get("actions") if isinstance(data, dict) else None
     if not isinstance(items, list):
@@ -677,6 +713,7 @@ def generate_personality_insight(
     completions: list[models.CompletedGoalLog],
     user_id: str | None = None,
     usage_db: Session | None = None,
+    force_refresh: bool = False,
 ) -> str:
     fallback = (
         "Your goals suggest a builder's personality: you respond well to clear execution targets, but you also keep a "
@@ -693,11 +730,12 @@ def generate_personality_insight(
     }
     data = _call_openai_json(
         PERSONALITY_INSIGHT_SYSTEM_PROMPT,
-        f"{PERSONALITY_INSIGHT_USER_PROMPT} Context: {json.dumps(context)}",
+        f"{PERSONALITY_INSIGHT_USER_PROMPT} Context: {_canonical_json(context)}",
         max_tokens=700,
         feature="personality_insight",
         user_id=user_id,
         usage_db=usage_db,
+        force_refresh=force_refresh,
     )
     insight = _clean_text(data.get("insight")) if isinstance(data, dict) else None
     return (insight or fallback)[:1200]
@@ -976,6 +1014,7 @@ def enrich_book_metadata(db: Session, book_id: str, replace_chapters: bool = Fal
         category=db_book.category if db_book.category != "Uncategorized" else None,
         user_id=db_book.user_id,
         usage_db=db,
+        force_refresh=replace_chapters,
     )
     if metadata["title"]:
         db_book.title = str(metadata["title"])
@@ -1110,13 +1149,7 @@ def _last_12_months(value: datetime) -> list[tuple[int, int]]:
 
 def suggest_books(db: Session, user: models.User) -> list[schemas.SuggestedBook]:
     books = list_books(db, user)
-    three_months_ago = datetime.now(timezone.utc) - timedelta(days=90)
-    recent_books = [
-        book
-        for book in books
-        if book.purchase_date is not None and _as_aware(book.purchase_date) >= three_months_ago
-    ]
-    suggestions = generate_book_suggestions(recent_books or books, user_id=user.id, usage_db=db)
+    suggestions = generate_book_suggestions(books, user_id=user.id, usage_db=db)
     return [schemas.SuggestedBook(**suggestion) for suggestion in suggestions]
 
 
@@ -1132,6 +1165,7 @@ def resolve_book_metadata(
     category: str | None,
     user_id: str | None = None,
     usage_db: Session | None = None,
+    force_refresh: bool = False,
 ) -> dict[str, str | None | list[str]]:
     provided_author = _clean_text(author)
     provided_category = _clean_text(category)
@@ -1147,6 +1181,7 @@ def resolve_book_metadata(
         category=provided_category,
         user_id=user_id,
         usage_db=usage_db,
+        force_refresh=force_refresh,
     )
     if not data:
         return metadata
@@ -1181,8 +1216,9 @@ def fetch_book_metadata(
     category: str | None,
     user_id: str | None = None,
     usage_db: Session | None = None,
+    force_refresh: bool = False,
 ) -> dict:
-    prompt = f"{BOOK_METADATA_USER_PROMPT} Context: {json.dumps({'title': title, 'author': author, 'category': category})}"
+    prompt = f"{BOOK_METADATA_USER_PROMPT} Context: {_canonical_json({'title': title, 'author': author, 'category': category})}"
     return _call_openai_json(
         BOOK_METADATA_SYSTEM_PROMPT,
         prompt,
@@ -1190,6 +1226,7 @@ def fetch_book_metadata(
         feature="book_metadata",
         user_id=user_id,
         usage_db=usage_db,
+        force_refresh=force_refresh,
     )
 
 
@@ -1199,7 +1236,7 @@ def resolve_pomodoro_assignment(
     user_id: str | None = None,
     usage_db: Session | None = None,
 ) -> dict:
-    prompt = f"{POMODORO_ASSIGNMENT_USER_PROMPT} Context: {json.dumps({'note': note, 'candidates': candidates})}"
+    prompt = f"{POMODORO_ASSIGNMENT_USER_PROMPT} Context: {_canonical_json({'note': note, 'candidates': candidates})}"
     return _call_openai_json(
         POMODORO_ASSIGNMENT_SYSTEM_PROMPT,
         prompt,
@@ -1224,6 +1261,10 @@ def _as_float(value: object) -> float:
         return 0
 
 
+def _canonical_json(value: object) -> str:
+    return json.dumps(value, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+
+
 def generate_book_suggestions(
     books: list[models.Book],
     user_id: str | None = None,
@@ -1240,12 +1281,12 @@ def generate_book_suggestions(
             "category": book.category,
             "liked": book.liked,
             "status": book.status.value,
+            "purchase_date": book.purchase_date.isoformat() if book.purchase_date else None,
+            "created_at": book.created_at.isoformat(),
         }
         for book in books[:12]
     ]
-    prompt = (
-        f"{BOOK_RECOMMENDATIONS_USER_PROMPT} History: {json.dumps(recent_context)}"
-    )
+    prompt = f"{BOOK_RECOMMENDATIONS_USER_PROMPT} History: {_canonical_json(recent_context)}"
     data = _call_openai_json(
         BOOK_RECOMMENDATIONS_SYSTEM_PROMPT,
         prompt,
@@ -1292,13 +1333,16 @@ def generate_next_owned_book_suggestions(
             "status": book.status.value,
             "liked": book.liked,
             "rating": book.rating,
+            "total_pages": book.total_pages,
+            "current_page": book.current_page,
             "pages_read": book.pages_read,
             "pages_remaining": book.pages_remaining,
             "purchase_date": book.purchase_date.isoformat() if book.purchase_date else None,
+            "created_at": book.created_at.isoformat(),
         }
         for book in books[:30]
     ]
-    prompt = f"{OWNED_BOOK_NEXT_READ_USER_PROMPT} Candidates: {json.dumps(candidates)}"
+    prompt = f"{OWNED_BOOK_NEXT_READ_USER_PROMPT} Candidates: {_canonical_json(candidates)}"
     data = _call_openai_json(
         OWNED_BOOK_NEXT_READ_SYSTEM_PROMPT,
         prompt,
@@ -1337,18 +1381,96 @@ def _call_openai_json(
     feature: str,
     user_id: str | None = None,
     usage_db: Session | None = None,
+    use_cache: bool = True,
+    force_refresh: bool = False,
 ) -> dict:
+    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    input_fingerprint = ai_service.build_cache_fingerprint(
+        feature=feature,
+        model=model,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        max_tokens=max_tokens,
+    )
+
+    if use_cache and not force_refresh:
+        cached = ai_service.get_cached_json(
+            user_id=user_id,
+            feature=feature,
+            model=model,
+            input_fingerprint=input_fingerprint,
+        )
+        if cached is not None:
+            return cached
+
+    if not use_cache:
+        return _request_openai_json(
+            system_prompt,
+            user_prompt,
+            max_tokens,
+            feature=feature,
+            model=model,
+            user_id=user_id,
+            usage_db=usage_db,
+        ) or {}
+
+    with ai_service.cache_lock(
+        user_id=user_id,
+        feature=feature,
+        model=model,
+        input_fingerprint=input_fingerprint,
+    ):
+        if not force_refresh:
+            cached = ai_service.get_cached_json(
+                user_id=user_id,
+                feature=feature,
+                model=model,
+                input_fingerprint=input_fingerprint,
+            )
+            if cached is not None:
+                return cached
+
+        data = _request_openai_json(
+            system_prompt,
+            user_prompt,
+            max_tokens,
+            feature=feature,
+            model=model,
+            user_id=user_id,
+            usage_db=usage_db,
+        )
+        if data is None:
+            return {}
+        ai_service.store_cached_json(
+            user_id=user_id,
+            feature=feature,
+            model=model,
+            input_fingerprint=input_fingerprint,
+            data=data,
+        )
+        return data
+
+
+def _request_openai_json(
+    system_prompt: str,
+    user_prompt: str,
+    max_tokens: int,
+    *,
+    feature: str,
+    model: str,
+    user_id: str | None,
+    usage_db: Session | None,
+) -> dict | None:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         logger.warning("OPENAI_API_KEY is not set. Skipping OpenAI LLM call.")
-        return {}
+        return None
 
     if OpenAI is None:
         logger.warning("OpenAI Python SDK is not installed. Run `pip install -r backend/requirements.txt`.")
-        return {}
+        return None
 
     client = OpenAI(api_key=api_key)
-    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
     started_at = perf_counter()
 
     try:
@@ -1372,7 +1494,7 @@ def _call_openai_json(
             latency_ms=round((perf_counter() - started_at) * 1000),
         )
         logger.warning("OpenAI LLM call failed: %s", err)
-        return {}
+        return None
 
     text = getattr(response, "output_text", None) or _extract_response_text(response)
     usage = getattr(response, "usage", None)
@@ -1402,7 +1524,25 @@ def _call_openai_json(
             latency_ms=round((perf_counter() - started_at) * 1000),
         )
         logger.warning("OpenAI LLM returned non-JSON content.")
-        return {}
+        return None
+
+    if not isinstance(data, dict):
+        ai_service.record_ai_usage(
+            db=usage_db,
+            user_id=user_id,
+            feature=feature,
+            model=str(getattr(response, "model", model) or model),
+            response_id=getattr(response, "id", None),
+            input_tokens=input_tokens,
+            cached_input_tokens=cached_input_tokens,
+            output_tokens=output_tokens,
+            reasoning_tokens=reasoning_tokens,
+            total_tokens=total_tokens,
+            status="invalid_json",
+            latency_ms=round((perf_counter() - started_at) * 1000),
+        )
+        logger.warning("OpenAI LLM returned a non-object JSON response.")
+        return None
 
     ai_service.record_ai_usage(
         db=usage_db,

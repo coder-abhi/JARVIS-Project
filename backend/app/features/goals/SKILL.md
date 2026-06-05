@@ -10,6 +10,6 @@ API endpoints:
 - `PUT /goals/tasks/{task_id}/complete`
 - `PUT /goals/completions/{completion_id}/restore`
 - `POST /goals/personality/refresh`
-- `GET /goals/next-actions`
+- `GET /goals/next-actions?refresh=false` (`refresh=true` forces a new AI result)
 
 Depends on auth, projects, and tasks. AI enrichment is optional and has deterministic fallbacks.

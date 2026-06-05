@@ -421,8 +421,8 @@ export function refreshPersonalityInsight() {
   });
 }
 
-export function getGoalNextActions() {
-  return request<GoalNextAction[]>("/goals/next-actions");
+export function getGoalNextActions(refresh = false) {
+  return request<GoalNextAction[]>(`/goals/next-actions?refresh=${refresh}`);
 }
 
 export function getLibrarySummary() {

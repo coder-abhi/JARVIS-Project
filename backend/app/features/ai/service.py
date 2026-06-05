@@ -1,7 +1,13 @@
+import hashlib
+import json
 import logging
 import os
 from collections import defaultdict
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
+from threading import Lock
+from typing import Iterator
 
 from sqlalchemy.orm import Session
 
@@ -10,6 +16,19 @@ from . import models, repository
 
 
 logger = logging.getLogger(__name__)
+
+ANONYMOUS_CACHE_USER = "__anonymous__"
+AI_CACHE_ENTRIES_PER_FEATURE = 25
+
+
+@dataclass
+class _CacheLockEntry:
+    lock: Lock = field(default_factory=Lock)
+    users: int = 0
+
+
+_cache_locks: dict[str, _CacheLockEntry] = {}
+_cache_locks_guard = Lock()
 
 FEATURE_LABELS = {
     "book_metadata": "Book metadata",
@@ -35,6 +54,116 @@ def ai_status() -> dict[str, str | bool]:
         "model": os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
         "message": "OpenAI API key is configured." if has_api_key else "OPENAI_API_KEY is not configured.",
     }
+
+
+def build_cache_fingerprint(
+    *,
+    feature: str,
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    max_tokens: int,
+) -> str:
+    canonical_input = json.dumps(
+        {
+            "feature": feature,
+            "max_tokens": max_tokens,
+            "model": model,
+            "system_prompt": system_prompt,
+            "user_prompt": user_prompt,
+        },
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(canonical_input.encode("utf-8")).hexdigest()
+
+
+def get_cached_json(
+    *,
+    user_id: str | None,
+    feature: str,
+    model: str,
+    input_fingerprint: str,
+) -> dict | None:
+    session = SessionLocal()
+    try:
+        cached = repository.get_cached_response(
+            session,
+            user_id=_cache_user_id(user_id),
+            feature=feature,
+            model=model,
+            input_fingerprint=input_fingerprint,
+        )
+        if cached is None:
+            return None
+        try:
+            data = json.loads(cached.response_json)
+        except json.JSONDecodeError:
+            logger.warning("Ignoring invalid cached AI JSON for %s.", feature)
+            return None
+        return data if isinstance(data, dict) else None
+    finally:
+        session.close()
+
+
+def store_cached_json(
+    *,
+    user_id: str | None,
+    feature: str,
+    model: str,
+    input_fingerprint: str,
+    data: dict,
+) -> None:
+    session = SessionLocal()
+    cache_user_id = _cache_user_id(user_id)
+    try:
+        repository.upsert_cached_response(
+            session,
+            user_id=cache_user_id,
+            feature=feature,
+            model=model,
+            input_fingerprint=input_fingerprint,
+            response_json=json.dumps(data, ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        )
+        repository.prune_cached_responses(
+            session,
+            user_id=cache_user_id,
+            feature=feature,
+            model=model,
+            keep=AI_CACHE_ENTRIES_PER_FEATURE,
+        )
+    except Exception:
+        session.rollback()
+        logger.exception("Could not persist AI response cache.")
+    finally:
+        session.close()
+
+
+@contextmanager
+def cache_lock(
+    *,
+    user_id: str | None,
+    feature: str,
+    model: str,
+    input_fingerprint: str,
+) -> Iterator[None]:
+    lock_key = ":".join((_cache_user_id(user_id), feature, model, input_fingerprint))
+    with _cache_locks_guard:
+        entry = _cache_locks.setdefault(lock_key, _CacheLockEntry())
+        entry.users += 1
+    try:
+        with entry.lock:
+            yield
+    finally:
+        with _cache_locks_guard:
+            entry.users -= 1
+            if entry.users == 0 and _cache_locks.get(lock_key) is entry:
+                del _cache_locks[lock_key]
+
+
+def _cache_user_id(user_id: str | None) -> str:
+    return user_id or ANONYMOUS_CACHE_USER
 
 
 def record_ai_usage(

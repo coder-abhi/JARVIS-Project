@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ...database import Base
@@ -30,3 +30,31 @@ class AiUsageEvent(Base):
     status: Mapped[str] = mapped_column(String(30), default="success", nullable=False, index=True)
     latency_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+
+
+class AiResponseCache(Base):
+    __tablename__ = "ai_response_cache"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "feature",
+            "model",
+            "input_fingerprint",
+            name="uq_ai_response_cache_input",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    feature: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    model: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    response_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        nullable=False,
+        index=True,
+    )

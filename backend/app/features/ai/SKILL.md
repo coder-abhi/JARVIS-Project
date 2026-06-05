@@ -7,3 +7,5 @@ API endpoints:
 - `GET /ai/costs?days=30&timezone_offset_minutes=0` (authenticated)
 
 Successful and failed OpenAI calls are recorded with their feature, model, token usage, latency, and estimated cost. Cost totals are returned in cents. Other features call AI helpers internally, and missing API keys do not block core app workflows.
+
+Successful JSON responses are cached persistently by user, feature, model, prompts, token limit, and normalized input. Automatic reloads reuse the cache without creating usage events; explicit refresh actions can force one new OpenAI request.

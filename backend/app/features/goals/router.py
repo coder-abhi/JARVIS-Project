@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ... import auth, crud, models, schemas
@@ -80,7 +80,8 @@ async def refresh_personality_insight(
 
 @router.get("/next-actions", response_model=list[schemas.GoalNextActionRead])
 async def next_goal_actions(
+    refresh: bool = Query(default=False),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    return crud.suggest_goal_next_actions(db, current_user)
+    return crud.suggest_goal_next_actions(db, current_user, force_refresh=refresh)
