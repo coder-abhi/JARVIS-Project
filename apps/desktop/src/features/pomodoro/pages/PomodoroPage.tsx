@@ -27,6 +27,7 @@ import {
   type PendingPomodoroCompletion,
   type PersistedPomodoroSession,
 } from "@/lib/pomodoroSession";
+import { calculateRangeAverage } from "@/lib/chartAverage";
 import { addCalendarDays, dateKey, getSessionWorkDayDate, getWorkDayDate, isCurrentWorkDay, startOfCalendarDay, workDaysBetween } from "@/lib/workDay";
 import "./PomodoroPage.css";
 
@@ -69,6 +70,7 @@ type FocusTrendPoint = {
 type FocusTrend = {
   averageMinutes: number;
   days: FocusTrendRange;
+  hasActivityBeforeRange: boolean;
   maxMinutes: number;
   points: FocusTrendPoint[];
   totalMinutes: number;
@@ -1371,6 +1373,9 @@ function getVisibleRecentLogs(logs: PomodoroLog[], filter: RecentEntriesFilter) 
 function buildFocusTrend(logs: PomodoroLog[], days: FocusTrendRange): FocusTrend {
   const today = getWorkDayDate(new Date());
   const start = addCalendarDays(today, -(days - 1));
+  const hasActivityBeforeRange = logs.some(
+    (log) => log.mode === "focus" && log.minutes > 0 && getSessionWorkDayDate(log).getTime() < start.getTime(),
+  );
   const minutesByDay = logs.reduce<Record<string, number>>((acc, log) => {
     if (log.mode !== "focus") return acc;
 
@@ -1393,11 +1398,14 @@ function buildFocusTrend(logs: PomodoroLog[], days: FocusTrendRange): FocusTrend
     };
   });
   const totalMinutes = points.reduce((sum, point) => sum + point.minutes, 0);
-  const averageMinutes = Math.round(totalMinutes / days);
+  const averageMinutes = calculateRangeAverage(
+    points.map((point) => point.minutes),
+    hasActivityBeforeRange,
+  );
   const maxLoggedMinutes = Math.max(...points.map((point) => point.minutes), averageMinutes);
   const maxMinutes = Math.max(25, Math.ceil(maxLoggedMinutes / 25) * 25);
 
-  return { averageMinutes, days, maxMinutes, points, totalMinutes };
+  return { averageMinutes, days, hasActivityBeforeRange, maxMinutes, points, totalMinutes };
 }
 
 function FocusMinutesChart({ mode, trend }: { mode: FocusTrendMode; trend: FocusTrend }) {
@@ -1409,7 +1417,10 @@ function FocusMinutesChart({ mode, trend }: { mode: FocusTrendMode; trend: Focus
       value: mode === "cumulative" ? runningTotal : point.minutes,
     };
   });
-  const averageValue = Math.round(chartPoints.reduce((sum, point) => sum + point.value, 0) / Math.max(1, chartPoints.length));
+  const averageValue = calculateRangeAverage(
+    chartPoints.map((point) => point.value),
+    trend.hasActivityBeforeRange,
+  );
   const maxValue = Math.max(...chartPoints.map((point) => point.value), averageValue);
   const maxY = Math.max(25, Math.ceil(maxValue / 25) * 25);
   const xForIndex = (index: number) => (index / Math.max(1, trend.points.length - 1)) * 100;

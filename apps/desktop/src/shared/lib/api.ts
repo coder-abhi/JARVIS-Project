@@ -181,6 +181,7 @@ export type LibrarySummary = {
   reading_books: number;
   pages_today: number;
   pages_this_week: number;
+  first_reading_date?: string | null;
   current_categories: string[];
   daywise_pages: { date: string; pages: number }[];
   daily_pages?: { date: string; pages: number }[];

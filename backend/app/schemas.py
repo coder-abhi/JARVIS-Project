@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -311,6 +311,7 @@ class LibrarySummary(BaseModel):
     reading_books: int
     pages_today: int
     pages_this_week: int
+    first_reading_date: date | None
     current_categories: list[str]
     daywise_pages: list[dict[str, int | str]]
     daily_pages: list[dict[str, int | str]]

@@ -1057,6 +1057,7 @@ def get_library_summary(db: Session, user: models.User) -> schemas.LibrarySummar
         reading_books=sum(book.status == models.BookStatus.reading for book in books),
         pages_today=sum(log.pages_read for log in logs if _as_aware(log.read_at).date() == today),
         pages_this_week=sum(log.pages_read for log in logs if _as_aware(log.read_at).date() >= week_start),
+        first_reading_date=min((_as_aware(log.read_at).date() for log in logs), default=None),
         current_categories=active_categories,
         daywise_pages=daywise_pages,
         daily_pages=daily_pages,

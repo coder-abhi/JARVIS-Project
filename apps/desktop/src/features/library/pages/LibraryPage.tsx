@@ -19,6 +19,7 @@ import {
   type LibrarySummary,
   type SuggestedBook,
 } from "@/lib/api";
+import { calculateRangeAverage } from "@/lib/chartAverage";
 import "./LibraryPage.css";
 
 type BookDraft = {
@@ -50,6 +51,7 @@ type ReadingTrendPoint = {
 
 type ReadingTrend = {
   days: ReadingTrendRange;
+  hasActivityBeforeRange: boolean;
   points: ReadingTrendPoint[];
   totalPages: number;
 };
@@ -981,7 +983,10 @@ function ReadingTrendChart({
       value: mode === "cumulative" ? runningTotal : point.pages,
     };
   });
-  const averageValue = Math.round(chartPoints.reduce((sum, point) => sum + point.value, 0) / Math.max(1, chartPoints.length));
+  const averageValue = calculateRangeAverage(
+    chartPoints.map((point) => point.value),
+    trend.hasActivityBeforeRange,
+  );
   const maxValue = Math.max(...chartPoints.map((point) => point.value), averageValue);
   const maxY = Math.max(10, Math.ceil(maxValue / 25) * 25);
   const xForIndex = (index: number) => (index / Math.max(1, chartPoints.length - 1)) * 100;
@@ -1120,6 +1125,8 @@ function ReadingTrendChart({
 function buildReadingTrend(summary: LibrarySummary | null, range: ReadingTrendRange): ReadingTrend {
   if (range === 365) {
     const monthlyPages = summary?.monthly_pages.length ? summary.monthly_pages : buildEmptyMonthlyPages();
+    const rangeStart = `${monthlyPages[0].month}-01`;
+    const firstReadingDate = getFirstReadingDate(summary);
     const points = monthlyPages.map((month) => ({
       label: new Date(`${month.month}-01T00:00:00`).toLocaleDateString(undefined, { month: "short", year: "numeric" }),
       pages: month.pages,
@@ -1128,6 +1135,7 @@ function buildReadingTrend(summary: LibrarySummary | null, range: ReadingTrendRa
 
     return {
       days: range,
+      hasActivityBeforeRange: Boolean(firstReadingDate && firstReadingDate < rangeStart),
       points,
       totalPages: points.reduce((sum, point) => sum + point.pages, 0),
     };
@@ -1140,6 +1148,7 @@ function buildReadingTrend(summary: LibrarySummary | null, range: ReadingTrendRa
   }, {});
   const today = startOfDay(new Date());
   const start = addDays(today, -(range - 1));
+  const firstReadingDate = getFirstReadingDate(summary);
   const points = Array.from({ length: range }, (_, index) => {
     const date = addDays(start, index);
     const key = dateKey(date);
@@ -1153,9 +1162,16 @@ function buildReadingTrend(summary: LibrarySummary | null, range: ReadingTrendRa
 
   return {
     days: range,
+    hasActivityBeforeRange: Boolean(firstReadingDate && firstReadingDate < dateKey(start)),
     points,
     totalPages: points.reduce((sum, point) => sum + point.pages, 0),
   };
+}
+
+function getFirstReadingDate(summary: LibrarySummary | null) {
+  if (summary?.first_reading_date) return summary.first_reading_date;
+
+  return (summary?.daily_pages ?? summary?.daywise_pages ?? []).find((day) => day.pages > 0)?.date ?? null;
 }
 
 function getReadingTrendLabelIndexes(trend: ReadingTrend) {
