@@ -38,6 +38,7 @@ FEATURE_LABELS = {
     "goal_next_actions": "Goal next actions",
     "personality_insight": "Personality insight",
     "pomodoro_assignment": "Pomodoro assignment",
+    "captain_compass": "Captain Compass",
 }
 
 FEATURE_DESCRIPTIONS = {
@@ -48,9 +49,19 @@ FEATURE_DESCRIPTIONS = {
     "goal_next_actions": "Generates mission analysis and recommended next actions from goals and tasks.",
     "personality_insight": "Generates the working-style insight shown on the Goals page.",
     "pomodoro_assignment": "Matches a completed Pomodoro note to the most relevant project and task.",
+    "captain_compass": "Rates execution speed, direction, and consistency from goals and project timelines.",
 }
 
 FEATURE_KEYS = tuple(FEATURE_LABELS)
+AVAILABLE_MODELS = (
+    "gpt-5.4-mini",
+    "gpt-5.4",
+    "gpt-5-mini",
+    "gpt-4.1-mini",
+)
+FEATURE_DEFAULT_MODELS = {
+    "captain_compass": "gpt-5.4-mini",
+}
 
 # USD per one million tokens. The app's default model and snapshot share these rates.
 MODEL_PRICING_PER_MILLION = {
@@ -68,9 +79,9 @@ def ai_status() -> dict[str, str | bool]:
     }
 
 
-def list_ai_feature_settings(db: Session, *, user_id: str) -> list[dict[str, str | bool]]:
+def list_ai_feature_settings(db: Session, *, user_id: str) -> list[dict]:
     saved_settings = {
-        setting.feature: setting.enabled
+        setting.feature: setting
         for setting in repository.list_feature_settings(db, user_id)
     }
     return [
@@ -78,7 +89,13 @@ def list_ai_feature_settings(db: Session, *, user_id: str) -> list[dict[str, str
             "feature": feature,
             "label": FEATURE_LABELS[feature],
             "description": FEATURE_DESCRIPTIONS[feature],
-            "enabled": saved_settings.get(feature, True),
+            "enabled": saved_settings[feature].enabled if feature in saved_settings else True,
+            "model": (
+                saved_settings[feature].model
+                if feature in saved_settings and saved_settings[feature].model
+                else default_model_for_feature(feature)
+            ),
+            "available_models": list(AVAILABLE_MODELS),
         }
         for feature in FEATURE_KEYS
     ]
@@ -89,21 +106,27 @@ def update_ai_feature_setting(
     *,
     user_id: str,
     feature: str,
-    enabled: bool,
-) -> dict[str, str | bool] | None:
+    enabled: bool | None,
+    model: str | None = None,
+) -> dict[str, str | bool | list[str]] | None:
     if feature not in FEATURE_LABELS:
         return None
-    setting = repository.set_feature_enabled(
+    if model is not None and model not in AVAILABLE_MODELS:
+        raise ValueError("Unsupported OpenAI model")
+    setting = repository.set_feature_setting(
         db,
         user_id=user_id,
         feature=feature,
         enabled=enabled,
+        model=model,
     )
     return {
         "feature": feature,
         "label": FEATURE_LABELS[feature],
         "description": FEATURE_DESCRIPTIONS[feature],
         "enabled": setting.enabled,
+        "model": setting.model or default_model_for_feature(feature),
+        "available_models": list(AVAILABLE_MODELS),
     }
 
 
@@ -114,6 +137,22 @@ def is_ai_feature_enabled(*, user_id: str | None, feature: str) -> bool:
     try:
         setting = repository.get_feature_setting(session, user_id=user_id, feature=feature)
         return setting.enabled if setting is not None else True
+    finally:
+        session.close()
+
+
+def default_model_for_feature(feature: str) -> str:
+    return FEATURE_DEFAULT_MODELS.get(feature, os.getenv("OPENAI_MODEL", "gpt-4.1-mini"))
+
+
+def resolve_ai_model(*, user_id: str | None, feature: str) -> str:
+    default_model = default_model_for_feature(feature)
+    if user_id is None or feature not in FEATURE_LABELS:
+        return default_model
+    session = SessionLocal()
+    try:
+        setting = repository.get_feature_setting(session, user_id=user_id, feature=feature)
+        return setting.model if setting is not None and setting.model else default_model
     finally:
         session.close()
 

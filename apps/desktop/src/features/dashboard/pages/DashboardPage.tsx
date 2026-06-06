@@ -2,12 +2,14 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
+  getCaptainCompass,
   getAiCosts,
   getAiStatus,
   getProjectSummaries,
   logGoalEntry,
   type AiCostSummary,
   type AiStatus,
+  type CaptainCompass,
   type ProjectSummary,
 } from "@/lib/api";
 import {
@@ -25,12 +27,15 @@ export default function DashboardPage() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [aiCosts, setAiCosts] = useState<AiCostSummary | null>(null);
   const [focusLogs, setFocusLogs] = useState<FocusMetricLog[]>([]);
+  const [captainCompass, setCaptainCompass] = useState<CaptainCompass | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [compassError, setCompassError] = useState<string | null>(null);
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
   const [isAiReachable, setIsAiReachable] = useState(true);
   const [now, setNow] = useState(() => new Date());
   const [logText, setLogText] = useState("");
   const [isLogging, setIsLogging] = useState(false);
+  const [isRefreshingCompass, setIsRefreshingCompass] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   async function loadDashboard() {
@@ -43,6 +48,9 @@ export default function DashboardPage() {
   useEffect(() => {
     loadDashboard()
       .catch((err: Error) => setError(err.message));
+    getCaptainCompass()
+      .then(setCaptainCompass)
+      .catch((err: Error) => setCompassError(err.message));
   }, []);
 
   useEffect(() => {
@@ -152,6 +160,19 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleCompassRefresh() {
+    if (isRefreshingCompass) return;
+    setIsRefreshingCompass(true);
+    setCompassError(null);
+    try {
+      setCaptainCompass(await getCaptainCompass(true));
+    } catch (err) {
+      setCompassError(err instanceof Error ? err.message : "Could not refresh Captain Compass");
+    } finally {
+      setIsRefreshingCompass(false);
+    }
+  }
+
   return (
     <main className="ops-screen">
       <section className="ops-header">
@@ -192,7 +213,36 @@ export default function DashboardPage() {
         </div>
 
         <div className="ops-panel span-4">
-          <PanelHeader label="System Metrics" detail="Current project inventory" />
+          <div className="captain-compass-head">
+            <PanelHeader
+              label="Captain Compass"
+              detail={captainCompass ? formatCompassStatus(captainCompass.status) : "Assessing course"}
+            />
+            <button
+              type="button"
+              className="ops-button primary captain-compass-refresh"
+              onClick={() => void handleCompassRefresh()}
+              disabled={isRefreshingCompass}
+            >
+              {isRefreshingCompass ? "Assessing..." : "Refresh"}
+            </button>
+          </div>
+          {compassError ? <p className="captain-compass-error">{compassError}</p> : null}
+          <div className="captain-compass-ratings">
+            <CompassRating label="Speed" value={captainCompass?.speed_rating} />
+            <CompassRating label="Direction" value={captainCompass?.direction_rating} />
+            <CompassRating label="Consistency" value={captainCompass?.consistency_rating} />
+            <CompassRating label="Overall" value={captainCompass?.overall_rating} signal />
+          </div>
+          <p className="captain-compass-summary">
+            {captainCompass?.summary ?? "Captain Compass is reading your goals and project timelines."}
+          </p>
+          {captainCompass?.advice ? <p className="captain-compass-advice">{captainCompass.advice}</p> : null}
+          {captainCompass ? (
+            <p className="captain-compass-meta">
+              {captainCompass.model} / {formatCompassTime(captainCompass.refreshed_at)}
+            </p>
+          ) : null}
         </div>
 
         <div className="ops-panel span-4">
@@ -272,6 +322,23 @@ function TextMetric({
   );
 }
 
+function CompassRating({
+  label,
+  value,
+  signal = false,
+}: {
+  label: string;
+  value?: number;
+  signal?: boolean;
+}) {
+  return (
+    <div className={signal ? "captain-compass-rating signal" : "captain-compass-rating"}>
+      <span>{label}</span>
+      <strong>{value ?? "-"}/10</strong>
+    </div>
+  );
+}
+
 function buildLiveFeed(projects: ProjectSummary[]) {
   const now = new Date();
   const lines = projects
@@ -305,4 +372,17 @@ function formatCents(value: number) {
     minimumFractionDigits: value > 0 && value < 0.01 ? 4 : 2,
     maximumFractionDigits: 6,
   })}¢`;
+}
+
+function formatCompassStatus(status: string) {
+  return status.replace(/_/g, " ");
+}
+
+function formatCompassTime(value: string) {
+  return new Date(value).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }

@@ -74,6 +74,7 @@ class AiFeatureSetting(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     feature: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    model: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

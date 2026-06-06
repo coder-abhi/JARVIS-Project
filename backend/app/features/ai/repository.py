@@ -110,19 +110,28 @@ def get_feature_setting(db: Session, *, user_id: str, feature: str) -> AiFeature
     )
 
 
-def set_feature_enabled(
+def set_feature_setting(
     db: Session,
     *,
     user_id: str,
     feature: str,
-    enabled: bool,
+    enabled: bool | None = None,
+    model: str | None = None,
 ) -> AiFeatureSetting:
     setting = get_feature_setting(db, user_id=user_id, feature=feature)
     if setting is None:
-        setting = AiFeatureSetting(user_id=user_id, feature=feature, enabled=enabled)
+        setting = AiFeatureSetting(
+            user_id=user_id,
+            feature=feature,
+            enabled=True if enabled is None else enabled,
+            model=model,
+        )
         db.add(setting)
     else:
-        setting.enabled = enabled
+        if enabled is not None:
+            setting.enabled = enabled
+        if model is not None:
+            setting.model = model
 
     db.commit()
     db.refresh(setting)

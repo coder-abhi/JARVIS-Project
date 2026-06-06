@@ -13,6 +13,7 @@ import ShelfPage from "@/features/library/pages/ShelfPage";
 import PomodoroHistoryPage from "@/features/pomodoro/pages/PomodoroHistoryPage";
 import PomodoroPage from "@/features/pomodoro/pages/PomodoroPage";
 import ProjectDetailPage from "@/features/projects/pages/ProjectDetailPage";
+import SettingsPage from "@/features/settings/pages/SettingsPage";
 
 export const router = createBrowserRouter([
   {
@@ -30,6 +31,7 @@ export const router = createBrowserRouter([
       { path: "library/shelf", element: <ShelfPage /> },
       { path: "money", element: <MoneyPage /> },
       { path: "ai-cost", element: <AiCostPage /> },
+      { path: "settings", element: <SettingsPage /> },
       { path: "login", element: <LoginPage /> },
       { path: "signup", element: <SignupPage /> },
       { path: "*", element: <Navigate to="/" replace /> }

@@ -28,6 +28,7 @@ def ensure_sqlite_compatibility() -> None:
     book_columns = {column["name"] for column in inspector.get_columns("books")} if "books" in table_names else set()
     chapter_columns = {column["name"] for column in inspector.get_columns("book_chapters")} if "book_chapters" in table_names else set()
     reading_log_columns = {column["name"] for column in inspector.get_columns("reading_logs")} if "reading_logs" in table_names else set()
+    ai_feature_setting_columns = {column["name"] for column in inspector.get_columns("ai_feature_settings")} if "ai_feature_settings" in table_names else set()
 
     with engine.begin() as connection:
         if project_columns and "user_id" not in project_columns:
@@ -163,6 +164,9 @@ def ensure_sqlite_compatibility() -> None:
                         """
                     )
                 )
+
+        if ai_feature_setting_columns and "model" not in ai_feature_setting_columns:
+            connection.execute(text("ALTER TABLE ai_feature_settings ADD COLUMN model VARCHAR(120)"))
 
         if project_columns and task_columns:
             migrate_legacy_goal_inbox_projects(connection, table_names)

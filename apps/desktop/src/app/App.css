@@ -93,6 +93,23 @@
     color 160ms ease;
 }
 
+.sidebar-footer .sidebar-user-link {
+  display: flex;
+  justify-content: space-between;
+  border-color: var(--ops-border);
+}
+
+.sidebar-footer .sidebar-user-link:hover,
+.sidebar-footer .sidebar-user-link.active {
+  border-color: rgba(34, 197, 94, 0.62);
+  color: var(--ops-signal);
+}
+
+.sidebar-footer .sidebar-user-link small {
+  color: var(--ops-dim);
+  font-size: 0.58rem;
+}
+
 .sidebar-nav a:hover,
 .sidebar-nav a.active {
   border-color: var(--ops-border-strong);

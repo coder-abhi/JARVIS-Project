@@ -237,6 +237,18 @@ class GoalNextActionRead(BaseModel):
     urgency: int = Field(ge=1, le=5)
 
 
+class CaptainCompassRead(BaseModel):
+    speed_rating: int = Field(ge=1, le=10)
+    direction_rating: int = Field(ge=1, le=10)
+    consistency_rating: int = Field(ge=1, le=10)
+    overall_rating: int = Field(ge=1, le=10)
+    status: str
+    summary: str
+    advice: str
+    model: str
+    refreshed_at: datetime
+
+
 class GoalsOverview(BaseModel):
     goals: list[GoalRead]
     active_tasks: list[GoalTaskRead]

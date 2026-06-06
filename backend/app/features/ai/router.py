@@ -43,12 +43,16 @@ async def update_ai_feature(
     db: Session = Depends(get_db),
     current_user: root_models.User = Depends(auth.get_current_user),
 ):
-    updated = service.update_ai_feature_setting(
-        db,
-        user_id=current_user.id,
-        feature=feature,
-        enabled=setting.enabled,
-    )
+    try:
+        updated = service.update_ai_feature_setting(
+            db,
+            user_id=current_user.id,
+            feature=feature,
+            enabled=setting.enabled,
+            model=setting.model,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if updated is None:
         raise HTTPException(status_code=404, detail="AI feature not found")
     return updated

@@ -91,3 +91,12 @@ async def next_goal_actions(
     current_user: models.User = Depends(auth.get_current_user),
 ):
     return crud.suggest_goal_next_actions(db, current_user, force_refresh=refresh)
+
+
+@router.get("/captain-compass", response_model=schemas.CaptainCompassRead)
+async def captain_compass(
+    refresh: bool = Query(default=False),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    return crud.get_captain_compass(db, current_user, force_refresh=refresh)

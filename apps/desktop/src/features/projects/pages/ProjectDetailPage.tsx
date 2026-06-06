@@ -21,7 +21,7 @@ import {
   type TaskStatus,
   type TaskUpdate,
 } from "@/lib/api";
-import { dateKey, getSessionWorkDayDate } from "@/lib/workDay";
+import { readProjectBehaviorSettings } from "@/lib/appSettings";
 import "./ProjectDetailPage.css";
 
 type StatusFilter = "all" | "incomplete" | TaskStatus;
@@ -36,12 +36,12 @@ export default function ProjectDetailPage() {
   const [sessions, setSessions] = useState<PomodoroProjectSession[]>([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [eta, setEta] = useState("60");
+  const [eta, setEta] = useState(() => String(readProjectBehaviorSettings().defaultTaskMinutes));
   const [spent, setSpent] = useState("0");
   const [startDate, setStartDate] = useState("");
   const [deadline, setDeadline] = useState("");
-  const [status, setStatus] = useState<TaskStatus>("todo");
-  const [priority, setPriority] = useState<TaskPriority>("medium");
+  const [status, setStatus] = useState<TaskStatus>(() => readProjectBehaviorSettings().defaultTaskStatus);
+  const [priority, setPriority] = useState<TaskPriority>(() => readProjectBehaviorSettings().defaultTaskPriority);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -109,12 +109,13 @@ export default function ProjectDetailPage() {
     setTasks((current) => [task, ...current]);
     setTitle("");
     setDescription("");
-    setEta("60");
+    const defaults = readProjectBehaviorSettings();
+    setEta(String(defaults.defaultTaskMinutes));
     setSpent("0");
     setStartDate("");
     setDeadline("");
-    setStatus("todo");
-    setPriority("medium");
+    setStatus(defaults.defaultTaskStatus);
+    setPriority(defaults.defaultTaskPriority);
     setIsCreateTaskOpen(false);
   }
 
@@ -150,6 +151,18 @@ export default function ProjectDetailPage() {
     }
   }
 
+  function toggleCreateTask() {
+    setIsCreateTaskOpen((current) => {
+      if (!current) {
+        const defaults = readProjectBehaviorSettings();
+        setEta(String(defaults.defaultTaskMinutes));
+        setStatus(defaults.defaultTaskStatus);
+        setPriority(defaults.defaultTaskPriority);
+      }
+      return !current;
+    });
+  }
+
   const totals = tasks.reduce(
     (acc, task) => ({
       eta: acc.eta + task.eta_hours,
@@ -162,8 +175,7 @@ export default function ProjectDetailPage() {
   const investedMinutes = taskSpentMinutes + sessionMinutes;
   const completedTasks = tasks.filter((task) => task.status === "done").length;
   const activeTasks = tasks.length - completedTasks;
-  const sessionTimelineGroups = formatProjectSessionTimeline(sessions);
-  const continuousTimelineItems = formatContinuousProjectTimeline(tasks, sessions);
+  const timelineItems = formatProjectActivityTimeline(tasks, sessions);
   const filteredTasks = tasks.filter((task) => {
     const matchesStatus =
       statusFilter === "all" ||
@@ -291,7 +303,7 @@ export default function ProjectDetailPage() {
               <h2>Objectives</h2>
               <button
                 type="button"
-                onClick={() => setIsCreateTaskOpen((current) => !current)}
+                onClick={toggleCreateTask}
                 className="ops-button primary"
               >
                 {isCreateTaskOpen ? "Close" : "Add Objective"}
@@ -357,53 +369,26 @@ export default function ProjectDetailPage() {
           <h2>Timeline</h2>
           <p className="project-meta-line">{investedMinutes} min logged</p>
         </div>
-        {project?.type === "continuous" ? (
-          <div className="project-session-log">
-            {continuousTimelineItems.length === 0 ? <p>No activity logged yet.</p> : null}
-            {continuousTimelineItems.map((item) => (
-              <div
-                key={item.id}
-                role={item.task ? "button" : undefined}
-                tabIndex={item.task ? 0 : undefined}
-                onClick={() => {
-                  if (item.task) setEditingTask(item.task);
-                }}
-                onKeyDown={(event) => {
-                  if (item.task && (event.key === "Enter" || event.key === " ")) setEditingTask(item.task);
-                }}
-                className={item.task ? "project-session-line interactive" : "project-session-line"}
-              >
-                <p>{item.date} --&gt; {item.minutes} minutes</p>
-                <p>{item.description}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <>
-            <div className="project-timeline-list">
-              {tasks.map((task) => (
-                <ProjectTimelineRow key={task.id} task={task} onEdit={setEditingTask} />
-              ))}
+        <div className="project-session-log">
+          {timelineItems.length === 0 ? <p>No completed tasks or Pomodoro sessions logged yet.</p> : null}
+          {timelineItems.map((item) => (
+            <div
+              key={item.id}
+              role={item.task ? "button" : undefined}
+              tabIndex={item.task ? 0 : undefined}
+              onClick={() => {
+                if (item.task) setEditingTask(item.task);
+              }}
+              onKeyDown={(event) => {
+                if (item.task && (event.key === "Enter" || event.key === " ")) setEditingTask(item.task);
+              }}
+              className={item.task ? "project-session-line interactive" : "project-session-line"}
+            >
+              <p>{item.date} --&gt; {item.minutes} minutes</p>
+              <p>{item.description}</p>
             </div>
-            <div className="project-session-log">
-              {sessionTimelineGroups.length === 0 ? <p>No completed session descriptions yet.</p> : null}
-              {sessionTimelineGroups.map((group) => (
-                <div key={group.date} className="project-session-group">
-                  <div className="project-session-lines">
-                    {group.sessions.map((session) => (
-                      <div key={session.id} className="project-session-line">
-                        <p>
-                          {group.date} --&gt; {session.minutes} minutes
-                        </p>
-                        <p>{session.description?.trim() || "(No description)"}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
+          ))}
+        </div>
       </section>
 
       {isCreateTaskOpen ? (
@@ -577,63 +562,12 @@ function ProjectObjectiveRow({
   );
 }
 
-function ProjectTimelineRow({ task, onEdit }: { task: Task; onEdit: (task: Task) => void }) {
-  const etaMinutes = Math.round(task.eta_hours * 60);
-  const spentMinutes = Math.round(task.time_spent_hours * 60);
-  const remainingMinutes = task.status === "done" ? 0 : Math.max(etaMinutes - spentMinutes, 0);
-  const deadline = task.deadline ? new Date(task.deadline) : null;
-  const daysUntilDeadline = deadline ? getDayDifference(deadline, new Date()) : null;
-
-  return (
-    <button type="button" onClick={() => onEdit(task)} className="project-timeline-row">
-      <span>{formatTaskDate(task.start_date ?? task.created_at, "unknown")} --&gt; {formatTaskDate(task.deadline, "open")}</span>
-      <strong>{task.title}</strong>
-      <span>{task.status.replace("_", " ")} / {spentMinutes}m logged / {remainingMinutes}m left / {etaMinutes}m eta</span>
-      <span>{formatDeadlineState(daysUntilDeadline)}</span>
-    </button>
-  );
-}
-
-function getDayDifference(later: Date, earlier: Date) {
-  const laterDay = new Date(later);
-  const earlierDay = new Date(earlier);
-
-  laterDay.setHours(0, 0, 0, 0);
-  earlierDay.setHours(0, 0, 0, 0);
-
-  return Math.ceil((laterDay.getTime() - earlierDay.getTime()) / (1000 * 60 * 60 * 24));
-}
-
 function formatTaskDate(value: string | null | undefined, fallback: string) {
   if (!value) return fallback;
   return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-function formatDeadlineState(daysUntilDeadline: number | null) {
-  if (daysUntilDeadline === null) return "no deadline";
-  if (daysUntilDeadline < 0) return `${Math.abs(daysUntilDeadline)}d late`;
-  if (daysUntilDeadline === 0) return "due today";
-  return `${daysUntilDeadline}d left`;
-}
-
-function formatProjectSessionTimeline(sessions: PomodoroProjectSession[]) {
-  const grouped = sessions.reduce<Record<string, { date: Date; sessions: PomodoroProjectSession[] }>>((acc, session) => {
-    const workDay = getSessionWorkDayDate(session);
-    const key = dateKey(workDay);
-    acc[key] = acc[key] ?? { date: workDay, sessions: [] };
-    acc[key].sessions.push(session);
-    return acc;
-  }, {});
-
-  return Object.values(grouped)
-    .sort((a, b) => b.date.getTime() - a.date.getTime())
-    .map((group) => ({
-      date: group.date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
-      sessions: group.sessions.sort((a, b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime()),
-    }));
-}
-
-function formatContinuousProjectTimeline(tasks: Task[], sessions: PomodoroProjectSession[]) {
+function formatProjectActivityTimeline(tasks: Task[], sessions: PomodoroProjectSession[]) {
   return [
     ...sessions.map((session) => ({
       id: `session-${session.id}`,
@@ -647,7 +581,7 @@ function formatContinuousProjectTimeline(tasks: Task[], sessions: PomodoroProjec
       description: session.description?.trim() || "(No description)",
       task: null,
     })),
-    ...tasks.map((task) => ({
+    ...tasks.filter((task) => task.status === "done").map((task) => ({
       id: `task-${task.id}`,
       timestamp: new Date(task.created_at).getTime(),
       date: new Date(task.created_at).toLocaleDateString(undefined, {
@@ -655,8 +589,8 @@ function formatContinuousProjectTimeline(tasks: Task[], sessions: PomodoroProjec
         day: "numeric",
         year: "numeric",
       }),
-      minutes: Math.round(task.eta_hours * 60),
-      description: `${task.title} / ${task.status.replace("_", " ")}`,
+      minutes: Math.round((task.time_spent_hours || task.eta_hours) * 60),
+      description: task.description?.trim() || task.title,
       task,
     })),
   ].sort((a, b) => b.timestamp - a.timestamp);

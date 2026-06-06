@@ -131,7 +131,6 @@
 }
 
 .project-objective-list,
-.project-timeline-list,
 .project-session-log {
   margin-top: 0.45rem;
   border-top: 1px solid var(--ops-border);
@@ -142,7 +141,6 @@
 }
 
 .project-objective-row,
-.project-timeline-row,
 .project-session-group {
   border-bottom: 1px solid var(--ops-border);
 }
@@ -157,8 +155,7 @@
   padding: 0.5rem 0;
 }
 
-.project-objective-row:hover,
-.project-timeline-row:hover {
+.project-objective-row:hover {
   color: var(--ops-signal);
 }
 
@@ -203,28 +200,6 @@
 .project-objective-status {
   justify-self: end;
   width: 8.5rem;
-}
-
-.project-timeline-row {
-  display: grid;
-  width: 100%;
-  grid-template-columns: 15rem minmax(10rem, 1fr) minmax(16rem, 1fr) 6.5rem;
-  gap: 0.7rem;
-  border-right: 0;
-  border-left: 0;
-  border-top: 0;
-  background: transparent;
-  color: var(--ops-muted);
-  padding: 0.55rem 0;
-  text-align: left;
-}
-
-.project-timeline-row strong {
-  overflow: hidden;
-  color: var(--ops-text);
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .project-session-log {
@@ -281,10 +256,5 @@
 
   .project-filter-line {
     justify-content: start;
-  }
-
-  .project-timeline-row {
-    grid-template-columns: 1fr;
-    gap: 0.25rem;
   }
 }

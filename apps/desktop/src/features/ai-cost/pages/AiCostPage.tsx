@@ -65,7 +65,7 @@ export default function AiCostPage() {
     setSavingFeature(feature.feature);
     setError(null);
     try {
-      const updated = await updateAiFeatureSetting(feature.feature, !feature.enabled);
+      const updated = await updateAiFeatureSetting(feature.feature, { enabled: !feature.enabled });
       setFeatures((current) => current.map((item) => (item.feature === updated.feature ? updated : item)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update AI feature");

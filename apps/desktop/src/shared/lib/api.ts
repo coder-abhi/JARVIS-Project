@@ -239,6 +239,20 @@ export type AiFeatureSetting = {
   label: string;
   description: string;
   enabled: boolean;
+  model: string;
+  available_models: string[];
+};
+
+export type CaptainCompass = {
+  speed_rating: number;
+  direction_rating: number;
+  consistency_rating: number;
+  overall_rating: number;
+  status: "on_track" | "drifting" | "stalled" | "overextended" | string;
+  summary: string;
+  advice: string;
+  model: string;
+  refreshed_at: string;
 };
 
 export type AiFeatureCost = {
@@ -419,10 +433,10 @@ export function getAiFeatureSettings() {
   return request<AiFeatureSetting[]>("/ai/features");
 }
 
-export function updateAiFeatureSetting(feature: string, enabled: boolean) {
+export function updateAiFeatureSetting(feature: string, changes: { enabled?: boolean; model?: string }) {
   return request<AiFeatureSetting>(`/ai/features/${encodeURIComponent(feature)}`, {
     method: "PUT",
-    body: JSON.stringify({ enabled }),
+    body: JSON.stringify(changes),
   });
 }
 
@@ -471,6 +485,10 @@ export function refreshPersonalityInsight() {
 
 export function getGoalNextActions(refresh = false) {
   return request<GoalNextAction[]>(`/goals/next-actions?refresh=${refresh}`);
+}
+
+export function getCaptainCompass(refresh = false) {
+  return request<CaptainCompass>(`/goals/captain-compass?refresh=${refresh}`);
 }
 
 export function getLibrarySummary() {

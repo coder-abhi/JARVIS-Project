@@ -1,0 +1,117 @@
+.settings-screen {
+  padding-bottom: 2rem;
+}
+
+.settings-header {
+  margin-top: 0.75rem;
+}
+
+.settings-user-badge {
+  border: 1px solid rgba(34, 197, 94, 0.58);
+  color: var(--ops-signal);
+  padding: 0.45rem 0.65rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.settings-panel {
+  margin-top: 0.75rem;
+}
+
+.settings-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.settings-field {
+  display: grid;
+  gap: 0.35rem;
+  border: 1px solid var(--ops-border);
+  background: #000;
+  padding: 0.75rem;
+}
+
+.settings-field > span,
+.settings-ai-copy strong {
+  color: var(--ops-text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.settings-field small,
+.settings-ai-copy p,
+.settings-panel-copy {
+  color: var(--ops-muted);
+  font-size: 0.67rem;
+  line-height: 1.45;
+}
+
+.settings-field select,
+.settings-field input,
+.settings-ai-row select {
+  min-height: 2.15rem;
+  border: 1px solid var(--ops-border);
+  background: #050505;
+  color: var(--ops-text);
+  padding: 0.4rem 0.55rem;
+}
+
+.settings-panel-copy {
+  margin: 0.65rem 0 0;
+}
+
+.settings-ai-list {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+
+.settings-ai-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(10rem, 13rem) 4rem;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--ops-border);
+  background: #000;
+  padding: 0.7rem;
+}
+
+.settings-ai-row.enabled {
+  border-color: rgba(34, 197, 94, 0.34);
+}
+
+.settings-ai-copy p {
+  margin: 0.25rem 0 0;
+}
+
+.settings-toggle {
+  min-height: 2.15rem;
+  border: 1px solid var(--ops-border-strong);
+  background: #050505;
+  color: var(--ops-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.settings-toggle.enabled {
+  border-color: rgba(34, 197, 94, 0.68);
+  color: var(--ops-signal);
+}
+
+@media (max-width: 760px) {
+  .settings-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-ai-row {
+    grid-template-columns: 1fr;
+  }
+}

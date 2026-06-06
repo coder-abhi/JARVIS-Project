@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 
 class AiFeatureCost(BaseModel):
@@ -61,7 +61,16 @@ class AiFeatureSettingRead(BaseModel):
     label: str
     description: str
     enabled: bool
+    model: str
+    available_models: list[str]
 
 
 class AiFeatureSettingUpdate(BaseModel):
-    enabled: bool
+    enabled: bool | None = None
+    model: str | None = Field(default=None, min_length=1, max_length=120)
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if self.enabled is None and self.model is None:
+            raise ValueError("At least one AI setting must be provided")
+        return self

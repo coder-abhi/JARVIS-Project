@@ -22,6 +22,7 @@ import {
   type ProjectType,
 } from "@/lib/api";
 import TimelinePage from "@/features/timeline/pages/TimelinePage";
+import { readProjectBehaviorSettings } from "@/lib/appSettings";
 import "./GoalsPage.css";
 
 const categoryLabels: Record<GoalCategory, string> = {
@@ -52,7 +53,9 @@ export default function GoalsPage() {
   const [restoringCompletionId, setRestoringCompletionId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
-  const [projectType, setProjectType] = useState<ProjectType>("fixed");
+  const [projectType, setProjectType] = useState<ProjectType>(
+    () => readProjectBehaviorSettings().defaultProjectType,
+  );
   const [projectGoalId, setProjectGoalId] = useState("");
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [isSavingProject, setIsSavingProject] = useState(false);
@@ -199,7 +202,7 @@ export default function GoalsPage() {
       await loadGoals();
       setProjectName("");
       setProjectDescription("");
-      setProjectType("fixed");
+      setProjectType(readProjectBehaviorSettings().defaultProjectType);
       setProjectGoalId("");
       setIsCreateProjectOpen(false);
       setMessage("Mission initialized.");
@@ -208,6 +211,11 @@ export default function GoalsPage() {
     } finally {
       setIsSavingProject(false);
     }
+  }
+
+  function openCreateProject() {
+    setProjectType(readProjectBehaviorSettings().defaultProjectType);
+    setIsCreateProjectOpen(true);
   }
 
   return (
@@ -225,7 +233,7 @@ export default function GoalsPage() {
             <Metric label="Goals" value={overview?.goals.length ?? 0} />
             <Metric label="Completed" value={overview?.recent_completed_tasks.length ?? 0} />
           </div>
-          <button type="button" onClick={() => setIsCreateProjectOpen(true)} className="ops-button primary justify-self-end">
+          <button type="button" onClick={openCreateProject} className="ops-button primary justify-self-end">
             New Mission
           </button>
         </div>

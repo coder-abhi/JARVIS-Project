@@ -54,7 +54,14 @@ export default function App() {
           </nav>
 
           <div className="sidebar-footer">
-            <span className="truncate">{user?.username ?? "Not signed in"}</span>
+            {user ? (
+              <Link to="/settings" className={location.pathname === "/settings" ? "sidebar-user-link active" : "sidebar-user-link"}>
+                <span className="truncate">{user.username}</span>
+                <small>Settings</small>
+              </Link>
+            ) : (
+              <span className="truncate">Not signed in</span>
+            )}
             {user ? (
               <button type="button" onClick={logout}>
                 Logout

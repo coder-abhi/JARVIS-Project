@@ -14,6 +14,8 @@ from .prompts import (
     BOOK_METADATA_USER_PROMPT,
     BOOK_RECOMMENDATIONS_SYSTEM_PROMPT,
     BOOK_RECOMMENDATIONS_USER_PROMPT,
+    CAPTAIN_COMPASS_SYSTEM_PROMPT,
+    CAPTAIN_COMPASS_USER_PROMPT,
     GOAL_LOG_SYSTEM_PROMPT,
     GOAL_LOG_USER_PROMPT,
     GOAL_NEXT_ACTIONS_SYSTEM_PROMPT,
@@ -684,6 +686,43 @@ def suggest_goal_next_actions(
     return [schemas.GoalNextActionRead(**action) for action in actions[:5]]
 
 
+def get_captain_compass(
+    db: Session,
+    user: models.User,
+    *,
+    force_refresh: bool = False,
+) -> schemas.CaptainCompassRead:
+    goals = ensure_default_goals(db, user)
+    projects = list(
+        db.scalars(
+            select(models.Project)
+            .where(models.Project.user_id == user.id)
+            .options(
+                selectinload(models.Project.parent_goal),
+                selectinload(models.Project.tasks),
+                selectinload(models.Project.pomodoro_sessions),
+            )
+            .order_by(models.Project.created_at.asc())
+        )
+    )
+    completion_logs = list(
+        db.scalars(
+            select(models.CompletedGoalLog)
+            .where(models.CompletedGoalLog.user_id == user.id)
+            .order_by(models.CompletedGoalLog.created_at.asc())
+        )
+    )
+    assessment = generate_captain_compass(
+        goals,
+        projects,
+        completion_logs,
+        user_id=user.id,
+        usage_db=db,
+        force_refresh=force_refresh,
+    )
+    return schemas.CaptainCompassRead(**assessment)
+
+
 def classify_goal_log(
     text: str,
     goals: list[models.Goal],
@@ -834,6 +873,98 @@ def generate_personality_insight(
     )
     insight = _clean_text(data.get("insight")) if isinstance(data, dict) else None
     return (insight or fallback)[:1200]
+
+
+def generate_captain_compass(
+    goals: list[models.Goal],
+    projects: list[models.Project],
+    completion_logs: list[models.CompletedGoalLog],
+    user_id: str | None = None,
+    usage_db: Session | None = None,
+    force_refresh: bool = False,
+) -> dict:
+    fallback = _fallback_captain_compass(goals, projects, completion_logs)
+    fallback["model"] = ai_service.resolve_ai_model(user_id=user_id, feature="captain_compass")
+    logs_by_project: dict[str, list[models.CompletedGoalLog]] = {}
+    logged_task_ids = set()
+    for completion in completion_logs:
+        if completion.project_id:
+            logs_by_project.setdefault(completion.project_id, []).append(completion)
+        if completion.task_id:
+            logged_task_ids.add(completion.task_id)
+
+    context_projects = []
+    for project in projects:
+        timeline = [
+            {
+                "kind": "pomodoro_session",
+                "occurred_at": session.completed_at.isoformat(),
+                "minutes": session.minutes,
+                "description": session.description,
+            }
+            for session in project.pomodoro_sessions
+        ]
+        timeline.extend(
+            {
+                "kind": "completed_task",
+                "occurred_at": completion.created_at.isoformat(),
+                "title": completion.title,
+            }
+            for completion in logs_by_project.get(project.id, [])
+        )
+        timeline.extend(
+            {
+                "kind": "completed_task",
+                "occurred_at": task.created_at.isoformat(),
+                "title": task.title,
+                "description": task.description,
+                "minutes_logged": round(task.time_spent_hours * 60),
+            }
+            for task in project.tasks
+            if task.status == models.TaskStatus.done and task.id not in logged_task_ids
+        )
+        timeline.sort(key=lambda item: item["occurred_at"])
+        context_projects.append(
+            {
+                "project_id": project.id,
+                "name": project.name,
+                "description": project.description,
+                "type": project.type.value,
+                "parent_goal": project.parent_goal.title if project.parent_goal else None,
+                "timeline": timeline,
+            }
+        )
+
+    context = {
+        "goals": [_goal_context(goal) for goal in goals],
+        "projects": context_projects,
+    }
+    data = _call_openai_json(
+        CAPTAIN_COMPASS_SYSTEM_PROMPT,
+        f"{CAPTAIN_COMPASS_USER_PROMPT} Context: {_canonical_json(context)}",
+        max_tokens=850,
+        feature="captain_compass",
+        user_id=user_id,
+        usage_db=usage_db,
+        force_refresh=force_refresh,
+    )
+    if not isinstance(data, dict):
+        return fallback
+
+    status = str(data.get("status") or fallback["status"]).strip().lower()
+    if status not in {"on_track", "drifting", "stalled", "overextended"}:
+        status = fallback["status"]
+    return {
+        "speed_rating": _bounded_int(data.get("speed_rating"), 1, 10, fallback["speed_rating"]),
+        "direction_rating": _bounded_int(data.get("direction_rating"), 1, 10, fallback["direction_rating"]),
+        "consistency_rating": _bounded_int(data.get("consistency_rating"), 1, 10, fallback["consistency_rating"]),
+        "overall_rating": _bounded_int(data.get("overall_rating"), 1, 10, fallback["overall_rating"]),
+        "status": status,
+        "summary": (_clean_text(data.get("summary")) or fallback["summary"])[:900],
+        "advice": (_clean_text(data.get("advice")) or fallback["advice"])[:320],
+        "model": ai_service.resolve_ai_model(user_id=user_id, feature="captain_compass"),
+        "refreshed_at": datetime.now(timezone.utc),
+    }
 
 
 def _latest_personality_insight(goals: list[models.Goal]) -> schemas.PersonalityInsightRead:
@@ -1020,6 +1151,46 @@ def _fallback_goal_next_actions(goals: list[models.Goal], active_tasks: list[mod
             }
         )
     return actions[:5]
+
+
+def _fallback_captain_compass(
+    goals: list[models.Goal],
+    projects: list[models.Project],
+    completion_logs: list[models.CompletedGoalLog],
+) -> dict:
+    completed_tasks = sum(task.status == models.TaskStatus.done for project in projects for task in project.tasks)
+    sessions = [session for project in projects for session in project.pomodoro_sessions]
+    focused_minutes = sum(session.minutes for session in sessions)
+    aligned_projects = sum(project.parent_goal is not None for project in projects if project.name != "General Work")
+    directional_projects = sum(project.name != "General Work" for project in projects)
+    activity_count = completed_tasks + len(completion_logs) + len(sessions)
+    speed = min(10, max(1, 3 + activity_count // 4))
+    direction = min(10, max(1, 5 + (aligned_projects * 3 // max(directional_projects, 1))))
+    consistency = min(10, max(1, 3 + len({session.completed_at.date() for session in sessions})))
+    overall = round((speed + direction + consistency) / 3)
+    if activity_count == 0:
+        status = "stalled"
+    elif direction <= 5:
+        status = "drifting"
+    elif speed >= 9 and direction < 7:
+        status = "overextended"
+    else:
+        status = "on_track"
+    return {
+        "speed_rating": speed,
+        "direction_rating": direction,
+        "consistency_rating": consistency,
+        "overall_rating": overall,
+        "status": status,
+        "summary": (
+            f"Current evidence shows {activity_count} completed work signals and {focused_minutes} focused minutes "
+            f"across {len(projects)} projects. Direction is strongest when active projects are explicitly tied to "
+            f"the four goal horizons; keep General Work from becoming the default destination for important work."
+        ),
+        "advice": "Choose one goal-aligned project as the next execution lane, then finish and log one concrete outcome.",
+        "model": ai_service.resolve_ai_model(user_id=None, feature="captain_compass"),
+        "refreshed_at": datetime.now(timezone.utc),
+    }
 
 
 def _task_linked_goals(task: models.Task) -> list[models.Goal]:
@@ -1547,7 +1718,7 @@ def _call_openai_json(
     if not ai_service.is_ai_feature_enabled(user_id=user_id, feature=feature):
         return {}
 
-    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    model = ai_service.resolve_ai_model(user_id=user_id, feature=feature)
     input_fingerprint = ai_service.build_cache_fingerprint(
         feature=feature,
         model=model,

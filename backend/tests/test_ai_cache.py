@@ -26,6 +26,7 @@ class FakeOpenAI:
     calls = 0
     delay_seconds = 0
     outputs: list[object] = []
+    requested_models: list[str] = []
     lock = threading.Lock()
 
     def __init__(self, api_key: str):
@@ -37,11 +38,13 @@ class FakeOpenAI:
         cls.calls = 0
         cls.delay_seconds = delay_seconds
         cls.outputs = list(outputs)
+        cls.requested_models = []
 
-    def create(self, **_kwargs):
+    def create(self, **kwargs):
         with self.lock:
             call_index = self.calls
             type(self).calls += 1
+            type(self).requested_models.append(str(kwargs.get("model")))
         if self.delay_seconds:
             time.sleep(self.delay_seconds)
 
@@ -184,6 +187,26 @@ class AiResponseCacheTests(unittest.TestCase):
         self.assertIsNotNone(updated)
         self.assertFalse(next(setting["enabled"] for setting in user_one if setting["feature"] == "book_recommendations"))
         self.assertTrue(next(setting["enabled"] for setting in user_two if setting["feature"] == "book_recommendations"))
+        self.assertEqual(
+            next(setting["model"] for setting in defaults if setting["feature"] == "captain_compass"),
+            "gpt-5.4-mini",
+        )
+
+    def test_ai_feature_model_setting_controls_calls(self) -> None:
+        FakeOpenAI.configure({"value": "configured"})
+        with self.session_factory() as session:
+            ai_service.update_ai_feature_setting(
+                session,
+                user_id="user-1",
+                feature="captain_compass",
+                enabled=True,
+                model="gpt-5.4-mini",
+            )
+
+        result = self.call_ai(feature="captain_compass")
+
+        self.assertEqual(result, {"value": "configured"})
+        self.assertEqual(FakeOpenAI.requested_models, ["gpt-5.4-mini"])
 
     def test_unknown_ai_feature_setting_is_rejected(self) -> None:
         with self.session_factory() as session:
@@ -368,6 +391,74 @@ class AiResponseCacheTests(unittest.TestCase):
 
         self.assertEqual(result, [])
         suggest.assert_called_once_with(db, current_user, force_refresh=True)
+
+    def test_captain_compass_uses_completed_timeline_context_and_refresh_route(self) -> None:
+        FakeOpenAI.configure(
+            {
+                "speed_rating": 7,
+                "direction_rating": 8,
+                "consistency_rating": 6,
+                "overall_rating": 7,
+                "status": "on_track",
+                "summary": "Execution is moving in the stated direction.",
+                "advice": "Finish the next aligned outcome.",
+            }
+        )
+        goal = models.Goal(
+            id="goal-1",
+            user_id="user-1",
+            category=models.GoalCategory.monthly,
+            title="Ship the release",
+            target_value=1,
+            current_value=0,
+            unit="release",
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        project = models.Project(
+            id="project-1",
+            user_id="user-1",
+            name="Release",
+            type=models.ProjectType.fixed,
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            linked_goals=[goal],
+        )
+        task = models.Task(
+            id="task-1",
+            project_id=project.id,
+            title="Publish build",
+            status=models.TaskStatus.done,
+            priority=models.TaskPriority.high,
+            importance_rating=5,
+            eta_hours=1,
+            time_spent_hours=1,
+            created_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+            project=project,
+        )
+        project.tasks = [task]
+
+        first = crud.generate_captain_compass([goal], [project], [], user_id="user-1")
+        task.title = "Publish signed build"
+        second = crud.generate_captain_compass([goal], [project], [], user_id="user-1")
+
+        self.assertEqual(first["overall_rating"], 7)
+        self.assertEqual(second["overall_rating"], 7)
+        self.assertEqual(FakeOpenAI.calls, 2)
+        self.assertEqual(FakeOpenAI.requested_models, ["gpt-5.4-mini", "gpt-5.4-mini"])
+
+        current_user = SimpleNamespace(id="user-1")
+        db = object()
+        compass = SimpleNamespace(overall_rating=7)
+        with patch.object(crud, "get_captain_compass", return_value=compass) as get_compass:
+            result = self.run_async(
+                goals_router.captain_compass(
+                    refresh=True,
+                    db=db,
+                    current_user=current_user,
+                )
+            )
+
+        self.assertIs(result, compass)
+        get_compass.assert_called_once_with(db, current_user, force_refresh=True)
 
     def call_ai(
         self,
