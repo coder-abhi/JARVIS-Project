@@ -38,3 +38,13 @@ async def update_task(
     if db_task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     return db_task
+
+
+@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_task(
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    if not crud.delete_task(db, task_id, current_user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")

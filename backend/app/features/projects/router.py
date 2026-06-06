@@ -67,6 +67,17 @@ async def list_project_pomodoro_sessions(
     return crud.list_pomodoro_sessions_by_project(db, project_id, current_user)
 
 
+@router.get("/{project_id}/completions", response_model=list[schemas.CompletedGoalLogRead])
+async def list_project_completions(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    if crud.get_project(db, project_id, current_user) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return crud.list_goal_completions_by_project(db, project_id, current_user)
+
+
 @router.put("/pomodoro-sessions/{session_id}", response_model=schemas.PomodoroSessionLogRead)
 async def upsert_project_pomodoro_session(
     session_id: str,

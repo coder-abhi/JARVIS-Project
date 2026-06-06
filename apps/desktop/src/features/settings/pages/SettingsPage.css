@@ -72,6 +72,41 @@
   margin-top: 0.75rem;
 }
 
+.settings-visibility-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.settings-visibility-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--ops-border);
+  background: #000;
+  padding: 0.75rem;
+}
+
+.settings-visibility-row.enabled {
+  border-color: rgba(34, 197, 94, 0.34);
+}
+
+.settings-visibility-row strong {
+  color: var(--ops-text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.settings-visibility-row p {
+  margin: 0.25rem 0 0;
+  color: var(--ops-muted);
+  font-size: 0.65rem;
+  line-height: 1.45;
+}
+
 .settings-ai-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(10rem, 13rem) 4rem;
@@ -112,6 +147,10 @@
   }
 
   .settings-ai-row {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-visibility-list {
     grid-template-columns: 1fr;
   }
 }

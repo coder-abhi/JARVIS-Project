@@ -180,6 +180,35 @@ def list_tasks_by_project(db: Session, project_id: str) -> list[models.Task]:
     return list(db.scalars(query))
 
 
+def delete_task(db: Session, task_id: str, user: models.User) -> bool:
+    db_task = db.scalar(
+        select(models.Task)
+        .join(models.Project)
+        .where(models.Task.id == task_id, models.Project.user_id == user.id)
+    )
+    if db_task is None:
+        return False
+
+    completion_logs = list(
+        db.scalars(
+            select(models.CompletedGoalLog).where(
+                models.CompletedGoalLog.user_id == user.id,
+                models.CompletedGoalLog.task_id == task_id,
+            )
+        )
+    )
+    for completion in completion_logs:
+        if completion.goal and completion.goal.measurable:
+            completion.goal.current_value = max(
+                completion.goal.current_value - _task_progress_delta(db_task, completion.goal),
+                0,
+            )
+        db.delete(completion)
+    db.delete(db_task)
+    db.commit()
+    return True
+
+
 def list_pomodoro_sessions_by_project(db: Session, project_id: str, user: models.User) -> list[models.PomodoroSessionLog]:
     query = (
         select(models.PomodoroSessionLog)
@@ -478,6 +507,40 @@ def list_recent_goal_completions(db: Session, user: models.User, limit: int = 12
             .limit(limit)
         )
     )
+
+
+def list_goal_completions_by_project(
+    db: Session,
+    project_id: str,
+    user: models.User,
+) -> list[models.CompletedGoalLog]:
+    return list(
+        db.scalars(
+            select(models.CompletedGoalLog)
+            .where(
+                models.CompletedGoalLog.user_id == user.id,
+                models.CompletedGoalLog.project_id == project_id,
+            )
+            .order_by(models.CompletedGoalLog.created_at.desc())
+        )
+    )
+
+
+def delete_goal_completion(db: Session, completion_id: str, user: models.User) -> bool:
+    completion = db.scalar(
+        select(models.CompletedGoalLog).where(
+            models.CompletedGoalLog.id == completion_id,
+            models.CompletedGoalLog.user_id == user.id,
+        )
+    )
+    if completion is None:
+        return False
+    if completion.goal and completion.goal.measurable:
+        delta = _extract_progress_delta(completion.title, completion.goal)
+        completion.goal.current_value = max(completion.goal.current_value - delta, 0)
+    db.delete(completion)
+    db.commit()
+    return True
 
 
 def log_goal_entry(db: Session, request: schemas.GoalLogRequest, user: models.User) -> schemas.GoalLogResponse:

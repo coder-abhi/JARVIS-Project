@@ -206,6 +206,62 @@ class ProjectGoalStructureTests(unittest.TestCase):
         self.assertEqual(fallback_project.type, models.ProjectType.continuous)
         self.assertFalse(any(item.name.endswith(" Actions") for item in crud.list_projects(self.session, self.user)))
 
+    def test_project_completion_history_and_task_deletion_stay_consistent(self) -> None:
+        goal = models.Goal(
+            id="goal-1",
+            user_id=self.user.id,
+            category=models.GoalCategory.monthly,
+            title="Complete two tasks",
+            target_value=2,
+            current_value=0,
+            unit="tasks",
+        )
+        self.session.add(goal)
+        self.session.commit()
+        project = crud.create_project(
+            self.session,
+            schemas.ProjectCreate(
+                name="Delivery",
+                type=models.ProjectType.fixed,
+                goal_id=goal.id,
+            ),
+            self.user,
+        )
+        task = crud.create_task(
+            self.session,
+            schemas.TaskCreate(
+                project_id=project.id,
+                title="Ship build",
+                time_spent_hours=1.5,
+            ),
+        )
+        completion = crud.complete_goal_task(self.session, task.id, self.user)
+
+        project_history = crud.list_goal_completions_by_project(self.session, project.id, self.user)
+        self.assertEqual([item.id for item in project_history], [completion.id])
+        self.assertTrue(crud.delete_task(self.session, task.id, self.user))
+        self.assertEqual(crud.list_tasks_by_project(self.session, project.id), [])
+        self.assertEqual(crud.list_goal_completions_by_project(self.session, project.id, self.user), [])
+        self.session.refresh(goal)
+        self.assertEqual(goal.current_value, 0)
+
+    def test_direct_completion_can_be_deleted_without_creating_a_task(self) -> None:
+        project = crud.create_project(
+            self.session,
+            schemas.ProjectCreate(name="General Work", type=models.ProjectType.continuous),
+            self.user,
+        )
+        completion = crud.create_goal_completion_log(
+            self.session,
+            self.user,
+            "Handled the admin task",
+            project,
+        )
+
+        self.assertTrue(crud.delete_goal_completion(self.session, completion.id, self.user))
+        self.assertEqual(crud.list_goal_completions_by_project(self.session, project.id, self.user), [])
+        self.assertEqual(crud.list_tasks_by_project(self.session, project.id), [])
+
 
 if __name__ == "__main__":
     unittest.main()

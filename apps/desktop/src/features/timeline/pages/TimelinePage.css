@@ -27,6 +27,10 @@
   padding: 0;
 }
 
+.timeline-reports-only {
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+}
+
 .timeline-plan-head {
   display: flex;
   align-items: center;

@@ -20,6 +20,7 @@ import {
   type SuggestedBook,
 } from "@/lib/api";
 import { LineTrendChart } from "@/components/LineTrendChart";
+import { DateTimePicker } from "@/components/DateTimePicker";
 import "./LibraryPage.css";
 
 type BookDraft = {
@@ -499,11 +500,11 @@ export default function LibraryPage() {
               </Field>
 
               <Field label="Date">
-                <input
-                  type="date"
+                <DateTimePicker
+                  mode="date"
                   value={progressDraft.readDate}
-                  onChange={(event) => setProgressDraft((current) => ({ ...current, readDate: event.target.value }))}
-                  className="reading-log-input"
+                  allowClear={false}
+                  onChange={(value) => setProgressDraft((current) => ({ ...current, readDate: value }))}
                 />
               </Field>
 
@@ -842,11 +843,10 @@ export default function LibraryPage() {
                 />
               </Field>
               <Field label="Bought on">
-                <input
-                  type="date"
+                <DateTimePicker
+                  mode="date"
                   value={draft.purchaseDate}
-                  onChange={(event) => setDraft((current) => ({ ...current, purchaseDate: event.target.value }))}
-                  className="field-input"
+                  onChange={(value) => setDraft((current) => ({ ...current, purchaseDate: value }))}
                 />
               </Field>
               <Field label="Purchase price">

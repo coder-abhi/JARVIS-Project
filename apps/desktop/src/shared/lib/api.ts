@@ -382,6 +382,12 @@ export function getProjectTasks(projectId: string) {
   return request<Task[]>(`/projects/${projectId}/tasks`);
 }
 
+export function deleteTask(taskId: string) {
+  return request<void>(`/tasks/${taskId}`, {
+    method: "DELETE",
+  });
+}
+
 export function createTask(task: TaskInput) {
   return request<Task>("/tasks", {
     method: "POST",
@@ -405,6 +411,10 @@ export function matchPomodoroAssignment(note: string, projectIds: string[] = [])
 
 export function getProjectPomodoroSessions(projectId: string) {
   return request<PomodoroProjectSession[]>(`/projects/${projectId}/pomodoro-sessions`);
+}
+
+export function getProjectCompletions(projectId: string) {
+  return request<CompletedGoalLog[]>(`/projects/${projectId}/completions`);
 }
 
 export function saveProjectPomodoroSession(session: PomodoroProjectSessionInput) {
@@ -474,6 +484,12 @@ export function completeGoalTask(taskId: string) {
 export function restoreCompletedGoal(completionId: string) {
   return request<GoalTask>(`/goals/completions/${completionId}/restore`, {
     method: "PUT",
+  });
+}
+
+export function deleteCompletedGoal(completionId: string) {
+  return request<void>(`/goals/completions/${completionId}`, {
+    method: "DELETE",
   });
 }
 

@@ -76,6 +76,16 @@ async def restore_goal_completion(
     return crud._goal_task_read(task)
 
 
+@router.delete("/completions/{completion_id}", status_code=204)
+async def delete_goal_completion(
+    completion_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    if not crud.delete_goal_completion(db, completion_id, current_user):
+        raise HTTPException(status_code=404, detail="Completion not found")
+
+
 @router.post("/personality/refresh", response_model=schemas.PersonalityInsightRead)
 async def refresh_personality_insight(
     db: Session = Depends(get_db),

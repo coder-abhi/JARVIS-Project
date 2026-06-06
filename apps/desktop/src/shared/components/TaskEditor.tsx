@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import type { Task, TaskPriority, TaskStatus, TaskUpdate } from "@/lib/api";
+import { DateTimePicker } from "@/components/DateTimePicker";
 
 type TaskEditorProps = {
   task: Task | null;
@@ -66,7 +67,7 @@ export function TaskEditor({ task, onClose, onSave }: TaskEditorProps) {
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-gray-950/35 px-4 py-6">
-      <div className="w-full max-w-2xl overflow-hidden rounded-lg bg-white shadow-xl">
+      <div className="w-full max-w-2xl rounded-lg bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Edit task</p>
@@ -130,26 +131,15 @@ export function TaskEditor({ task, onClose, onSave }: TaskEditorProps) {
               </select>
             </label>
 
-            <label className="grid gap-2">
-              <span className="text-sm font-semibold text-gray-700">Start date</span>
-              <input
-                type="date"
-                value={startDate}
-                disabled={status === "todo"}
-                onChange={(event) => setStartDate(event.target.value)}
-                className="rounded-md border border-gray-200 px-3 py-3 outline-none ring-gray-900/10 focus:ring-4 disabled:bg-gray-50 disabled:text-gray-400"
-              />
-            </label>
+            <DateTimePicker
+              label="Start date"
+              mode="date"
+              value={startDate}
+              disabled={status === "todo"}
+              onChange={setStartDate}
+            />
 
-            <label className="grid gap-2">
-              <span className="text-sm font-semibold text-gray-700">Deadline</span>
-              <input
-                type="date"
-                value={deadline}
-                onChange={(event) => setDeadline(event.target.value)}
-                className="rounded-md border border-gray-200 px-3 py-3 outline-none ring-gray-900/10 focus:ring-4"
-              />
-            </label>
+            <DateTimePicker label="Deadline" mode="date" value={deadline} onChange={setDeadline} />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">

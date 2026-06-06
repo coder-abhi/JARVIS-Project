@@ -2,6 +2,7 @@
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { getScopedStorageKey } from "@/lib/auth";
+import { DateTimePicker } from "@/components/DateTimePicker";
 import "./MoneyPage.css";
 
 type Currency = "INR" | "USD" | "EUR" | "GBP";
@@ -494,7 +495,7 @@ function EntryModal({
               <Field label="Amount"><input required min="0.01" step="0.01" type="number" value={draft.amount} onChange={(e) => patch("amount", e.target.value)} /></Field>
               <Field label="Why / Description" wide><input required value={draft.description} onChange={(e) => patch("description", e.target.value)} placeholder="What was this money for?" /></Field>
               <Field label="Category"><select value={draft.category} onChange={(e) => patch("category", e.target.value)}>{categories.map((category) => <option key={category}>{category}</option>)}</select></Field>
-              <Field label="Date & Time"><input required type="datetime-local" value={draft.dateTime} onChange={(e) => patch("dateTime", e.target.value)} /></Field>
+              <Field label="Date & Time"><DateTimePicker value={draft.dateTime} allowClear={false} onChange={(value) => patch("dateTime", value)} /></Field>
               <Field label="Tags (optional)" wide><input value={draft.tags} onChange={(e) => patch("tags", e.target.value)} placeholder="#recurring #work or recurring, work" /></Field>
               <Field label="Paid Via"><select value={draft.sourceKind} onChange={(e) => patch("sourceKind", e.target.value)}>
                 <option value="cash">Cash / Untracked</option>
@@ -533,7 +534,7 @@ function EntryModal({
               <Field label="Original Amount"><input required min="0" type="number" step="0.01" value={draft.principal} onChange={(e) => patch("principal", e.target.value)} /></Field>
               <Field label="Outstanding"><input required min="0" type="number" step="0.01" value={draft.outstanding} onChange={(e) => patch("outstanding", e.target.value)} /></Field>
               <Field label="Interest %"><input min="0" type="number" step="0.01" value={draft.interestRate} onChange={(e) => patch("interestRate", e.target.value)} /></Field>
-              <Field label="Expected Return / Repay Date"><input required type="date" value={draft.expectedReturnDate} onChange={(e) => patch("expectedReturnDate", e.target.value)} /></Field>
+              <Field label="Expected Return / Repay Date"><DateTimePicker mode="date" value={draft.expectedReturnDate} allowClear={false} onChange={(value) => patch("expectedReturnDate", value)} /></Field>
               <Field label="Notes" wide><textarea value={draft.note} onChange={(e) => patch("note", e.target.value)} placeholder="Terms, purpose, repayment plan..." /></Field>
             </>
           ) : null}
@@ -551,14 +552,14 @@ function EntryModal({
               <Field label="Goal Name" wide><input required value={draft.name} onChange={(e) => patch("name", e.target.value)} placeholder="Emergency fund, trip, laptop..." /></Field>
               <Field label="Target Amount"><input required min="0" type="number" step="0.01" value={draft.targetAmount} onChange={(e) => patch("targetAmount", e.target.value)} /></Field>
               <Field label="Already Saved"><input required min="0" type="number" step="0.01" value={draft.savedAmount} onChange={(e) => patch("savedAmount", e.target.value)} /></Field>
-              <Field label="Due Date"><input required type="date" value={draft.dueDate} onChange={(e) => patch("dueDate", e.target.value)} /></Field>
+              <Field label="Due Date"><DateTimePicker mode="date" value={draft.dueDate} allowClear={false} onChange={(value) => patch("dueDate", value)} /></Field>
             </>
           ) : null}
           {kind === "income" ? (
             <>
               <Field label="Income Source" wide><input required value={draft.source} onChange={(e) => patch("source", e.target.value)} placeholder="Salary, client invoice, dividend..." /></Field>
               <Field label="Expected Amount"><input required min="0" type="number" step="0.01" value={draft.amount} onChange={(e) => patch("amount", e.target.value)} /></Field>
-              <Field label="Expected Date"><input required type="date" value={draft.expectedDate} onChange={(e) => patch("expectedDate", e.target.value)} /></Field>
+              <Field label="Expected Date"><DateTimePicker mode="date" value={draft.expectedDate} allowClear={false} onChange={(value) => patch("expectedDate", value)} /></Field>
               <Field label="Notes" wide><textarea value={draft.note} onChange={(e) => patch("note", e.target.value)} /></Field>
             </>
           ) : null}

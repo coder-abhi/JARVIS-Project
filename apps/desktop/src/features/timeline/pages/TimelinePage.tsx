@@ -13,6 +13,10 @@ import {
   type TaskStatus,
   type TaskUpdate,
 } from "@/lib/api";
+import {
+  appSettingsChangedEvent,
+  readMissionControlVisibilitySettings,
+} from "@/lib/appSettings";
 import "./TimelinePage.css";
 
 type TimelineView = "3day" | "week" | "month";
@@ -56,6 +60,7 @@ export default function TimelinePage({ embedded = false }: { embedded?: boolean 
   const [priorityFilter, setPriorityFilter] = useState<TimelinePriorityFilter>("all");
   const [maxRequiredMinutes, setMaxRequiredMinutes] = useState("");
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [visibility, setVisibility] = useState(() => readMissionControlVisibilitySettings());
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
@@ -71,6 +76,19 @@ export default function TimelinePage({ embedded = false }: { embedded?: boolean 
     loadTimeline()
       .catch((err: Error) => setError(err.message))
       .finally(() => setIsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    function syncVisibility() {
+      setVisibility(readMissionControlVisibilitySettings());
+    }
+
+    window.addEventListener("storage", syncVisibility);
+    window.addEventListener(appSettingsChangedEvent, syncVisibility);
+    return () => {
+      window.removeEventListener("storage", syncVisibility);
+      window.removeEventListener(appSettingsChangedEvent, syncVisibility);
+    };
   }, []);
 
   useEffect(() => {
@@ -120,6 +138,7 @@ export default function TimelinePage({ embedded = false }: { embedded?: boolean 
   const continuousProjects = items.filter((item) => item.project.type === "continuous");
   const activeFilterCount =
     Number(statusFilter !== "all") + Number(priorityFilter !== "all") + Number(Boolean(maxRequiredMinutes));
+  const hasReports = visibility.efficiencyReport || visibility.timeAllocation;
 
   function recalibrateToToday() {
     scrollerRef.current?.scrollTo({ left: Math.max(currentTimeOffset - 24, 0), behavior: "smooth" });
@@ -176,7 +195,9 @@ export default function TimelinePage({ embedded = false }: { embedded?: boolean 
 
       {error ? <p className="ops-alert danger">{error}</p> : null}
 
-      <section className="mt-4 grid gap-5 lg:grid-cols-[1fr_320px]">
+      {visibility.weekOperationsPlan || hasReports ? (
+      <section className={`mt-4 grid gap-5 ${visibility.weekOperationsPlan && hasReports ? "lg:grid-cols-[1fr_320px]" : ""}`}>
+        {visibility.weekOperationsPlan ? (
         <div className="ops-panel timeline-plan">
           <div className="timeline-plan-head">
             <div>
@@ -331,8 +352,11 @@ export default function TimelinePage({ embedded = false }: { embedded?: boolean 
             </div>
           ) : null}
         </div>
+        ) : null}
 
-        <aside className="grid gap-4">
+        {hasReports ? (
+        <aside className={`grid gap-4 ${visibility.weekOperationsPlan ? "" : "timeline-reports-only"}`}>
+          {visibility.efficiencyReport ? (
           <div className="ops-panel">
             <div className="ops-panel-head">
               <h2>Efficiency Report</h2>
@@ -344,7 +368,9 @@ export default function TimelinePage({ embedded = false }: { embedded?: boolean 
               <SummaryMetric label="Completion Rate" value={`${completionRate}%`} />
             </div>
           </div>
+          ) : null}
 
+          {visibility.timeAllocation ? (
           <div className="ops-panel">
             <div className="ops-panel-head">
               <h2>Time Allocation</h2>
@@ -356,8 +382,11 @@ export default function TimelinePage({ embedded = false }: { embedded?: boolean 
               ))}
             </div>
           </div>
+          ) : null}
         </aside>
+        ) : null}
       </section>
+      ) : null}
 
       <section className="timeline-project-register">
         <ProjectRegister title="Fixed Projects" items={fixedProjects} emptyText="No fixed projects" />

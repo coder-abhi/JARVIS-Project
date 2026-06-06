@@ -6,8 +6,11 @@ import {
   type AiFeatureSetting,
 } from "@/lib/api";
 import {
+  readMissionControlVisibilitySettings,
   readProjectBehaviorSettings,
+  saveMissionControlVisibilitySettings,
   saveProjectBehaviorSettings,
+  type MissionControlVisibilitySettings,
   type ProjectBehaviorSettings,
 } from "@/lib/appSettings";
 import { getStoredUser } from "@/lib/auth";
@@ -17,6 +20,9 @@ export default function SettingsPage() {
   const router = useRouter();
   const user = getStoredUser();
   const [behavior, setBehavior] = useState<ProjectBehaviorSettings>(() => readProjectBehaviorSettings());
+  const [missionControl, setMissionControl] = useState<MissionControlVisibilitySettings>(
+    () => readMissionControlVisibilitySettings(),
+  );
   const [features, setFeatures] = useState<AiFeatureSetting[]>([]);
   const [savingFeature, setSavingFeature] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -33,6 +39,13 @@ export default function SettingsPage() {
     saveProjectBehaviorSettings(next);
     setBehavior(readProjectBehaviorSettings());
     setMessage("Project behavior saved locally for this user.");
+  }
+
+  function updateMissionControl(changes: Partial<MissionControlVisibilitySettings>) {
+    const next = { ...missionControl, ...changes };
+    setMissionControl(next);
+    saveMissionControlVisibilitySettings(next);
+    setMessage("Mission Control visibility saved locally for this user.");
   }
 
   async function updateFeature(feature: AiFeatureSetting, changes: { enabled?: boolean; model?: string }) {
@@ -128,6 +141,33 @@ export default function SettingsPage() {
 
       <section className="ops-panel settings-panel">
         <div className="ops-panel-head">
+          <h2>Mission Control Sections</h2>
+          <span>Show or hide schedule reports</span>
+        </div>
+        <div className="settings-visibility-list">
+          <VisibilityToggle
+            label="Week Operations Plan"
+            description="The interactive weekly project and objective schedule."
+            enabled={missionControl.weekOperationsPlan}
+            onChange={(enabled) => updateMissionControl({ weekOperationsPlan: enabled })}
+          />
+          <VisibilityToggle
+            label="Efficiency Report"
+            description="Planned versus actual hours and completion rate."
+            enabled={missionControl.efficiencyReport}
+            onChange={(enabled) => updateMissionControl({ efficiencyReport: enabled })}
+          />
+          <VisibilityToggle
+            label="Time Allocation"
+            description="Minutes and percentages allocated across missions."
+            enabled={missionControl.timeAllocation}
+            onChange={(enabled) => updateMissionControl({ timeAllocation: enabled })}
+          />
+        </div>
+      </section>
+
+      <section className="ops-panel settings-panel">
+        <div className="ops-panel-head">
           <h2>AI Call Routing</h2>
           <span>Per-feature model and availability</span>
         </div>
@@ -172,6 +212,36 @@ export default function SettingsPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+function VisibilityToggle({
+  label,
+  description,
+  enabled,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  enabled: boolean;
+  onChange: (enabled: boolean) => void;
+}) {
+  return (
+    <div className={enabled ? "settings-visibility-row enabled" : "settings-visibility-row"}>
+      <div>
+        <strong>{label}</strong>
+        <p>{description}</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        className={enabled ? "settings-toggle enabled" : "settings-toggle"}
+        onClick={() => onChange(!enabled)}
+      >
+        {enabled ? "On" : "Off"}
+      </button>
+    </div>
   );
 }
 

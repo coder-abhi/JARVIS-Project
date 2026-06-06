@@ -4,15 +4,20 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { TaskEditor } from "@/components/TaskEditor";
+import { DateTimePicker } from "@/components/DateTimePicker";
 import {
   createTask,
+  deleteCompletedGoal,
+  deleteTask,
   getGoalsOverview,
+  getProjectCompletions,
   getProjectPomodoroSessions,
   getProjects,
   getProjectTasks,
   updateProject,
   updateTask,
   type Goal,
+  type CompletedGoalLog,
   type PomodoroProjectSession,
   type Project,
   type ProjectType,
@@ -24,7 +29,6 @@ import {
 import { readProjectBehaviorSettings } from "@/lib/appSettings";
 import "./ProjectDetailPage.css";
 
-type StatusFilter = "all" | "incomplete" | TaskStatus;
 type PriorityFilter = "all" | TaskPriority;
 
 export default function ProjectDetailPage() {
@@ -34,6 +38,7 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [sessions, setSessions] = useState<PomodoroProjectSession[]>([]);
+  const [completions, setCompletions] = useState<CompletedGoalLog[]>([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [eta, setEta] = useState(() => String(readProjectBehaviorSettings().defaultTaskMinutes));
@@ -42,7 +47,6 @@ export default function ProjectDetailPage() {
   const [deadline, setDeadline] = useState("");
   const [status, setStatus] = useState<TaskStatus>(() => readProjectBehaviorSettings().defaultTaskStatus);
   const [priority, setPriority] = useState<TaskPriority>(() => readProjectBehaviorSettings().defaultTaskPriority);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
@@ -66,10 +70,11 @@ export default function ProjectDetailPage() {
     async function loadProject() {
       setIsLoading(true);
       setError(null);
-      const [projects, projectTasks, projectSessions, goalsOverview] = await Promise.all([
+      const [projects, projectTasks, projectSessions, projectCompletions, goalsOverview] = await Promise.all([
         getProjects(),
         getProjectTasks(projectId),
         getProjectPomodoroSessions(projectId),
+        getProjectCompletions(projectId),
         getGoalsOverview(),
       ]);
       const currentProject = projects.find((item) => item.id === projectId) ?? null;
@@ -81,6 +86,7 @@ export default function ProjectDetailPage() {
       setGoals(goalsOverview.goals);
       setTasks(projectTasks);
       setSessions(projectSessions);
+      setCompletions(projectCompletions);
       setIsLoading(false);
     }
 
@@ -117,11 +123,6 @@ export default function ProjectDetailPage() {
     setStatus(defaults.defaultTaskStatus);
     setPriority(defaults.defaultTaskPriority);
     setIsCreateTaskOpen(false);
-  }
-
-  async function handleStatusChange(taskId: string, nextStatus: TaskStatus) {
-    const updated = await updateTask(taskId, { status: nextStatus });
-    setTasks((current) => current.map((task) => (task.id === taskId ? updated : task)));
   }
 
   async function handleTaskSave(taskId: string, changes: TaskUpdate) {
@@ -163,6 +164,39 @@ export default function ProjectDetailPage() {
     });
   }
 
+  async function handleDeleteTask(task: Task) {
+    if (!window.confirm(`Delete "${task.title}"?`)) return;
+    setError(null);
+    try {
+      await deleteTask(task.id);
+      setTasks((current) => current.filter((item) => item.id !== task.id));
+      setCompletions((current) => current.filter((item) => item.task_id !== task.id));
+      setEditingTask((current) => (current?.id === task.id ? null : current));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete objective");
+    }
+  }
+
+  async function handleDeleteTimelineItem(item: ProjectActivityTimelineItem) {
+    const label = item.task?.title ?? item.description;
+    if (!window.confirm(`Delete "${label}" from this project timeline?`)) return;
+    setError(null);
+    try {
+      if (item.task) {
+        await deleteTask(item.task.id);
+        setTasks((current) => current.filter((task) => task.id !== item.task?.id));
+        setCompletions((current) => current.filter((completion) => completion.task_id !== item.task?.id));
+        return;
+      }
+      if (item.completionId) {
+        await deleteCompletedGoal(item.completionId);
+        setCompletions((current) => current.filter((completion) => completion.id !== item.completionId));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete timeline entry");
+    }
+  }
+
   const totals = tasks.reduce(
     (acc, task) => ({
       eta: acc.eta + task.eta_hours,
@@ -175,14 +209,11 @@ export default function ProjectDetailPage() {
   const investedMinutes = taskSpentMinutes + sessionMinutes;
   const completedTasks = tasks.filter((task) => task.status === "done").length;
   const activeTasks = tasks.length - completedTasks;
-  const timelineItems = formatProjectActivityTimeline(tasks, sessions);
-  const filteredTasks = tasks.filter((task) => {
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "incomplete" ? task.status !== "done" : task.status === statusFilter);
+  const timelineItems = formatProjectActivityTimeline(tasks, sessions, completions);
+  const incompleteTasks = tasks.filter((task) => task.status !== "done");
+  const filteredTasks = incompleteTasks.filter((task) => {
     const matchesPriority = priorityFilter === "all" || task.priority === priorityFilter;
-
-    return matchesStatus && matchesPriority;
+    return matchesPriority;
   });
 
   return (
@@ -310,23 +341,10 @@ export default function ProjectDetailPage() {
               </button>
             </div>
             <p className="project-meta-line">
-              {filteredTasks.length} shown of {tasks.length} total objectives
+              {filteredTasks.length} shown of {incompleteTasks.length} incomplete objectives
             </p>
           </div>
           <div className="project-filter-line">
-            <label>
-              <span>Status</span>
-              <select
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-              >
-                <option value="all">All</option>
-                <option value="incomplete">Incomplete</option>
-                <option value="todo">Todo</option>
-                <option value="in_progress">In progress</option>
-                <option value="done">Done</option>
-              </select>
-            </label>
             <label>
               <span>Priority</span>
               <select
@@ -342,12 +360,12 @@ export default function ProjectDetailPage() {
           </div>
         </div>
         {isLoading ? <p className="project-empty-line">Loading objectives...</p> : null}
-        {!isLoading && tasks.length === 0 ? (
+        {!isLoading && incompleteTasks.length === 0 ? (
           <p className="project-empty-line">
-            Add your first objective to see progress and timeline bars.
+            No incomplete objectives. Add a new objective when there is more work to do.
           </p>
         ) : null}
-        {!isLoading && tasks.length > 0 && filteredTasks.length === 0 ? (
+        {!isLoading && incompleteTasks.length > 0 && filteredTasks.length === 0 ? (
           <p className="project-empty-line">
             No tasks match the selected filters.
           </p>
@@ -358,7 +376,7 @@ export default function ProjectDetailPage() {
               key={task.id}
               task={task}
               onEdit={setEditingTask}
-              onStatusChange={handleStatusChange}
+              onDelete={handleDeleteTask}
             />
           ))}
         </div>
@@ -384,8 +402,22 @@ export default function ProjectDetailPage() {
               }}
               className={item.task ? "project-session-line interactive" : "project-session-line"}
             >
-              <p>{item.date} --&gt; {item.minutes} minutes</p>
-              <p>{item.description}</p>
+              <div className="project-session-copy">
+                <p>{item.date} --&gt; {item.minutes} minutes spent</p>
+                <p>{item.description}</p>
+              </div>
+              {item.task || item.completionId ? (
+                <button
+                  type="button"
+                  className="project-delete-button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void handleDeleteTimelineItem(item);
+                  }}
+                >
+                  Delete
+                </button>
+              ) : null}
             </div>
           ))}
         </div>
@@ -430,37 +462,14 @@ export default function ProjectDetailPage() {
           </div>
 
           <div className="grid content-start gap-3">
-            <label className="grid gap-2">
-              <span className="text-sm font-semibold text-gray-700">Status</span>
-              <select
-                value={status}
-                onChange={(event) => setStatus(event.target.value as TaskStatus)}
-                className="rounded-md border border-gray-200 px-3 py-3 outline-none ring-gray-900/10 focus:ring-4"
-              >
-                <option value="todo">Todo</option>
-                <option value="in_progress">In progress</option>
-                <option value="done">Done</option>
-              </select>
-            </label>
-            <label className="grid gap-2">
-              <span className="text-sm font-semibold text-gray-700">Deadline</span>
-              <input
-                type="date"
-                value={deadline}
-                onChange={(event) => setDeadline(event.target.value)}
-                className="rounded-md border border-gray-200 px-3 py-3 outline-none ring-gray-900/10 focus:ring-4"
-              />
-            </label>
-            <label className="grid gap-2">
-              <span className="text-sm font-semibold text-gray-700">Start date</span>
-              <input
-                type="date"
-                value={startDate}
-                disabled={status === "todo"}
-                onChange={(event) => setStartDate(event.target.value)}
-                className="rounded-md border border-gray-200 px-3 py-3 outline-none ring-gray-900/10 focus:ring-4 disabled:bg-gray-50 disabled:text-gray-400"
-              />
-            </label>
+            <DateTimePicker label="Deadline" mode="date" value={deadline} onChange={setDeadline} />
+            <DateTimePicker
+              label="Start date"
+              mode="date"
+              value={startDate}
+              disabled={status === "todo"}
+              onChange={setStartDate}
+            />
             <label className="grid gap-2">
               <span className="text-sm font-semibold text-gray-700">Priority</span>
               <select
@@ -519,11 +528,11 @@ function minutesInputToHours(value: string) {
 function ProjectObjectiveRow({
   task,
   onEdit,
-  onStatusChange,
+  onDelete,
 }: {
   task: Task;
   onEdit: (task: Task) => void;
-  onStatusChange: (taskId: string, nextStatus: TaskStatus) => void;
+  onDelete: (task: Task) => void;
 }) {
   const etaMinutes = Math.round(task.eta_hours * 60);
   const spentMinutes = Math.round(task.time_spent_hours * 60);
@@ -546,18 +555,17 @@ function ProjectObjectiveRow({
         <span>{remainingMinutes}m left</span>
         <span>{spentMinutes > 0 ? `${spentMinutes}/${etaMinutes}m` : `${etaMinutes}m eta`}</span>
       </span>
-      <select
-        value={task.status}
-        onClick={(event) => event.stopPropagation()}
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          void onDelete(task);
+        }}
         onKeyDown={(event) => event.stopPropagation()}
-        onChange={(event) => onStatusChange(task.id, event.target.value as TaskStatus)}
-        className="project-objective-status"
-        aria-label={`Status for ${task.title}`}
+        className="project-delete-button"
       >
-        <option value="todo">Todo</option>
-        <option value="in_progress">In progress</option>
-        <option value="done">Done</option>
-      </select>
+        Delete
+      </button>
     </div>
   );
 }
@@ -567,7 +575,23 @@ function formatTaskDate(value: string | null | undefined, fallback: string) {
   return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-function formatProjectActivityTimeline(tasks: Task[], sessions: PomodoroProjectSession[]) {
+type ProjectActivityTimelineItem = {
+  id: string;
+  timestamp: number;
+  date: string;
+  minutes: number;
+  description: string;
+  task: Task | null;
+  completionId: string | null;
+};
+
+function formatProjectActivityTimeline(
+  tasks: Task[],
+  sessions: PomodoroProjectSession[],
+  completions: CompletedGoalLog[],
+): ProjectActivityTimelineItem[] {
+  const tasksById = new Map(tasks.map((task) => [task.id, task]));
+  const loggedTaskIds = new Set(completions.map((completion) => completion.task_id).filter(Boolean));
   return [
     ...sessions.map((session) => ({
       id: `session-${session.id}`,
@@ -580,18 +604,36 @@ function formatProjectActivityTimeline(tasks: Task[], sessions: PomodoroProjectS
       minutes: session.minutes,
       description: session.description?.trim() || "(No description)",
       task: null,
+      completionId: null,
     })),
-    ...tasks.filter((task) => task.status === "done").map((task) => ({
+    ...completions.map((completion) => {
+      const task = completion.task_id ? tasksById.get(completion.task_id) ?? null : null;
+      return {
+        id: `completion-${completion.id}`,
+        timestamp: new Date(completion.created_at).getTime(),
+        date: formatTimelineDate(completion.created_at),
+        minutes: task ? Math.round(task.time_spent_hours * 60) : 0,
+        description: completion.title,
+        task,
+        completionId: task ? null : completion.id,
+      };
+    }),
+    ...tasks.filter((task) => task.status === "done" && !loggedTaskIds.has(task.id)).map((task) => ({
       id: `task-${task.id}`,
       timestamp: new Date(task.created_at).getTime(),
-      date: new Date(task.created_at).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
-      minutes: Math.round((task.time_spent_hours || task.eta_hours) * 60),
-      description: task.description?.trim() || task.title,
+      date: formatTimelineDate(task.created_at),
+      minutes: Math.round(task.time_spent_hours * 60),
+      description: task.title,
       task,
+      completionId: null,
     })),
   ].sort((a, b) => b.timestamp - a.timestamp);
+}
+
+function formatTimelineDate(value: string) {
+  return new Date(value).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
