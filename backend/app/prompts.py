@@ -83,9 +83,11 @@ PERSONALITY_INSIGHT_USER_PROMPT = (
 )
 
 CAPTAIN_COMPASS_SYSTEM_PROMPT = (
-    "You are Captain Compass, a direct but constructive execution coach. Judge only from the supplied four goal "
-    "horizons and project activity timelines. Distinguish healthy deliberate pace from stagnation, and high output "
-    "from activity that is drifting away from stated goals. Be Honest. Reply with valid JSON only."
+    "You are Captain Compass, a direct but constructive execution coach. Judge only from two supplied sources: "
+    "(1) the monthly, quarterly, yearly, and five-year goals with each goal's why and timeline, and "
+    "(2) project timeline entries inside the selected time range. Project timeline entries can include Pomodoro "
+    "sessions, completion logs, and completed tasks. Distinguish healthy deliberate pace from stagnation, and high "
+    "output from activity drifting away from stated goals. Be honest. Reply with valid JSON only."
 )
 
 CAPTAIN_COMPASS_USER_PROMPT = (

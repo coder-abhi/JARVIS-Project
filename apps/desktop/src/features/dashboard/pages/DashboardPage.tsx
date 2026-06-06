@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   getCaptainCompass,
   getAiCosts,
@@ -10,6 +10,7 @@ import {
   type AiCostSummary,
   type AiStatus,
   type CaptainCompass,
+  type CaptainCompassContextDays,
   type ProjectSummary,
 } from "@/lib/api";
 import {
@@ -35,8 +36,11 @@ export default function DashboardPage() {
   const [now, setNow] = useState(() => new Date());
   const [logText, setLogText] = useState("");
   const [isLogging, setIsLogging] = useState(false);
+  const [isLoadingCompass, setIsLoadingCompass] = useState(false);
   const [isRefreshingCompass, setIsRefreshingCompass] = useState(false);
+  const [compassContextDays, setCompassContextDays] = useState<CaptainCompassContextDays>(30);
   const [message, setMessage] = useState<string | null>(null);
+  const compassRequestId = useRef(0);
 
   async function loadDashboard() {
     setError(null);
@@ -48,10 +52,24 @@ export default function DashboardPage() {
   useEffect(() => {
     loadDashboard()
       .catch((err: Error) => setError(err.message));
-    getCaptainCompass()
-      .then(setCaptainCompass)
-      .catch((err: Error) => setCompassError(err.message));
   }, []);
+
+  useEffect(() => {
+    const requestId = ++compassRequestId.current;
+    setIsLoadingCompass(true);
+    setCompassError(null);
+    setCaptainCompass(null);
+    getCaptainCompass(false, compassContextDays)
+      .then((assessment) => {
+        if (compassRequestId.current === requestId) setCaptainCompass(assessment);
+      })
+      .catch((err: Error) => {
+        if (compassRequestId.current === requestId) setCompassError(err.message);
+      })
+      .finally(() => {
+        if (compassRequestId.current === requestId) setIsLoadingCompass(false);
+      });
+  }, [compassContextDays]);
 
   useEffect(() => {
     const tick = window.setInterval(() => setNow(new Date()), 1000);
@@ -162,14 +180,18 @@ export default function DashboardPage() {
 
   async function handleCompassRefresh() {
     if (isRefreshingCompass) return;
+    const requestId = ++compassRequestId.current;
     setIsRefreshingCompass(true);
     setCompassError(null);
     try {
-      setCaptainCompass(await getCaptainCompass(true));
+      const assessment = await getCaptainCompass(true, compassContextDays);
+      if (compassRequestId.current === requestId) setCaptainCompass(assessment);
     } catch (err) {
-      setCompassError(err instanceof Error ? err.message : "Could not refresh Captain Compass");
+      if (compassRequestId.current === requestId) {
+        setCompassError(err instanceof Error ? err.message : "Could not refresh Captain Compass");
+      }
     } finally {
-      setIsRefreshingCompass(false);
+      if (compassRequestId.current === requestId) setIsRefreshingCompass(false);
     }
   }
 
@@ -216,16 +238,31 @@ export default function DashboardPage() {
           <div className="captain-compass-head">
             <PanelHeader
               label="Captain Compass"
-              detail={captainCompass ? formatCompassStatus(captainCompass.status) : "Assessing course"}
+              detail={isLoadingCompass ? "Loading context" : captainCompass ? formatCompassStatus(captainCompass.status) : "Assessing course"}
             />
-            <button
-              type="button"
-              className="ops-button primary captain-compass-refresh"
-              onClick={() => void handleCompassRefresh()}
-              disabled={isRefreshingCompass}
-            >
-              {isRefreshingCompass ? "Assessing..." : "Refresh"}
-            </button>
+            <div className="captain-compass-controls">
+              <label>
+                <span className="sr-only">Captain Compass context range</span>
+                <select
+                  value={compassContextDays}
+                  onChange={(event) => setCompassContextDays(Number(event.target.value) as CaptainCompassContextDays)}
+                  disabled={isRefreshingCompass}
+                  aria-label="Captain Compass context range"
+                >
+                  <option value={7}>Last 7 days</option>
+                  <option value={30}>Last 30 days</option>
+                  <option value={90}>Last 90 days</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                className="ops-button primary captain-compass-refresh"
+                onClick={() => void handleCompassRefresh()}
+                disabled={isLoadingCompass || isRefreshingCompass}
+              >
+                {isRefreshingCompass ? "Assessing..." : "Refresh"}
+              </button>
+            </div>
           </div>
           {compassError ? <p className="captain-compass-error">{compassError}</p> : null}
           <div className="captain-compass-ratings">
@@ -235,12 +272,12 @@ export default function DashboardPage() {
             <CompassRating label="Overall" value={captainCompass?.overall_rating} signal />
           </div>
           <p className="captain-compass-summary">
-            {captainCompass?.summary ?? "Captain Compass is reading your goals and project timelines."}
+            {captainCompass?.summary ?? `Captain Compass is reading your goal and project timelines from the last ${compassContextDays} days.`}
           </p>
           {captainCompass?.advice ? <p className="captain-compass-advice">{captainCompass.advice}</p> : null}
           {captainCompass ? (
             <p className="captain-compass-meta">
-              {captainCompass.model} / {formatCompassTime(captainCompass.refreshed_at)}
+              Last {captainCompass.context_days} days / {captainCompass.model} / {formatCompassTime(captainCompass.refreshed_at)}
             </p>
           ) : null}
         </div>

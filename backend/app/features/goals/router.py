@@ -106,7 +106,10 @@ async def next_goal_actions(
 @router.get("/captain-compass", response_model=schemas.CaptainCompassRead)
 async def captain_compass(
     refresh: bool = Query(default=False),
+    days: int = Query(default=30),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    return crud.get_captain_compass(db, current_user, force_refresh=refresh)
+    if days not in crud.CAPTAIN_COMPASS_CONTEXT_DAYS:
+        raise HTTPException(status_code=422, detail="days must be 7, 30, or 90")
+    return crud.get_captain_compass(db, current_user, force_refresh=refresh, context_days=days)

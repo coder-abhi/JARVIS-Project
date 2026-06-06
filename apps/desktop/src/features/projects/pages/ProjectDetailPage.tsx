@@ -620,8 +620,8 @@ function formatProjectActivityTimeline(
     }),
     ...tasks.filter((task) => task.status === "done" && !loggedTaskIds.has(task.id)).map((task) => ({
       id: `task-${task.id}`,
-      timestamp: new Date(task.created_at).getTime(),
-      date: formatTimelineDate(task.created_at),
+      timestamp: new Date(task.completed_at ?? task.created_at).getTime(),
+      date: formatTimelineDate(task.completed_at ?? task.created_at),
       minutes: Math.round(task.time_spent_hours * 60),
       description: task.title,
       task,

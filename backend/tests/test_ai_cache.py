@@ -6,14 +6,17 @@ import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
-from app import crud, models
+from app import auth, crud, models
+from app.database import get_db
 from app.database import Base
 from app.features.ai import models as ai_models
 from app.features.ai import service as ai_service
@@ -27,6 +30,7 @@ class FakeOpenAI:
     delay_seconds = 0
     outputs: list[object] = []
     requested_models: list[str] = []
+    requests: list[dict] = []
     lock = threading.Lock()
 
     def __init__(self, api_key: str):
@@ -39,12 +43,14 @@ class FakeOpenAI:
         cls.delay_seconds = delay_seconds
         cls.outputs = list(outputs)
         cls.requested_models = []
+        cls.requests = []
 
     def create(self, **kwargs):
         with self.lock:
             call_index = self.calls
             type(self).calls += 1
             type(self).requested_models.append(str(kwargs.get("model")))
+            type(self).requests.append(kwargs)
         if self.delay_seconds:
             time.sleep(self.delay_seconds)
 
@@ -472,7 +478,7 @@ class AiResponseCacheTests(unittest.TestCase):
         self.assertEqual(result, [])
         suggest.assert_called_once_with(db, current_user, force_refresh=True)
 
-    def test_captain_compass_uses_completed_timeline_context_and_refresh_route(self) -> None:
+    def test_captain_compass_uses_goal_and_ranged_project_timelines(self) -> None:
         FakeOpenAI.configure(
             {
                 "speed_rating": 7,
@@ -489,6 +495,7 @@ class AiResponseCacheTests(unittest.TestCase):
             user_id="user-1",
             category=models.GoalCategory.monthly,
             title="Ship the release",
+            description="Deliver useful improvements reliably.",
             target_value=1,
             current_value=0,
             unit="release",
@@ -502,6 +509,7 @@ class AiResponseCacheTests(unittest.TestCase):
             created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
             linked_goals=[goal],
         )
+        recent_at = datetime.now(timezone.utc) - timedelta(days=2)
         task = models.Task(
             id="task-1",
             project_id=project.id,
@@ -511,29 +519,100 @@ class AiResponseCacheTests(unittest.TestCase):
             importance_rating=5,
             eta_hours=1,
             time_spent_hours=1,
-            created_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+            created_at=recent_at,
+            completed_at=recent_at,
             project=project,
         )
-        project.tasks = [task]
+        pending_task = models.Task(
+            id="task-2",
+            project_id=project.id,
+            title="Future release objective",
+            status=models.TaskStatus.todo,
+            priority=models.TaskPriority.high,
+            importance_rating=5,
+            eta_hours=1,
+            time_spent_hours=0,
+            created_at=recent_at,
+            deadline=datetime.now(timezone.utc) + timedelta(days=3),
+            project=project,
+        )
+        old_done_task = models.Task(
+            id="task-3",
+            project_id=project.id,
+            title="Old completed task",
+            status=models.TaskStatus.done,
+            priority=models.TaskPriority.medium,
+            importance_rating=3,
+            eta_hours=1,
+            time_spent_hours=1,
+            created_at=datetime.now(timezone.utc) - timedelta(days=40),
+            completed_at=datetime.now(timezone.utc) - timedelta(days=40),
+            project=project,
+        )
+        project.tasks = [task, pending_task, old_done_task]
+        recent_session = models.PomodoroSessionLog(
+            id="session-1",
+            user_id="user-1",
+            project_id=project.id,
+            mode="focus",
+            minutes=25,
+            description="Reviewed release readiness",
+            started_at=recent_at - timedelta(minutes=25),
+            completed_at=recent_at,
+            created_at=recent_at,
+            project=project,
+        )
+        old_session = models.PomodoroSessionLog(
+            id="session-2",
+            user_id="user-1",
+            project_id=project.id,
+            mode="focus",
+            minutes=50,
+            description="Old planning session",
+            started_at=datetime.now(timezone.utc) - timedelta(days=41),
+            completed_at=datetime.now(timezone.utc) - timedelta(days=40),
+            created_at=datetime.now(timezone.utc) - timedelta(days=40),
+            project=project,
+        )
+        project.pomodoro_sessions = [recent_session, old_session]
+        recent_completion = models.CompletedGoalLog(
+            id="completion-1",
+            user_id="user-1",
+            goal_id=goal.id,
+            project_id=project.id,
+            title="Signed off release notes",
+            goal_label=goal.title,
+            created_at=recent_at,
+        )
+        old_completion = models.CompletedGoalLog(
+            id="completion-2",
+            user_id="user-1",
+            goal_id=goal.id,
+            project_id=project.id,
+            title="Old release milestone",
+            goal_label=goal.title,
+            created_at=datetime.now(timezone.utc) - timedelta(days=40),
+        )
+        completion_logs = [old_completion, recent_completion]
 
         automatic = crud.generate_captain_compass(
             [goal],
             [project],
-            [],
+            completion_logs,
             user_id="user-1",
             cache_only=True,
         )
         first = crud.generate_captain_compass(
             [goal],
             [project],
-            [],
+            completion_logs,
             user_id="user-1",
             force_refresh=True,
         )
         cached = crud.generate_captain_compass(
             [goal],
             [project],
-            [],
+            completion_logs,
             user_id="user-1",
             cache_only=True,
         )
@@ -541,14 +620,14 @@ class AiResponseCacheTests(unittest.TestCase):
         changed_automatic = crud.generate_captain_compass(
             [goal],
             [project],
-            [],
+            completion_logs,
             user_id="user-1",
             cache_only=True,
         )
         second = crud.generate_captain_compass(
             [goal],
             [project],
-            [],
+            completion_logs,
             user_id="user-1",
             force_refresh=True,
         )
@@ -560,6 +639,28 @@ class AiResponseCacheTests(unittest.TestCase):
         self.assertEqual(second["overall_rating"], 7)
         self.assertEqual(FakeOpenAI.calls, 2)
         self.assertEqual(FakeOpenAI.requested_models, ["gpt-5.4-mini", "gpt-5.4-mini"])
+        user_prompt = FakeOpenAI.requests[0]["input"][1]["content"]
+        context = json.loads(user_prompt.split("Context: ", 1)[1])
+        self.assertEqual(set(context), {"goals_by_horizon", "project_timelines"})
+        self.assertEqual(set(context["goals_by_horizon"]), {"monthly", "quarterly", "yearly", "five_year"})
+        monthly_goal = context["goals_by_horizon"]["monthly"][0]
+        self.assertEqual(monthly_goal["why"], "Deliver useful improvements reliably.")
+        self.assertEqual(
+            {entry["kind"] for entry in monthly_goal["timeline"]},
+            {"goal_established", "project_attached", "next_deadline", "completion"},
+        )
+        self.assertEqual(context["project_timelines"]["selected_range_days"], 30)
+        project_timeline = context["project_timelines"]["projects"][0]["timeline"]
+        self.assertEqual(
+            [entry["kind"] for entry in project_timeline],
+            ["pomodoro_session", "completion_log", "completed_task"],
+        )
+        self.assertEqual(
+            [entry.get("title") for entry in project_timeline if entry.get("title")],
+            ["Signed off release notes", "Publish build"],
+        )
+        self.assertNotIn("Old planning session", json.dumps(project_timeline))
+        self.assertNotIn("Old release milestone", json.dumps(project_timeline))
 
         current_user = SimpleNamespace(id="user-1")
         db = object()
@@ -568,13 +669,44 @@ class AiResponseCacheTests(unittest.TestCase):
             result = self.run_async(
                 goals_router.captain_compass(
                     refresh=True,
+                    days=90,
                     db=db,
                     current_user=current_user,
                 )
             )
 
         self.assertIs(result, compass)
-        get_compass.assert_called_once_with(db, current_user, force_refresh=True)
+        get_compass.assert_called_once_with(db, current_user, force_refresh=True, context_days=90)
+
+    def test_captain_compass_route_parses_string_days_query(self) -> None:
+        app = FastAPI()
+        app.include_router(goals_router.router)
+        app.dependency_overrides[get_db] = lambda: object()
+        app.dependency_overrides[auth.get_current_user] = lambda: SimpleNamespace(id="user-1")
+        compass = {
+            "speed_rating": 7,
+            "direction_rating": 8,
+            "consistency_rating": 6,
+            "overall_rating": 7,
+            "status": "on_track",
+            "summary": "Execution is moving in the stated direction.",
+            "advice": "Continue.",
+            "model": "gpt-5.4-mini",
+            "refreshed_at": datetime.now(timezone.utc),
+            "context_days": 7,
+        }
+
+        with patch.object(crud, "get_captain_compass", return_value=compass) as get_compass:
+            response = TestClient(app).get("/goals/captain-compass?refresh=true&days=7")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["context_days"], 7)
+        get_compass.assert_called_once_with(
+            ANY,
+            ANY,
+            force_refresh=True,
+            context_days=7,
+        )
 
     def call_ai(
         self,

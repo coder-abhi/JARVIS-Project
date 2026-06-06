@@ -129,13 +129,37 @@
 }
 
 .captain-compass-head .ops-panel-head {
-  padding-right: 5.4rem;
+  padding-right: 12.5rem;
 }
 
-.captain-compass-refresh {
+.captain-compass-controls {
   position: absolute;
   top: -0.18rem;
   right: 0;
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.captain-compass-controls select {
+  min-height: 1.65rem;
+  border: 1px solid var(--ops-border);
+  border-radius: 0;
+  background: #000;
+  color: var(--ops-muted);
+  padding: 0.2rem 0.35rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.56rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.captain-compass-controls select:focus {
+  border-color: var(--ops-signal);
+  outline: none;
+}
+
+.captain-compass-refresh {
   min-height: 1.65rem;
   padding: 0.25rem 0.45rem;
   font-size: 0.58rem;
@@ -359,5 +383,14 @@
 
   .captain-compass-ratings {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .captain-compass-head .ops-panel-head {
+    padding-right: 0;
+  }
+
+  .captain-compass-controls {
+    position: static;
+    margin-top: 0.55rem;
   }
 }

@@ -37,6 +37,8 @@ except ImportError:  # pragma: no cover - depends on local environment setup
 
 logger = logging.getLogger(__name__)
 
+CAPTAIN_COMPASS_CONTEXT_DAYS = (7, 30, 90)
+
 
 def create_project(db: Session, project: schemas.ProjectCreate, user: models.User) -> models.Project:
     project_data = project.model_dump(exclude={"goal_id", "linked_goal_ids"})
@@ -167,6 +169,8 @@ def create_task(db: Session, task: schemas.TaskCreate) -> models.Task:
         task_data["start_date"] = None
     elif task_data["status"] == models.TaskStatus.in_progress and task_data["start_date"] is None:
         task_data["start_date"] = datetime.now(timezone.utc)
+    if task_data["status"] == models.TaskStatus.done:
+        task_data["completed_at"] = datetime.now(timezone.utc)
 
     db_task = models.Task(**task_data)
     db.add(db_task)
@@ -350,6 +354,10 @@ def update_task(db: Session, task_id: str, task: schemas.TaskUpdate, user: model
         changes["start_date"] = None
     elif next_status == models.TaskStatus.in_progress and "start_date" not in changes and db_task.start_date is None:
         changes["start_date"] = datetime.now(timezone.utc)
+    if next_status == models.TaskStatus.done and db_task.status != models.TaskStatus.done:
+        changes["completed_at"] = datetime.now(timezone.utc)
+    elif next_status != models.TaskStatus.done:
+        changes["completed_at"] = None
 
     for key, value in changes.items():
         setattr(db_task, key, value)
@@ -618,6 +626,7 @@ def complete_goal_task(db: Session, task_id: str, user: models.User) -> schemas.
         return None
 
     db_task.status = models.TaskStatus.done
+    db_task.completed_at = datetime.now(timezone.utc)
     linked_goals = _task_linked_goals(db_task)
     for goal in linked_goals:
         if goal.measurable:
@@ -674,6 +683,7 @@ def restore_goal_completion(db: Session, completion_id: str, user: models.User) 
     else:
         db_task.status = models.TaskStatus.todo
         db_task.start_date = None
+        db_task.completed_at = None
 
     linked_goals = _task_linked_goals(db_task)
     for goal in linked_goals:
@@ -754,7 +764,11 @@ def get_captain_compass(
     user: models.User,
     *,
     force_refresh: bool = False,
+    context_days: int = 30,
 ) -> schemas.CaptainCompassRead:
+    if context_days not in CAPTAIN_COMPASS_CONTEXT_DAYS:
+        raise ValueError(f"Captain Compass context must be one of {CAPTAIN_COMPASS_CONTEXT_DAYS}")
+
     goals = ensure_default_goals(db, user)
     projects = list(
         db.scalars(
@@ -783,6 +797,7 @@ def get_captain_compass(
         usage_db=db,
         force_refresh=force_refresh,
         cache_only=not force_refresh,
+        context_days=context_days,
     )
     return schemas.CaptainCompassRead(**assessment)
 
@@ -947,62 +962,23 @@ def generate_captain_compass(
     usage_db: Session | None = None,
     force_refresh: bool = False,
     cache_only: bool = False,
+    context_days: int = 30,
 ) -> dict:
-    fallback = _fallback_captain_compass(goals, projects, completion_logs)
-    fallback["model"] = ai_service.resolve_ai_model(user_id=user_id, feature="captain_compass")
-    logs_by_project: dict[str, list[models.CompletedGoalLog]] = {}
-    logged_task_ids = set()
-    for completion in completion_logs:
-        if completion.project_id:
-            logs_by_project.setdefault(completion.project_id, []).append(completion)
-        if completion.task_id:
-            logged_task_ids.add(completion.task_id)
+    if context_days not in CAPTAIN_COMPASS_CONTEXT_DAYS:
+        raise ValueError(f"Captain Compass context must be one of {CAPTAIN_COMPASS_CONTEXT_DAYS}")
 
-    context_projects = []
-    for project in projects:
-        timeline = [
-            {
-                "kind": "pomodoro_session",
-                "occurred_at": session.completed_at.isoformat(),
-                "minutes": session.minutes,
-                "description": session.description,
-            }
-            for session in project.pomodoro_sessions
-        ]
-        timeline.extend(
-            {
-                "kind": "completed_task",
-                "occurred_at": completion.created_at.isoformat(),
-                "title": completion.title,
-            }
-            for completion in logs_by_project.get(project.id, [])
-        )
-        timeline.extend(
-            {
-                "kind": "completed_task",
-                "occurred_at": task.created_at.isoformat(),
-                "title": task.title,
-                "description": task.description,
-                "minutes_logged": round(task.time_spent_hours * 60),
-            }
-            for task in project.tasks
-            if task.status == models.TaskStatus.done and task.id not in logged_task_ids
-        )
-        timeline.sort(key=lambda item: item["occurred_at"])
-        context_projects.append(
-            {
-                "project_id": project.id,
-                "name": project.name,
-                "description": project.description,
-                "type": project.type.value,
-                "parent_goal": project.parent_goal.title if project.parent_goal else None,
-                "timeline": timeline,
-            }
-        )
+    cutoff = datetime.now(timezone.utc) - timedelta(days=context_days)
+    goal_context = _captain_compass_goals_by_horizon(goals, projects, completion_logs)
+    project_timelines = _captain_compass_project_timelines(projects, completion_logs, cutoff)
+    fallback = _fallback_captain_compass(project_timelines, context_days)
+    fallback["model"] = ai_service.resolve_ai_model(user_id=user_id, feature="captain_compass")
 
     context = {
-        "goals": [_goal_context(goal) for goal in goals],
-        "projects": context_projects,
+        "goals_by_horizon": goal_context,
+        "project_timelines": {
+            "selected_range_days": context_days,
+            "projects": project_timelines,
+        },
     }
     data = _call_openai_json(
         CAPTAIN_COMPASS_SYSTEM_PROMPT,
@@ -1030,6 +1006,7 @@ def generate_captain_compass(
         "advice": (_clean_text(data.get("advice")) or fallback["advice"])[:320],
         "model": ai_service.resolve_ai_model(user_id=user_id, feature="captain_compass"),
         "refreshed_at": datetime.now(timezone.utc),
+        "context_days": context_days,
     }
 
 
@@ -1220,19 +1197,22 @@ def _fallback_goal_next_actions(goals: list[models.Goal], active_tasks: list[mod
 
 
 def _fallback_captain_compass(
-    goals: list[models.Goal],
-    projects: list[models.Project],
-    completion_logs: list[models.CompletedGoalLog],
+    project_timelines: list[dict],
+    context_days: int,
 ) -> dict:
-    completed_tasks = sum(task.status == models.TaskStatus.done for project in projects for task in project.tasks)
-    sessions = [session for project in projects for session in project.pomodoro_sessions]
-    focused_minutes = sum(session.minutes for session in sessions)
-    aligned_projects = sum(project.parent_goal is not None for project in projects if project.name != "General Work")
-    directional_projects = sum(project.name != "General Work" for project in projects)
-    activity_count = completed_tasks + len(completion_logs) + len(sessions)
+    entries = [entry for project in project_timelines for entry in project["timeline"]]
+    activity_count = len(entries)
+    completion_count = sum(entry["kind"] in {"completion_log", "completed_task"} for entry in entries)
+    focused_minutes = sum(entry.get("minutes", 0) for entry in entries if entry["kind"] == "pomodoro_session")
+    aligned_entries = sum(
+        len(project["timeline"])
+        for project in project_timelines
+        if project["linked_goal"] is not None
+    )
+    activity_days = {entry["occurred_at"][:10] for entry in entries}
     speed = min(10, max(1, 3 + activity_count // 4))
-    direction = min(10, max(1, 5 + (aligned_projects * 3 // max(directional_projects, 1))))
-    consistency = min(10, max(1, 3 + len({session.completed_at.date() for session in sessions})))
+    direction = min(10, max(1, 4 + (aligned_entries * 4 // max(activity_count, 1))))
+    consistency = min(10, max(1, 3 + len(activity_days)))
     overall = round((speed + direction + consistency) / 3)
     if activity_count == 0:
         status = "stalled"
@@ -1249,14 +1229,176 @@ def _fallback_captain_compass(
         "overall_rating": overall,
         "status": status,
         "summary": (
-            f"Current evidence shows {activity_count} completed work signals and {focused_minutes} focused minutes "
-            f"across {len(projects)} projects. Direction is strongest when active projects are explicitly tied to "
-            f"the four goal horizons; keep General Work from becoming the default destination for important work."
+            f"Current evidence shows {activity_count} project timeline entries in the last {context_days} days, "
+            f"including {completion_count} completions and {focused_minutes} focused minutes."
         ),
-        "advice": "Choose one goal-aligned project as the next execution lane, then finish and log one concrete outcome.",
+        "advice": "Keep project timeline activity tied to the purpose and direction recorded in your four goal horizons.",
         "model": ai_service.resolve_ai_model(user_id=None, feature="captain_compass"),
         "refreshed_at": datetime.now(timezone.utc),
+        "context_days": context_days,
     }
+
+
+def _captain_compass_goals_by_horizon(
+    goals: list[models.Goal],
+    projects: list[models.Project],
+    completion_logs: list[models.CompletedGoalLog],
+) -> dict[str, list[dict]]:
+    projects_by_goal: dict[str, list[models.Project]] = {}
+    for project in projects:
+        goal_id = project.parent_goal.id if project.parent_goal else project.goal_id
+        if goal_id:
+            projects_by_goal.setdefault(goal_id, []).append(project)
+
+    completions_by_goal: dict[str, list[models.CompletedGoalLog]] = {}
+    for completion in completion_logs:
+        goal_id = completion.goal_id
+        if goal_id is None and completion.project_id:
+            project = next((item for item in projects if item.id == completion.project_id), None)
+            goal_id = (
+                project.parent_goal.id
+                if project and project.parent_goal
+                else project.goal_id if project else None
+            )
+        if goal_id:
+            completions_by_goal.setdefault(goal_id, []).append(completion)
+
+    result: dict[str, list[dict]] = {}
+    for category in models.GoalCategory:
+        category_goals = []
+        for goal in goals:
+            if goal.category != category:
+                continue
+            timeline = [
+                {
+                    "kind": "goal_established",
+                    "occurred_at": _as_utc(goal.created_at).isoformat(),
+                    "title": "Goal established",
+                }
+            ]
+            for project in projects_by_goal.get(goal.id, []):
+                timeline.append(
+                    {
+                        "kind": "project_attached",
+                        "occurred_at": _as_utc(project.created_at).isoformat(),
+                        "project_id": project.id,
+                        "project_name": project.name,
+                        "project_type": project.type.value,
+                    }
+                )
+                active_deadlines = [
+                    task.deadline
+                    for task in project.tasks
+                    if task.deadline is not None and task.status != models.TaskStatus.done
+                ]
+                if active_deadlines:
+                    timeline.append(
+                        {
+                            "kind": "next_deadline",
+                            "occurred_at": _as_utc(min(active_deadlines)).isoformat(),
+                            "project_id": project.id,
+                            "project_name": project.name,
+                        }
+                    )
+            timeline.extend(
+                {
+                    "kind": "completion",
+                    "occurred_at": _as_utc(completion.created_at).isoformat(),
+                    "title": completion.title,
+                    "project_id": completion.project_id,
+                }
+                for completion in completions_by_goal.get(goal.id, [])
+            )
+            timeline.sort(key=lambda entry: entry["occurred_at"])
+            category_goals.append(
+                {
+                    "goal_id": goal.id,
+                    "title": goal.title,
+                    "why": goal.description,
+                    "timeline": timeline,
+                }
+            )
+        result[category.value] = category_goals
+    return result
+
+
+def _captain_compass_project_timelines(
+    projects: list[models.Project],
+    completion_logs: list[models.CompletedGoalLog],
+    cutoff: datetime,
+) -> list[dict]:
+    logs_by_project: dict[str, list[models.CompletedGoalLog]] = {}
+    logged_task_ids = set()
+    for completion in completion_logs:
+        if completion.project_id and _is_at_or_after(completion.created_at, cutoff):
+            logs_by_project.setdefault(completion.project_id, []).append(completion)
+        if completion.task_id:
+            logged_task_ids.add(completion.task_id)
+
+    project_timelines = []
+    for project in projects:
+        timeline = [
+            {
+                "kind": "pomodoro_session",
+                "occurred_at": _as_utc(session.completed_at).isoformat(),
+                "minutes": session.minutes,
+                "description": session.description,
+            }
+            for session in project.pomodoro_sessions
+            if _is_at_or_after(session.completed_at, cutoff)
+        ]
+        timeline.extend(
+            {
+                "kind": "completion_log",
+                "occurred_at": _as_utc(completion.created_at).isoformat(),
+                "title": completion.title,
+                "task_id": completion.task_id,
+            }
+            for completion in logs_by_project.get(project.id, [])
+        )
+        timeline.extend(
+            {
+                "kind": "completed_task",
+                "occurred_at": _as_utc(task.completed_at).isoformat(),
+                "task_id": task.id,
+                "title": task.title,
+                "description": task.description,
+                "minutes": round(task.time_spent_hours * 60),
+            }
+            for task in project.tasks
+            if (
+                task.status == models.TaskStatus.done
+                and task.id not in logged_task_ids
+                and task.completed_at is not None
+                and _is_at_or_after(task.completed_at, cutoff)
+            )
+        )
+        timeline.sort(key=lambda entry: entry["occurred_at"])
+        project_timelines.append(
+            {
+                "project_id": project.id,
+                "project_name": project.name,
+                "linked_goal": (
+                    {
+                        "goal_id": project.parent_goal.id,
+                        "category": project.parent_goal.category.value,
+                        "title": project.parent_goal.title,
+                    }
+                    if project.parent_goal
+                    else None
+                ),
+                "timeline": timeline,
+            }
+        )
+    return project_timelines
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
+def _is_at_or_after(value: datetime, cutoff: datetime) -> bool:
+    return _as_utc(value) >= cutoff
 
 
 def _task_linked_goals(task: models.Task) -> list[models.Goal]:

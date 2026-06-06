@@ -113,6 +113,7 @@ class Task(Base):
     time_spent_hours: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     project: Mapped[Project] = relationship(back_populates="tasks")

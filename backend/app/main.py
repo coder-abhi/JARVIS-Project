@@ -51,6 +51,10 @@ def ensure_sqlite_compatibility() -> None:
             connection.execute(text("ALTER TABLE tasks ADD COLUMN importance_rating INTEGER NOT NULL DEFAULT 3"))
         if task_columns and "start_date" not in task_columns:
             connection.execute(text("ALTER TABLE tasks ADD COLUMN start_date DATETIME"))
+        if task_columns and "completed_at" not in task_columns:
+            connection.execute(text("ALTER TABLE tasks ADD COLUMN completed_at DATETIME"))
+            connection.execute(text("UPDATE tasks SET completed_at = created_at WHERE status = 'done'"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_tasks_completed_at ON tasks (completed_at)"))
         if task_columns:
             connection.execute(text("UPDATE tasks SET status = 'todo' WHERE status = 'delayed'"))
         if task_columns and "goal_id" in task_columns and {"goal_id", "project_id"} <= goal_project_columns:
@@ -282,6 +286,7 @@ def drop_legacy_task_goal_id() -> None:
                             time_spent_hours FLOAT NOT NULL,
                             start_date DATETIME,
                             deadline DATETIME,
+                            completed_at DATETIME,
                             created_at DATETIME NOT NULL,
                             PRIMARY KEY (id),
                             FOREIGN KEY(project_id) REFERENCES projects (id)
@@ -304,6 +309,7 @@ def drop_legacy_task_goal_id() -> None:
                             time_spent_hours,
                             start_date,
                             deadline,
+                            completed_at,
                             created_at
                         )
                         SELECT
@@ -318,6 +324,7 @@ def drop_legacy_task_goal_id() -> None:
                             time_spent_hours,
                             start_date,
                             deadline,
+                            completed_at,
                             created_at
                         FROM tasks
                         """
@@ -326,6 +333,7 @@ def drop_legacy_task_goal_id() -> None:
                 connection.execute(text("DROP TABLE tasks"))
                 connection.execute(text("ALTER TABLE tasks_without_goal_id RENAME TO tasks"))
                 connection.execute(text("CREATE INDEX ix_tasks_project_id ON tasks (project_id)"))
+                connection.execute(text("CREATE INDEX ix_tasks_completed_at ON tasks (completed_at)"))
         finally:
             connection.exec_driver_sql("PRAGMA foreign_keys=ON")
             connection.commit()

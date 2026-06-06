@@ -127,6 +127,7 @@ class TaskRead(TaskBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    completed_at: datetime | None = None
     created_at: datetime
 
 
@@ -247,6 +248,7 @@ class CaptainCompassRead(BaseModel):
     advice: str
     model: str
     refreshed_at: datetime
+    context_days: int = Field(ge=1)
 
 
 class GoalsOverview(BaseModel):

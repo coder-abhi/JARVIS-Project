@@ -52,6 +52,7 @@ export type Task = {
   time_spent_hours: number;
   start_date?: string | null;
   deadline?: string | null;
+  completed_at?: string | null;
   created_at: string;
 };
 
@@ -60,10 +61,10 @@ export type ProjectInput = Pick<Project, "name" | "type" | "description"> & {
   linked_goal_ids?: string[];
 };
 export type ProjectUpdate = Partial<Pick<Project, "name" | "description" | "type" | "goal_id">>;
-export type TaskInput = Omit<Task, "id" | "created_at" | "importance_rating"> & {
+export type TaskInput = Omit<Task, "id" | "created_at" | "completed_at" | "importance_rating"> & {
   importance_rating?: number;
 };
-export type TaskUpdate = Partial<Omit<Task, "id" | "project_id" | "created_at">>;
+export type TaskUpdate = Partial<Omit<Task, "id" | "project_id" | "created_at" | "completed_at">>;
 
 export type Goal = {
   id: string;
@@ -253,7 +254,10 @@ export type CaptainCompass = {
   advice: string;
   model: string;
   refreshed_at: string;
+  context_days: CaptainCompassContextDays;
 };
+
+export type CaptainCompassContextDays = 7 | 30 | 90;
 
 export type AiFeatureCost = {
   feature: string;
@@ -503,8 +507,8 @@ export function getGoalNextActions(refresh = false) {
   return request<GoalNextAction[]>(`/goals/next-actions?refresh=${refresh}`);
 }
 
-export function getCaptainCompass(refresh = false) {
-  return request<CaptainCompass>(`/goals/captain-compass?refresh=${refresh}`);
+export function getCaptainCompass(refresh = false, days: CaptainCompassContextDays = 30) {
+  return request<CaptainCompass>(`/goals/captain-compass?refresh=${refresh}&days=${days}`);
 }
 
 export function getLibrarySummary() {

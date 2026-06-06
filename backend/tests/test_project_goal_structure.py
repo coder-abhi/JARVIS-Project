@@ -31,6 +31,7 @@ class ProjectGoalStructureTests(unittest.TestCase):
 
         self.assertNotIn("goal_id", columns)
         self.assertFalse(columns["project_id"]["nullable"])
+        self.assertIn("completed_at", columns)
 
     def test_project_links_goals_and_tasks_inherit_that_context(self) -> None:
         goal = models.Goal(
