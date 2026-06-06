@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   completeGoalTask,
@@ -11,7 +13,6 @@ import {
   logGoalEntry,
   refreshPersonalityInsight,
   restoreCompletedGoal,
-  updateGoal,
   type Goal,
   type GoalCategory,
   type GoalNextAction,
@@ -37,21 +38,18 @@ const projectTypes: { value: ProjectType; label: string; description: string }[]
   { value: "continuous", label: "Continuous", description: "Persistent operating loop or habit system." },
 ];
 type SortMode = "importance" | "time" | "goal";
-type GoalDraft = { title: string; description: string; target: string; current: string; unit: string };
 
 export default function GoalsPage() {
+  const router = useRouter();
   const [overview, setOverview] = useState<GoalsOverview | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [nextActions, setNextActions] = useState<GoalNextAction[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("importance");
-  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<GoalDraft>({ title: "", description: "", target: "", current: "", unit: "" });
   const [logText, setLogText] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isLogging, setIsLogging] = useState(false);
   const [isRefreshingNextActions, setIsRefreshingNextActions] = useState(false);
   const [isRefreshingPersonality, setIsRefreshingPersonality] = useState(false);
-  const [savingGoalId, setSavingGoalId] = useState<string | null>(null);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [creatingGoalCategory, setCreatingGoalCategory] = useState<GoalCategory | null>(null);
   const [restoringCompletionId, setRestoringCompletionId] = useState<string | null>(null);
@@ -110,40 +108,6 @@ export default function GoalsPage() {
     return grouped;
   }, [overview?.goals]);
 
-  function beginEdit(goal: Goal) {
-    setEditingGoalId(goal.id);
-    setEditDraft({
-      title: goal.title,
-      description: goal.description ?? "",
-      target: goal.target_value == null ? "" : String(goal.target_value),
-      current: String(goal.current_value ?? 0),
-      unit: goal.unit ?? "",
-    });
-  }
-
-  async function saveGoal(goalId: string) {
-    if (!editDraft.title.trim()) return;
-    setSavingGoalId(goalId);
-    setError(null);
-    try {
-      await updateGoal(goalId, {
-        title: editDraft.title.trim(),
-        description: editDraft.description.trim() || null,
-        target_value: editDraft.target.trim() ? Number(editDraft.target) : null,
-        current_value: Number(editDraft.current) || 0,
-        unit: editDraft.unit.trim() || null,
-      });
-      setEditingGoalId(null);
-      setMessage("Goal updated.");
-      await loadGoals();
-      await loadNextActions();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update goal");
-    } finally {
-      setSavingGoalId(null);
-    }
-  }
-
   async function handleCreateGoal(category: GoalCategory) {
     setCreatingGoalCategory(category);
     setError(null);
@@ -151,15 +115,12 @@ export default function GoalsPage() {
       const goal = await createGoal({
         category,
         title: `New ${categoryLabels[category].toLowerCase()}`,
+        description: null,
         target_value: null,
         current_value: 0,
         unit: null,
       });
-      setEditingGoalId(goal.id);
-      setEditDraft({ title: goal.title, description: "", target: "", current: "0", unit: "" });
-      setMessage("Goal added.");
-      await loadGoals();
-      await loadNextActions();
+      router.push(`/goal/${goal.id}?edit=1`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add goal");
     } finally {
@@ -390,15 +351,8 @@ export default function GoalsPage() {
               key={category}
               category={category}
               goals={goalsByCategory[category]}
-              editingGoalId={editingGoalId}
-              draft={editDraft}
-              savingGoalId={savingGoalId}
               isCreating={creatingGoalCategory === category}
               onCreate={() => handleCreateGoal(category)}
-              onBeginEdit={beginEdit}
-              onDraftChange={setEditDraft}
-              onSave={saveGoal}
-              onCancel={() => setEditingGoalId(null)}
             />
           ))}
         </section>
@@ -545,27 +499,13 @@ export default function GoalsPage() {
 function GoalCategorySection({
   category,
   goals,
-  editingGoalId,
-  draft,
-  savingGoalId,
   isCreating,
   onCreate,
-  onBeginEdit,
-  onDraftChange,
-  onSave,
-  onCancel,
 }: {
   category: GoalCategory;
   goals: Goal[];
-  editingGoalId: string | null;
-  draft: GoalDraft;
-  savingGoalId: string | null;
   isCreating: boolean;
   onCreate: () => void;
-  onBeginEdit: (goal: Goal) => void;
-  onDraftChange: (draft: GoalDraft) => void;
-  onSave: (goalId: string) => void;
-  onCancel: () => void;
 }) {
   return (
     <div className="ops-panel">
@@ -594,13 +534,6 @@ function GoalCategorySection({
             <GoalCard
               key={goal.id}
               goal={goal}
-              isEditing={editingGoalId === goal.id}
-              draft={draft}
-              isSaving={savingGoalId === goal.id}
-              onBeginEdit={() => onBeginEdit(goal)}
-              onDraftChange={onDraftChange}
-              onSave={() => onSave(goal.id)}
-              onCancel={onCancel}
             />
           ))
         ) : (
@@ -617,58 +550,13 @@ function GoalCategorySection({
   );
 }
 
-function GoalCard({
-  goal,
-  isEditing,
-  draft,
-  isSaving,
-  onBeginEdit,
-  onDraftChange,
-  onSave,
-  onCancel,
-}: {
-  goal: Goal;
-  isEditing: boolean;
-  draft: GoalDraft;
-  isSaving: boolean;
-  onBeginEdit: () => void;
-  onDraftChange: (draft: GoalDraft) => void;
-  onSave: () => void;
-  onCancel: () => void;
-}) {
-  if (isEditing) {
-    return (
-      <div className="rounded-lg border border-teal-200 bg-white p-3 shadow-sm">
-        <div className="grid gap-2">
-          <input value={draft.title} onChange={(event) => onDraftChange({ ...draft, title: event.target.value })} className="field-input py-2 text-xs" autoFocus />
-          <textarea
-            value={draft.description}
-            onChange={(event) => onDraftChange({ ...draft, description: event.target.value })}
-            className="field-input min-h-20 resize-y py-2 text-xs"
-            placeholder="What kinds of projects and tasks belong under this goal?"
-          />
-          <div className="grid grid-cols-2 gap-2">
-            <input type="number" min="0" step="0.25" placeholder="Target" value={draft.target} onChange={(event) => onDraftChange({ ...draft, target: event.target.value })} className="field-input py-2 text-xs" />
-            <input type="number" min="0" step="0.25" placeholder="Current" value={draft.current} onChange={(event) => onDraftChange({ ...draft, current: event.target.value })} className="field-input py-2 text-xs" />
-          </div>
-          <input value={draft.unit} placeholder="Unit" onChange={(event) => onDraftChange({ ...draft, unit: event.target.value })} className="field-input py-2 text-xs" />
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={onCancel} className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-semibold text-stone-700 transition hover:bg-stone-50">
-              Cancel
-            </button>
-            <button type="button" onClick={onSave} disabled={isSaving} className="rounded-full bg-stone-950 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-stone-800 disabled:bg-stone-300">
-              {isSaving ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+function GoalCard({ goal }: { goal: Goal }) {
   return (
-    <button type="button" onClick={onBeginEdit} className="rounded-lg border border-stone-200 bg-white p-3 text-left transition hover:border-teal-200 hover:bg-teal-50/30">
+    <Link href={`/goal/${goal.id}`} className="group block rounded-lg border border-stone-200 bg-white p-3 text-left transition hover:border-teal-200 hover:bg-teal-50/30">
       <h3 className="text-sm font-semibold leading-5 text-stone-950">{goal.title}</h3>
-      {goal.description ? <p className="mt-1.5 text-xs leading-5 text-stone-600">{goal.description}</p> : null}
+      <p className="mt-1.5 text-xs leading-5 text-stone-600">
+        {goal.description || "No why captured yet. Open this goal to define it."}
+      </p>
       {goal.measurable && goal.progress_percentage != null ? (
         <div className="mt-2.5">
           <div className="flex justify-between text-[11px] font-semibold text-stone-500">
@@ -682,9 +570,12 @@ function GoalCard({
           </div>
         </div>
       ) : (
-        <p className="mt-2 text-xs font-medium text-stone-500">Click to edit its description or measurable telemetry.</p>
+        <div className="mt-2 flex items-center justify-between text-xs font-medium text-stone-500">
+          <span>{goal.linked_projects.length} attached project{goal.linked_projects.length === 1 ? "" : "s"}</span>
+          <span className="text-stone-950 transition group-hover:translate-x-1">Open</span>
+        </div>
       )}
-    </button>
+    </Link>
   );
 }
 

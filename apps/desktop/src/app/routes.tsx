@@ -5,6 +5,7 @@ import AiCostPage from "@/features/ai-cost/pages/AiCostPage";
 import LoginPage from "@/features/auth/pages/LoginPage";
 import SignupPage from "@/features/auth/pages/SignupPage";
 import DashboardPage from "@/features/dashboard/pages/DashboardPage";
+import GoalDetailPage from "@/features/goals/pages/GoalDetailPage";
 import GoalsPage from "@/features/goals/pages/GoalsPage";
 import LibraryPage from "@/features/library/pages/LibraryPage";
 import MoneyPage from "@/features/money/pages/MoneyPage";
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <DashboardPage /> },
       { path: "goals", element: <GoalsPage /> },
+      { path: "goal/:id", element: <GoalDetailPage /> },
       { path: "project/:id", element: <ProjectDetailPage /> },
       { path: "timeline", element: <Navigate to="/goals#schedule" replace /> },
       { path: "pomodoro", element: <PomodoroPage /> },
