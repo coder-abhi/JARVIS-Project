@@ -5,6 +5,7 @@
 .money-header-actions,
 .money-panel-head > div,
 .money-row-actions,
+.money-expectation-actions,
 .money-card-title,
 .money-goal-head,
 .money-card-meta,
@@ -129,8 +130,18 @@
   text-transform: none;
 }
 
+.money-ledger-total {
+  border: 1px solid rgba(34, 197, 94, 0.55);
+  color: var(--ops-signal);
+  padding: 0.3rem 0.45rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.62rem;
+  white-space: nowrap;
+}
+
 .money-add-button,
-.money-row-actions button {
+.money-row-actions button,
+.money-expectation-actions button {
   border: 0;
   background: transparent;
   color: var(--ops-signal);
@@ -147,8 +158,21 @@
   white-space: nowrap;
 }
 
-.money-row-actions button.danger {
+.money-row-actions button.danger,
+.money-expectation-actions button.danger {
   color: #f87171;
+}
+
+.money-expectation-actions {
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.money-expectation-actions button.primary {
+  border: 1px solid rgba(34, 197, 94, 0.55);
+  color: var(--ops-signal);
+  padding: 0.28rem 0.45rem;
 }
 
 .money-chart {
@@ -476,7 +500,7 @@
 
 .money-income-list article {
   display: grid;
-  grid-template-columns: 5.5rem minmax(0, 1fr) auto auto;
+  grid-template-columns: 5.5rem minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.55rem;
   border-bottom: 1px solid var(--ops-border);
@@ -603,6 +627,40 @@
   opacity: 0.45;
 }
 
+.money-tag-input {
+  position: relative;
+}
+
+.money-tag-suggestions {
+  position: absolute;
+  inset: calc(100% + 0.25rem) 0 auto;
+  z-index: 80;
+  display: grid;
+  max-height: 12rem;
+  overflow-y: auto;
+  border: 1px solid var(--ops-border-strong);
+  background: #050505;
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.55);
+  padding: 0.25rem;
+}
+
+.money-tag-suggestions button {
+  border: 0;
+  background: transparent;
+  color: var(--ops-muted);
+  cursor: pointer;
+  padding: 0.45rem 0.55rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.66rem;
+  text-align: left;
+}
+
+.money-tag-suggestions button:hover,
+.money-tag-suggestions button.active {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--ops-signal);
+}
+
 .money-modal-actions {
   justify-content: flex-end;
   margin-top: 1rem;
@@ -656,7 +714,8 @@
 
   .money-account-card > strong,
   .money-list-amount,
-  .money-row-actions {
+  .money-row-actions,
+  .money-expectation-actions {
     text-align: left;
     justify-content: flex-start;
   }

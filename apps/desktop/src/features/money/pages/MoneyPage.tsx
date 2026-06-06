@@ -1,12 +1,12 @@
 "use client";
 
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { getScopedStorageKey } from "@/lib/auth";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import "./MoneyPage.css";
 
 type Currency = "INR" | "USD" | "EUR" | "GBP";
-type EntryKind = "transaction" | "account" | "card" | "loan" | "investment" | "goal" | "income";
+type EntryKind = "transaction" | "account" | "card" | "loan" | "investment" | "goal" | "income" | "bill";
 type TransactionType = "expense" | "income";
 type SourceKind = "account" | "card" | "cash";
 
@@ -75,6 +75,16 @@ type ExpectedIncome = {
   amount: number;
   expectedDate: string;
   note: string;
+  accountId: string;
+};
+
+type ExpectedBill = {
+  id: string;
+  payee: string;
+  amount: number;
+  expectedDate: string;
+  note: string;
+  accountId: string;
 };
 
 type MoneyData = {
@@ -87,9 +97,10 @@ type MoneyData = {
   investments: Investment[];
   goals: SavingGoal[];
   incomes: ExpectedIncome[];
+  bills: ExpectedBill[];
 };
 
-type Entry = Transaction | BankAccount | CreditCard | Loan | Investment | SavingGoal | ExpectedIncome;
+type Entry = Transaction | BankAccount | CreditCard | Loan | Investment | SavingGoal | ExpectedIncome | ExpectedBill;
 type Draft = Record<string, string>;
 
 const storageKey = "jarvis-money-command-v1";
@@ -103,6 +114,7 @@ const emptyData: MoneyData = {
   investments: [],
   goals: [],
   incomes: [],
+  bills: [],
 };
 const expenseCategories = ["Food", "Housing", "Transport", "Shopping", "Health", "Education", "Entertainment", "Bills", "Travel", "Other"];
 const incomeCategories = ["Salary", "Freelance", "Business", "Investment", "Gift", "Refund", "Other"];
@@ -114,6 +126,7 @@ const kindLabels: Record<EntryKind, string> = {
   investment: "Investment",
   goal: "Saving Goal",
   income: "Expected Income",
+  bill: "Expected Bill",
 };
 
 export default function MoneyPage() {
@@ -140,7 +153,8 @@ export default function MoneyPage() {
           loans: parsed.loans ?? [],
           investments: parsed.investments ?? [],
           goals: parsed.goals ?? [],
-          incomes: parsed.incomes ?? [],
+          incomes: (parsed.incomes ?? []).map((income) => ({ ...income, accountId: income.accountId ?? "" })),
+          bills: (parsed.bills ?? []).map((bill) => ({ ...bill, accountId: bill.accountId ?? "" })),
         });
       } catch {
         setData(emptyData);
@@ -162,14 +176,15 @@ export default function MoneyPage() {
     () => [...new Set(data.transactions.flatMap((transaction) => transaction.tags))].sort((a, b) => a.localeCompare(b)),
     [data.transactions],
   );
-  const filteredTransactions = useMemo(
+  const matchingTransactions = useMemo(
     () =>
       [...data.transactions]
         .filter((transaction) => !tagFilter || transaction.tags.includes(tagFilter))
-        .sort((a, b) => b.dateTime.localeCompare(a.dateTime))
-        .slice(0, 30),
+        .sort((a, b) => b.dateTime.localeCompare(a.dateTime)),
     [data.transactions, tagFilter],
   );
+  const filteredTransactions = useMemo(() => matchingTransactions.slice(0, 30), [matchingTransactions]);
+  const filteredAmountTotal = useMemo(() => sum(matchingTransactions.map((transaction) => transaction.amount)), [matchingTransactions]);
   const formatter = useMemo(
     () => new Intl.NumberFormat(undefined, { style: "currency", currency: data.currency, maximumFractionDigits: 0 }),
     [data.currency],
@@ -231,6 +246,37 @@ export default function MoneyPage() {
     });
   }
 
+  function completeExpectation(kind: "income" | "bill", id: string) {
+    setData((current) => {
+      const next = cloneData(current);
+      const expectation = kind === "income"
+        ? next.incomes.find((item) => item.id === id)
+        : next.bills.find((item) => item.id === id);
+      if (!expectation) return current;
+
+      const accountId = expectation.accountId && next.accounts.some((account) => account.id === expectation.accountId)
+        ? expectation.accountId
+        : "";
+      const transaction: Transaction = {
+        id: createId(),
+        type: kind === "income" ? "income" : "expense",
+        amount: expectation.amount,
+        description: kind === "income" ? (expectation as ExpectedIncome).source : (expectation as ExpectedBill).payee,
+        category: kind === "income" ? "Other" : "Bills",
+        dateTime: toDateTimeValue(new Date()),
+        sourceKind: accountId ? "account" : "cash",
+        sourceId: accountId,
+        tags: [],
+      };
+
+      next.transactions = [...next.transactions, transaction];
+      applyTransactionToSource(next, transaction, 1);
+      if (kind === "income") next.incomes = next.incomes.filter((item) => item.id !== id);
+      if (kind === "bill") next.bills = next.bills.filter((item) => item.id !== id);
+      return next;
+    });
+  }
+
   const nextIncome = [...data.incomes]
     .filter((income) => endOfDay(income.expectedDate) >= Date.now())
     .sort((a, b) => a.expectedDate.localeCompare(b.expectedDate))[0];
@@ -281,16 +327,42 @@ export default function MoneyPage() {
         </section>
 
         <section className="ops-panel span-4">
-          <PanelHeader label="Financial Readiness" detail="Derived signals" />
-          <div className="money-intelligence">
-            <IntelligenceRow label="Emergency Runway" value={summary.runwayMonths == null ? "No spend data" : `${summary.runwayMonths.toFixed(1)} months`} signal={(summary.runwayMonths ?? 0) >= 3} />
-            <IntelligenceRow label="Savings Rate" value={summary.monthlyIncome ? `${Math.round((summary.cashFlow / summary.monthlyIncome) * 100)}%` : "No income data"} signal={summary.cashFlow > 0} />
-            <IntelligenceRow label="Credit Utilization" value={summary.creditLimit ? `${Math.round((summary.cardDebt / summary.creditLimit) * 100)}%` : "No cards"} signal={summary.creditLimit > 0 && summary.cardDebt / summary.creditLimit < 0.3} />
-            <IntelligenceRow label="Investment Return" value={summary.invested ? `${formatSignedPercent(((summary.investmentValue - summary.invested) / summary.invested) * 100)}` : "No investments"} signal={summary.investmentValue >= summary.invested && summary.invested > 0} />
+          <PanelHeader label="Expected Income" detail={`${money(summary.expectedIncome)} expected`} action={<AddButton onClick={() => openCreate("income")} />} />
+          <div className="money-income-list">
+            {[...data.incomes].sort((a, b) => a.expectedDate.localeCompare(b.expectedDate)).map((income) => (
+              <article key={income.id}>
+                <span>{formatDate(income.expectedDate)}</span>
+                <div>
+                  <strong>{income.source}</strong>
+                  <small>{expectationDetail(income.note || "Expected receipt", income.accountId, data)}</small>
+                </div>
+                <strong className="money-positive">{money(income.amount)}</strong>
+                <ExpectationActions primaryLabel="Received" onPrimary={() => completeExpectation("income", income.id)} onEdit={() => openEdit("income", income)} onDelete={() => deleteEntry("income", income.id)} />
+              </article>
+            ))}
+            {!data.incomes.length ? <EmptyState text="Schedule salary, invoices, dividends, or other expected income." /> : null}
           </div>
         </section>
 
-        <section className="ops-panel span-8">
+        <section className="ops-panel span-4">
+          <PanelHeader label="Expected Bill" detail={`${money(summary.expectedBills)} expected`} action={<AddButton onClick={() => openCreate("bill")} />} />
+          <div className="money-income-list">
+            {[...data.bills].sort((a, b) => a.expectedDate.localeCompare(b.expectedDate)).map((bill) => (
+              <article key={bill.id}>
+                <span>{formatDate(bill.expectedDate)}</span>
+                <div>
+                  <strong>{bill.payee}</strong>
+                  <small>{expectationDetail(bill.note || "Expected payment", bill.accountId, data)}</small>
+                </div>
+                <strong className="money-negative">{money(bill.amount)}</strong>
+                <ExpectationActions primaryLabel="Paid" onPrimary={() => completeExpectation("bill", bill.id)} onEdit={() => openEdit("bill", bill)} onDelete={() => deleteEntry("bill", bill.id)} />
+              </article>
+            ))}
+            {!data.bills.length ? <EmptyState text="Schedule utilities, subscriptions, invoices, or other expected bills." /> : null}
+          </div>
+        </section>
+
+        <section className="ops-panel span-4">
           <PanelHeader label="Upcoming Money Radar" detail="Next 45 days" />
           <div className="money-radar">
             {upcoming.length ? upcoming.map((item) => (
@@ -345,7 +417,12 @@ export default function MoneyPage() {
         <section className="ops-panel span-12">
           <PanelHeader
             label="Transaction Ledger"
-            detail={`${filteredTransactions.length} shown / ${data.transactions.length} entries`}
+            detail={(
+              <>
+                <span>{filteredTransactions.length} shown / {data.transactions.length} entries</span>
+                {tagFilter ? <strong className="money-ledger-total">Total {money(filteredAmountTotal)}</strong> : null}
+              </>
+            )}
             action={(
               <div className="money-ledger-actions">
                 <label>
@@ -431,17 +508,12 @@ export default function MoneyPage() {
         </section>
 
         <section className="ops-panel span-5">
-          <PanelHeader label="Expected Income" detail={`${money(summary.expectedIncome)} expected`} action={<AddButton onClick={() => openCreate("income")} />} />
-          <div className="money-income-list">
-            {[...data.incomes].sort((a, b) => a.expectedDate.localeCompare(b.expectedDate)).map((income) => (
-              <article key={income.id}>
-                <span>{formatDate(income.expectedDate)}</span>
-                <div><strong>{income.source}</strong><small>{income.note || "Expected receipt"}</small></div>
-                <strong className="money-positive">{money(income.amount)}</strong>
-                <RowActions onEdit={() => openEdit("income", income)} onDelete={() => deleteEntry("income", income.id)} />
-              </article>
-            ))}
-            {!data.incomes.length ? <EmptyState text="Schedule salary, invoices, dividends, or other expected income." /> : null}
+          <PanelHeader label="Financial Readiness" detail="Derived signals" />
+          <div className="money-intelligence">
+            <IntelligenceRow label="Emergency Runway" value={summary.runwayMonths == null ? "No spend data" : `${summary.runwayMonths.toFixed(1)} months`} signal={(summary.runwayMonths ?? 0) >= 3} />
+            <IntelligenceRow label="Savings Rate" value={summary.monthlyIncome ? `${Math.round((summary.cashFlow / summary.monthlyIncome) * 100)}%` : "No income data"} signal={summary.cashFlow > 0} />
+            <IntelligenceRow label="Credit Utilization" value={summary.creditLimit ? `${Math.round((summary.cardDebt / summary.creditLimit) * 100)}%` : "No cards"} signal={summary.creditLimit > 0 && summary.cardDebt / summary.creditLimit < 0.3} />
+            <IntelligenceRow label="Investment Return" value={summary.invested ? `${formatSignedPercent(((summary.investmentValue - summary.invested) / summary.invested) * 100)}` : "No investments"} signal={summary.investmentValue >= summary.invested && summary.invested > 0} />
           </div>
         </section>
       </section>
@@ -453,6 +525,7 @@ export default function MoneyPage() {
           draft={draft}
           setDraft={setDraft}
           data={data}
+          existingTags={existingTags}
           onClose={closeModal}
           onSubmit={saveEntry}
         />
@@ -467,6 +540,7 @@ function EntryModal({
   draft,
   setDraft,
   data,
+  existingTags,
   onClose,
   onSubmit,
 }: {
@@ -475,6 +549,7 @@ function EntryModal({
   draft: Draft;
   setDraft: (draft: Draft) => void;
   data: MoneyData;
+  existingTags: string[];
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
@@ -496,7 +571,9 @@ function EntryModal({
               <Field label="Why / Description" wide><input required value={draft.description} onChange={(e) => patch("description", e.target.value)} placeholder="What was this money for?" /></Field>
               <Field label="Category"><select value={draft.category} onChange={(e) => patch("category", e.target.value)}>{categories.map((category) => <option key={category}>{category}</option>)}</select></Field>
               <Field label="Date & Time"><DateTimePicker value={draft.dateTime} allowClear={false} onChange={(value) => patch("dateTime", value)} /></Field>
-              <Field label="Tags (optional)" wide><input value={draft.tags} onChange={(e) => patch("tags", e.target.value)} placeholder="#recurring #work or recurring, work" /></Field>
+              <Field label="Tags (optional)" wide>
+                <TagAutocompleteInput value={draft.tags} existingTags={existingTags} onChange={(value) => patch("tags", value)} />
+              </Field>
               <Field label="Paid Via"><select value={draft.sourceKind} onChange={(e) => patch("sourceKind", e.target.value)}>
                 <option value="cash">Cash / Untracked</option>
                 <option value="account">Bank Account</option>
@@ -560,6 +637,22 @@ function EntryModal({
               <Field label="Income Source" wide><input required value={draft.source} onChange={(e) => patch("source", e.target.value)} placeholder="Salary, client invoice, dividend..." /></Field>
               <Field label="Expected Amount"><input required min="0" type="number" step="0.01" value={draft.amount} onChange={(e) => patch("amount", e.target.value)} /></Field>
               <Field label="Expected Date"><DateTimePicker mode="date" value={draft.expectedDate} allowClear={false} onChange={(value) => patch("expectedDate", value)} /></Field>
+              <Field label="Receiving Account (optional)" wide><select value={draft.accountId} onChange={(e) => patch("accountId", e.target.value)}>
+                <option value="">Cash / Choose when received</option>
+                {data.accounts.map((account) => <option value={account.id} key={account.id}>{account.bankName} / {account.name}</option>)}
+              </select></Field>
+              <Field label="Notes" wide><textarea value={draft.note} onChange={(e) => patch("note", e.target.value)} /></Field>
+            </>
+          ) : null}
+          {kind === "bill" ? (
+            <>
+              <Field label="Bill / Payee" wide><input required value={draft.payee} onChange={(e) => patch("payee", e.target.value)} placeholder="Rent, electricity, subscription..." /></Field>
+              <Field label="Expected Amount"><input required min="0" type="number" step="0.01" value={draft.amount} onChange={(e) => patch("amount", e.target.value)} /></Field>
+              <Field label="Expected Date"><DateTimePicker mode="date" value={draft.expectedDate} allowClear={false} onChange={(value) => patch("expectedDate", value)} /></Field>
+              <Field label="Paying Account (optional)" wide><select value={draft.accountId} onChange={(e) => patch("accountId", e.target.value)}>
+                <option value="">Cash / Choose when paid</option>
+                {data.accounts.map((account) => <option value={account.id} key={account.id}>{account.bankName} / {account.name}</option>)}
+              </select></Field>
               <Field label="Notes" wide><textarea value={draft.note} onChange={(e) => patch("note", e.target.value)} /></Field>
             </>
           ) : null}
@@ -577,8 +670,99 @@ function Field({ label, wide = false, children }: { label: string; wide?: boolea
   return <label className={wide ? "money-field wide" : "money-field"}><span>{label}</span>{children}</label>;
 }
 
-function PanelHeader({ label, detail, action }: { label: string; detail: string; action?: ReactNode }) {
-  return <div className="ops-panel-head money-panel-head"><h2>{label}</h2><div><span>{detail}</span>{action}</div></div>;
+function TagAutocompleteInput({ value, existingTags, onChange }: { value: string; existingTags: string[]; onChange: (value: string) => void }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [cursor, setCursor] = useState(value.length);
+  const [isFocused, setIsFocused] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeTag = getActiveTag(value, cursor);
+  const suggestions = activeTag
+    ? existingTags.filter((tag) => tag.slice(1).startsWith(activeTag.query)).slice(0, 8)
+    : [];
+  const isOpen = isFocused && suggestions.length > 0;
+  const selectedSuggestionIndex = Math.min(activeIndex, Math.max(suggestions.length - 1, 0));
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [activeTag?.query]);
+
+  function syncCursor() {
+    setCursor(inputRef.current?.selectionStart ?? value.length);
+    setIsFocused(true);
+  }
+
+  function selectSuggestion(tag: string) {
+    const match = getActiveTag(value, cursor);
+    if (!match) return;
+    const nextValue = `${value.slice(0, match.start)}${tag} ${value.slice(match.end)}`;
+    const nextCursor = match.start + tag.length + 1;
+    onChange(nextValue);
+    setCursor(nextCursor);
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(nextCursor, nextCursor);
+    });
+  }
+
+  function handleKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (!isOpen) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((current) => (current + 1) % suggestions.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((current) => (current - 1 + suggestions.length) % suggestions.length);
+    } else if (event.key === "Enter" || event.key === "Tab") {
+      event.preventDefault();
+      selectSuggestion(suggestions[selectedSuggestionIndex]);
+    } else if (event.key === "Escape") {
+      setIsFocused(false);
+    }
+  }
+
+  return (
+    <div className="money-tag-input">
+      <input
+        ref={inputRef}
+        value={value}
+        onBlur={() => setIsFocused(false)}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setCursor(event.target.selectionStart ?? event.target.value.length);
+          setIsFocused(true);
+        }}
+        onClick={syncCursor}
+        onFocus={syncCursor}
+        onKeyDown={handleKeyDown}
+        onSelect={syncCursor}
+        placeholder="#recurring #work or recurring, work"
+        autoComplete="off"
+        aria-autocomplete="list"
+        aria-expanded={isOpen}
+      />
+      {isOpen ? (
+        <div className="money-tag-suggestions" role="listbox">
+          {suggestions.map((tag, index) => (
+            <button
+              key={tag}
+              type="button"
+              className={index === selectedSuggestionIndex ? "active" : ""}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => selectSuggestion(tag)}
+              role="option"
+              aria-selected={index === selectedSuggestionIndex}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PanelHeader({ label, detail, action }: { label: string; detail: ReactNode; action?: ReactNode }) {
+  return <div className="ops-panel-head money-panel-head"><h2>{label}</h2><div>{typeof detail === "string" ? <span>{detail}</span> : detail}{action}</div></div>;
 }
 
 function SummaryCard({ label, value, detail, tone = "" }: { label: string; value: string; detail: string; tone?: string }) {
@@ -591,6 +775,16 @@ function AddButton({ onClick, label = "+ Add" }: { onClick: () => void; label?: 
 
 function RowActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
   return <div className="money-row-actions"><button type="button" onClick={onEdit}>Edit</button><button type="button" className="danger" onClick={onDelete}>Delete</button></div>;
+}
+
+function ExpectationActions({ primaryLabel, onPrimary, onEdit, onDelete }: { primaryLabel: string; onPrimary: () => void; onEdit: () => void; onDelete: () => void }) {
+  return (
+    <div className="money-expectation-actions">
+      <button type="button" className="primary" onClick={onPrimary}>{primaryLabel}</button>
+      <button type="button" onClick={onEdit}>Edit</button>
+      <button type="button" className="danger" onClick={onDelete}>Delete</button>
+    </div>
+  );
 }
 
 function IntelligenceRow({ label, value, signal }: { label: string; value: string; signal: boolean }) {
@@ -650,6 +844,7 @@ function calculateSummary(data: MoneyData) {
   const creditLimit = sum(data.cards.map((card) => card.creditLimit));
   const goalSaved = sum(data.goals.map((goal) => goal.savedAmount));
   const expectedIncome = sum(data.incomes.map((income) => income.amount));
+  const expectedBills = sum(data.bills.map((bill) => bill.amount));
   const totalSavings = sum(data.accounts.filter((account) => account.accountType === "Savings").map((account) => account.balance)) + goalSaved;
   const assets = cash + investmentValue + receivables;
   const debt = loanDebt + cardDebt;
@@ -668,6 +863,7 @@ function calculateSummary(data: MoneyData) {
     creditLimit,
     goalSaved,
     expectedIncome,
+    expectedBills,
     runwayMonths: monthlyExpense > 0 ? Math.max(cash, 0) / monthlyExpense : null,
   };
 }
@@ -707,6 +903,7 @@ function buildUpcoming(data: MoneyData) {
   data.loans.forEach((loan) => rows.push({ id: `loan-${loan.id}`, type: "Loan", label: `${loan.direction === "given" ? "Expected from" : "Repay"} ${loan.person}`, detail: loan.note || `${loan.direction} loan`, date: loan.expectedReturnDate, tone: loan.direction === "given" ? "signal" : "danger" }));
   data.goals.forEach((goal) => rows.push({ id: `goal-${goal.id}`, type: "Goal", label: goal.name, detail: "Savings target deadline", date: goal.dueDate, tone: "neutral" }));
   data.incomes.forEach((income) => rows.push({ id: `income-${income.id}`, type: "Income", label: income.source, detail: income.note || "Expected receipt", date: income.expectedDate, tone: "signal" }));
+  data.bills.forEach((bill) => rows.push({ id: `bill-${bill.id}`, type: "Bill", label: bill.payee, detail: bill.note || "Expected payment", date: bill.expectedDate, tone: "danger" }));
   return rows.filter((row) => {
     const time = endOfDay(row.date);
     return time >= today.getTime() && time <= horizon;
@@ -734,7 +931,8 @@ function initialDraft(kind: EntryKind): Draft {
     loan: { direction: "taken", person: "", principal: "", outstanding: "", interestRate: "0", expectedReturnDate: today, note: "" },
     investment: { type: "Mutual Fund", name: "", platform: "", investedAmount: "", currentValue: "" },
     goal: { name: "", targetAmount: "", savedAmount: "0", dueDate: today },
-    income: { source: "", amount: "", expectedDate: today, note: "" },
+    income: { source: "", amount: "", expectedDate: today, note: "", accountId: "" },
+    bill: { payee: "", amount: "", expectedDate: today, note: "", accountId: "" },
   };
   return drafts[kind];
 }
@@ -774,11 +972,12 @@ function draftToEntry(kind: EntryKind, draft: Draft, id: string): Entry | null {
   if (kind === "loan") return { id, direction: draft.direction as Loan["direction"], person: draft.person.trim(), principal: number("principal"), outstanding: number("outstanding"), interestRate: number("interestRate"), expectedReturnDate: draft.expectedReturnDate, note: draft.note.trim() };
   if (kind === "investment") return { id, type: draft.type, name: draft.name.trim(), platform: draft.platform.trim(), investedAmount: number("investedAmount"), currentValue: number("currentValue") };
   if (kind === "goal") return { id, name: draft.name.trim(), targetAmount: number("targetAmount"), savedAmount: number("savedAmount"), dueDate: draft.dueDate };
-  return { id, source: draft.source.trim(), amount: number("amount"), expectedDate: draft.expectedDate, note: draft.note.trim() };
+  if (kind === "income") return { id, source: draft.source.trim(), amount: number("amount"), expectedDate: draft.expectedDate, note: draft.note.trim(), accountId: draft.accountId };
+  return { id, payee: draft.payee.trim(), amount: number("amount"), expectedDate: draft.expectedDate, note: draft.note.trim(), accountId: draft.accountId };
 }
 
-function collectionKey(kind: Exclude<EntryKind, "transaction">): "accounts" | "cards" | "loans" | "investments" | "goals" | "incomes" {
-  return ({ account: "accounts", card: "cards", loan: "loans", investment: "investments", goal: "goals", income: "incomes" } as const)[kind];
+function collectionKey(kind: Exclude<EntryKind, "transaction">): "accounts" | "cards" | "loans" | "investments" | "goals" | "incomes" | "bills" {
+  return ({ account: "accounts", card: "cards", loan: "loans", investment: "investments", goal: "goals", income: "incomes", bill: "bills" } as const)[kind];
 }
 
 function upsert<T extends { id: string }>(items: T[], entry: T) {
@@ -795,6 +994,7 @@ function cloneData(data: MoneyData): MoneyData {
     investments: [...data.investments],
     goals: [...data.goals],
     incomes: [...data.incomes],
+    bills: [...data.bills],
   };
 }
 
@@ -820,6 +1020,22 @@ function normalizeTags(value: string | string[]) {
       .filter(Boolean)
       .map((tag) => `#${tag}`),
   )];
+}
+
+function getActiveTag(value: string, cursor: number) {
+  let start = cursor;
+  while (start > 0 && !/[\s,]/.test(value[start - 1])) start -= 1;
+  if (value[start] !== "#") return null;
+
+  let end = cursor;
+  while (end < value.length && !/[\s,]/.test(value[end])) end += 1;
+  return { start, end, query: value.slice(start + 1, cursor).toLowerCase() };
+}
+
+function expectationDetail(note: string, accountId: string, data: MoneyData) {
+  if (!accountId) return note;
+  const account = data.accounts.find((item) => item.id === accountId);
+  return `${note} / ${account ? `${account.bankName} / ${account.name}` : "Deleted account"}`;
 }
 
 function createId() {
@@ -848,7 +1064,7 @@ function formatDate(value: string) {
 }
 
 function formatDateTime(value: string) {
-  return new Date(value).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return new Date(value).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 }
 
 function startOfDay(date: Date) {

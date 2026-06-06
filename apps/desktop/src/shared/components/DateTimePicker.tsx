@@ -19,9 +19,10 @@ export function DateTimePicker({
 }: DateTimePickerProps) {
   const fieldRef = useRef<HTMLDivElement | null>(null);
   const hasValue = Boolean(value);
-  const selectedDate = parsePickerValue(value, mode);
+  const selectedDate = useMemo(() => parsePickerValue(value, mode), [mode, value]);
   const [isOpen, setIsOpen] = useState(false);
   const [viewDate, setViewDate] = useState(() => selectedDate);
+  const [pendingDate, setPendingDate] = useState(() => selectedDate);
   const days = useMemo(() => getCalendarGrid(viewDate), [viewDate]);
   const hours = useMemo(() => Array.from({ length: 24 }, (_, hour) => hour), []);
   const minutes = useMemo(() => Array.from({ length: 60 }, (_, minute) => minute), []);
@@ -38,24 +39,34 @@ export function DateTimePicker({
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen) setViewDate(selectedDate);
+    if (isOpen) {
+      setViewDate(selectedDate);
+      setPendingDate(selectedDate);
+    }
   }, [isOpen, selectedDate.getTime()]);
 
-  function emit(nextDate: Date) {
-    onChange(mode === "date" ? toDateInputValue(nextDate) : toDateTimeLocal(nextDate));
-  }
-
   function updateDate(nextDate: Date) {
-    const nextValue = new Date(selectedDate);
+    const nextValue = new Date(pendingDate);
     nextValue.setFullYear(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate());
-    emit(nextValue);
+    setPendingDate(nextValue);
   }
 
   function updateTime(part: "hour" | "minute", nextNumber: number) {
-    const nextValue = new Date(selectedDate);
+    const nextValue = new Date(pendingDate);
     if (part === "hour") nextValue.setHours(nextNumber);
     if (part === "minute") nextValue.setMinutes(nextNumber);
-    emit(nextValue);
+    setPendingDate(nextValue);
+  }
+
+  function selectToday() {
+    const today = new Date();
+    setPendingDate(today);
+    setViewDate(today);
+  }
+
+  function confirmSelection() {
+    onChange(mode === "date" ? toDateInputValue(pendingDate) : toDateTimeLocal(pendingDate));
+    setIsOpen(false);
   }
 
   function shiftMonth(direction: -1 | 1) {
@@ -96,7 +107,7 @@ export function DateTimePicker({
 
               <div className="mt-2 grid grid-cols-7 gap-1">
                 {days.map((day) => {
-                  const isSelected = hasValue && isSameDate(day, selectedDate);
+                  const isSelected = isSameDate(day, pendingDate);
                   const isCurrentMonth = day.getMonth() === viewDate.getMonth();
                   return (
                     <button
@@ -120,25 +131,25 @@ export function DateTimePicker({
 
             {mode === "datetime" ? (
               <>
-                <TimeColumn label="Hour" options={hours} value={selectedDate.getHours()} onChange={(nextHour) => updateTime("hour", nextHour)} />
-                <TimeColumn label="Minute" options={minutes} value={selectedDate.getMinutes()} onChange={(nextMinute) => updateTime("minute", nextMinute)} />
+                <TimeColumn label="Hour (24H)" options={hours} value={pendingDate.getHours()} onChange={(nextHour) => updateTime("hour", nextHour)} />
+                <TimeColumn label="Minute" options={minutes} value={pendingDate.getMinutes()} onChange={(nextMinute) => updateTime("minute", nextMinute)} />
               </>
             ) : null}
           </div>
 
           <div className="flex items-center justify-between border-t border-white/10 px-4 py-3 text-sm font-semibold">
             <div className="flex gap-4">
-              <button type="button" onClick={() => emit(new Date())} className="text-teal-300 outline-none ring-0 transition hover:text-teal-100">
+              <button type="button" onClick={selectToday} className="text-teal-300 outline-none ring-0 transition hover:text-teal-100">
                 Today
               </button>
               {allowClear && hasValue ? (
-                <button type="button" onClick={() => onChange("")} className="text-stone-400 outline-none ring-0 transition hover:text-white">
+                <button type="button" onClick={() => { onChange(""); setIsOpen(false); }} className="text-stone-400 outline-none ring-0 transition hover:text-white">
                   Clear
                 </button>
               ) : null}
             </div>
-            <button type="button" onClick={() => setIsOpen(false)} className="rounded-full bg-white px-4 py-2 text-stone-950 outline-none ring-0 transition hover:bg-stone-200">
-              Done
+            <button type="button" onClick={confirmSelection} className="rounded-full bg-white px-4 py-2 text-stone-950 outline-none ring-0 transition hover:bg-stone-200">
+              OK
             </button>
           </div>
         </div>
@@ -244,7 +255,7 @@ function parsePickerValue(value: string, mode: "date" | "datetime") {
 function formatPickerValue(date: Date, mode: "date" | "datetime") {
   const dateLabel = date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   if (mode === "date") return dateLabel;
-  return `${dateLabel} / ${date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
+  return `${dateLabel} / ${date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}`;
 }
 
 function getCalendarGrid(viewDate: Date) {
