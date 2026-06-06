@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, Fragment, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   addChapter,
   createBook,
@@ -19,7 +19,7 @@ import {
   type LibrarySummary,
   type SuggestedBook,
 } from "@/lib/api";
-import { calculateRangeAverage } from "@/lib/chartAverage";
+import { LineTrendChart } from "@/components/LineTrendChart";
 import "./LibraryPage.css";
 
 type BookDraft = {
@@ -53,7 +53,6 @@ type ReadingTrend = {
   days: ReadingTrendRange;
   hasActivityBeforeRange: boolean;
   points: ReadingTrendPoint[];
-  totalPages: number;
 };
 
 const emptyDraft: BookDraft = {
@@ -975,29 +974,6 @@ function ReadingTrendChart({
   setRange: (range: ReadingTrendRange) => void;
   trend: ReadingTrend;
 }) {
-  let runningTotal = 0;
-  const chartPoints = trend.points.map((point) => {
-    runningTotal += point.pages;
-    return {
-      ...point,
-      value: mode === "cumulative" ? runningTotal : point.pages,
-    };
-  });
-  const averageValue = calculateRangeAverage(
-    chartPoints.map((point) => point.value),
-    trend.hasActivityBeforeRange,
-  );
-  const maxValue = Math.max(...chartPoints.map((point) => point.value), averageValue);
-  const maxY = Math.max(10, Math.ceil(maxValue / 25) * 25);
-  const xForIndex = (index: number) => (index / Math.max(1, chartPoints.length - 1)) * 100;
-  const yForValue = (value: number) => 92 - (value / maxY) * 84;
-  const linePoints = chartPoints.map((point, index) => `${xForIndex(index)},${yForValue(point.value)}`).join(" ");
-  const averageY = yForValue(averageValue);
-  const yTicks = [1, 0.75, 0.5, 0.25, 0].map((ratio) => Math.round(maxY * ratio));
-  const labelIndexes = getReadingTrendLabelIndexes(trend);
-  const visibleChartPoints = chartPoints.filter((_, index) => labelIndexes.includes(index));
-  const hasLoggedPages = trend.totalPages > 0;
-
   return (
     <div className="mt-6 rounded-lg border border-stone-200 bg-white/80 p-5 shadow-sm">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -1034,90 +1010,20 @@ function ReadingTrendChart({
         </div>
       </div>
 
-      {hasLoaded ? (
-        <div className="mt-4">
-          <div className="grid grid-cols-[3rem_1fr] gap-3">
-            <div className="relative h-64">
-              {yTicks.map((pages, index) =>
-                pages === averageValue ? null : (
-                  <span
-                    key={`${pages}-${index}`}
-                    className="absolute right-0 -translate-y-1/2 text-xs font-medium text-stone-500"
-                    style={{ top: `${yForValue(pages)}%` }}
-                  >
-                    {pages}
-                  </span>
-                ),
-              )}
-              <span
-                className="absolute right-0 -translate-y-1/2 text-xs font-semibold leading-tight text-orange-500"
-                style={{ top: `${averageY}%` }}
-              >
-                {averageValue}
-              </span>
-            </div>
-            <div>
-              <div className="relative h-64">
-                <svg className="h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label={`${readingTrendModeLabels[mode]} Pages Read ${readingTrendRangeLabels[range]}`}>
-                  {yTicks.map((pages, index) => {
-                    const y = yForValue(pages);
-                    return <polyline key={`${pages}-${index}`} points={`0,${y} 100,${y}`} fill="none" stroke="#e7e5e4" strokeWidth="0.45" vectorEffect="non-scaling-stroke" />;
-                  })}
-                  <polyline
-                    points={`0,${averageY} 100,${averageY}`}
-                    fill="none"
-                    stroke="#f97316"
-                    strokeDasharray="5 5"
-                    strokeWidth="1.2"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  <polyline points={linePoints} fill="none" stroke="#0d9488" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-                </svg>
-                {visibleChartPoints.map((point, pointIndex) => {
-                  const sourceIndex = labelIndexes[pointIndex];
-                  const x = xForIndex(sourceIndex);
-                  const y = yForValue(point.value);
-
-                  return (
-                    <Fragment key={`${point.label}-point`}>
-                      <span
-                        className="pointer-events-none absolute h-2 w-2 rounded-full border-2 border-teal-700 bg-white shadow-sm"
-                        style={{ left: `${x}%`, top: `${y}%`, transform: "translate(-50%, -50%)" }}
-                      />
-                      <span
-                        className={`pointer-events-none absolute -translate-y-[calc(100%+0.45rem)] rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 shadow-sm ring-1 ring-teal-100 ${
-                          sourceIndex === 0 ? "translate-x-0" : sourceIndex === chartPoints.length - 1 ? "-translate-x-full" : "-translate-x-1/2"
-                        }`}
-                        style={{ left: `${x}%`, top: `${y}%` }}
-                      >
-                        {point.value}
-                      </span>
-                    </Fragment>
-                  );
-                })}
-              </div>
-              <div className="mt-3 grid gap-1" style={{ gridTemplateColumns: `repeat(${labelIndexes.length || 1}, minmax(0, 1fr))` }}>
-                {visibleChartPoints.map((point) => (
-                  <p key={`${point.label}-label`} className="text-center text-[10px] font-medium text-stone-500">
-                    {point.shortLabel}
-                  </p>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {!hasLoggedPages ? (
-            <p className="mt-4 rounded-lg border border-dashed border-stone-300 bg-stone-50 p-4 text-sm font-medium text-stone-600">
-              No pages logged in this range yet.
-            </p>
-          ) : null}
-        </div>
-      ) : (
-        <div className="mt-4 grid grid-cols-[3rem_1fr] gap-3">
-          <div className="h-64" />
-          <div className="h-64 rounded-lg border border-dashed border-stone-300 bg-stone-50" />
-        </div>
-      )}
+      <LineTrendChart
+        ariaLabel={`${readingTrendModeLabels[mode]} Pages Read ${readingTrendRangeLabels[range]}`}
+        className="mt-4"
+        emptyMessage="No pages logged in this range yet."
+        getLabel={(point) => point.label}
+        getShortLabel={(point) => point.shortLabel}
+        getValue={(point) => point.pages}
+        hasActivityBeforeRange={trend.hasActivityBeforeRange}
+        isLoading={!hasLoaded}
+        maxLabels={trend.days === 365 ? trend.points.length : trend.days === 7 ? 7 : 10}
+        minY={10}
+        mode={mode}
+        points={trend.points}
+      />
     </div>
   );
 }
@@ -1137,7 +1043,6 @@ function buildReadingTrend(summary: LibrarySummary | null, range: ReadingTrendRa
       days: range,
       hasActivityBeforeRange: Boolean(firstReadingDate && firstReadingDate < rangeStart),
       points,
-      totalPages: points.reduce((sum, point) => sum + point.pages, 0),
     };
   }
 
@@ -1164,7 +1069,6 @@ function buildReadingTrend(summary: LibrarySummary | null, range: ReadingTrendRa
     days: range,
     hasActivityBeforeRange: Boolean(firstReadingDate && firstReadingDate < dateKey(start)),
     points,
-    totalPages: points.reduce((sum, point) => sum + point.pages, 0),
   };
 }
 
@@ -1172,17 +1076,6 @@ function getFirstReadingDate(summary: LibrarySummary | null) {
   if (summary?.first_reading_date) return summary.first_reading_date;
 
   return (summary?.daily_pages ?? summary?.daywise_pages ?? []).find((day) => day.pages > 0)?.date ?? null;
-}
-
-function getReadingTrendLabelIndexes(trend: ReadingTrend) {
-  if (trend.days === 365) {
-    return trend.points.map((_, index) => index);
-  }
-
-  const count = trend.days === 7 ? 7 : 10;
-  const lastIndex = trend.points.length - 1;
-  const indexes = Array.from({ length: count }, (_, index) => Math.round((index / Math.max(1, count - 1)) * lastIndex));
-  return Array.from(new Set(indexes));
 }
 
 function buildEmptyMonthlyPages() {

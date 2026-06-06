@@ -28,7 +28,7 @@ import {
   type PersistedPomodoroSession,
 } from "@/lib/pomodoroSession";
 import { getFocusMinutesToday, getFocusMomentum, pomodoroLogsStorageKey } from "@/lib/focusMetrics";
-import { calculateRangeAverage } from "@/lib/chartAverage";
+import { LineTrendChart } from "@/components/LineTrendChart";
 import { addCalendarDays, dateKey, getSessionWorkDayDate, getWorkDayDate, isCurrentWorkDay, startOfCalendarDay, workDaysBetween } from "@/lib/workDay";
 import "./PomodoroPage.css";
 
@@ -69,12 +69,9 @@ type FocusTrendPoint = {
 };
 
 type FocusTrend = {
-  averageMinutes: number;
   days: FocusTrendRange;
   hasActivityBeforeRange: boolean;
-  maxMinutes: number;
   points: FocusTrendPoint[];
-  totalMinutes: number;
 };
 
 type SessionDraft = PomodoroSessionDraft;
@@ -1344,7 +1341,7 @@ const FocusTrendSection = memo(function FocusTrendSection({
         </div>
       </div>
 
-      {hasLoadedLogs ? <FocusMinutesChart mode={mode} trend={trend} /> : <FocusTrendSkeleton />}
+      <FocusMinutesChart isLoading={!hasLoadedLogs} mode={mode} trend={trend} />
     </section>
   );
 });
@@ -1384,137 +1381,33 @@ function buildFocusTrend(logs: PomodoroLog[], days: FocusTrendRange): FocusTrend
       shortLabel: date.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
     };
   });
-  const totalMinutes = points.reduce((sum, point) => sum + point.minutes, 0);
-  const averageMinutes = calculateRangeAverage(
-    points.map((point) => point.minutes),
-    hasActivityBeforeRange,
-  );
-  const maxLoggedMinutes = Math.max(...points.map((point) => point.minutes), averageMinutes);
-  const maxMinutes = Math.max(25, Math.ceil(maxLoggedMinutes / 25) * 25);
-
-  return { averageMinutes, days, hasActivityBeforeRange, maxMinutes, points, totalMinutes };
+  return { days, hasActivityBeforeRange, points };
 }
 
-function FocusMinutesChart({ mode, trend }: { mode: FocusTrendMode; trend: FocusTrend }) {
-  let runningTotal = 0;
-  const chartPoints = trend.points.map((point) => {
-    runningTotal += point.minutes;
-    return {
-      ...point,
-      value: mode === "cumulative" ? runningTotal : point.minutes,
-    };
-  });
-  const averageValue = calculateRangeAverage(
-    chartPoints.map((point) => point.value),
-    trend.hasActivityBeforeRange,
-  );
-  const maxValue = Math.max(...chartPoints.map((point) => point.value), averageValue);
-  const maxY = Math.max(25, Math.ceil(maxValue / 25) * 25);
-  const xForIndex = (index: number) => (index / Math.max(1, trend.points.length - 1)) * 100;
-  const yForValue = (value: number) => 92 - (value / maxY) * 84;
-  const linePoints = chartPoints.map((point, index) => `${xForIndex(index)},${yForValue(point.value)}`).join(" ");
-  const averageY = yForValue(averageValue);
-  const yTicks = [1, 0.75, 0.5, 0.25, 0].map((ratio) => Math.round(maxY * ratio));
-  const labelIndexes = getTrendLabelIndexes(trend.days);
-  const labelIndexSet = new Set(labelIndexes);
-  const visibleChartPoints = chartPoints.filter((_, index) => labelIndexSet.has(index));
-  const hasFocusMinutes = trend.totalMinutes > 0;
-
+function FocusMinutesChart({
+  isLoading,
+  mode,
+  trend,
+}: {
+  isLoading: boolean;
+  mode: FocusTrendMode;
+  trend: FocusTrend;
+}) {
   return (
-    <div className="mt-6">
-      <div className="grid grid-cols-[3rem_1fr] gap-3">
-        <div className="relative h-64">
-          {yTicks.map((minutes, index) => (
-            minutes === averageValue ? null : (
-              <span
-                key={`${minutes}-${index}`}
-                className="absolute right-0 -translate-y-1/2 text-xs font-medium text-stone-500"
-                style={{ top: `${yForValue(minutes)}%` }}
-              >
-                {minutes}
-              </span>
-            )
-          ))}
-          <span
-            className="absolute right-0 -translate-y-1/2 text-xs font-semibold leading-tight text-orange-500"
-            style={{ top: `${averageY}%` }}
-          >
-            {averageValue}
-          </span>
-        </div>
-        <div>
-          <div className="relative h-64">
-            <svg className="h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label={`${focusTrendModeLabels[mode]} Focused Minutes Over The Last ${trend.days} Days`}>
-              {yTicks.map((minutes, index) => {
-                const y = yForValue(minutes);
-                return <polyline key={`${minutes}-${index}`} points={`0,${y} 100,${y}`} fill="none" stroke="#e7e5e4" strokeWidth="0.45" vectorEffect="non-scaling-stroke" />;
-              })}
-              <polyline
-                points={`0,${averageY} 100,${averageY}`}
-                fill="none"
-                stroke="#f97316"
-                strokeDasharray="5 5"
-                strokeWidth="1.2"
-                vectorEffect="non-scaling-stroke"
-              />
-              <polyline points={linePoints} fill="none" stroke="#0d9488" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-            </svg>
-            {visibleChartPoints.map((point, pointIndex) => {
-              const sourceIndex = labelIndexes[pointIndex];
-              const x = xForIndex(sourceIndex);
-              const y = yForValue(point.value);
-
-              return (
-                <Fragment key={`${point.label}-point`}>
-                  <span
-                    className="pointer-events-none absolute h-2 w-2 rounded-full border-2 border-teal-700 bg-white shadow-sm"
-                    style={{ left: `${x}%`, top: `${y}%`, transform: "translate(-50%, -50%)" }}
-                  />
-                  <span
-                    className={`pointer-events-none absolute -translate-y-[calc(100%+0.45rem)] rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 shadow-sm ring-1 ring-teal-100 ${
-                      sourceIndex === 0 ? "translate-x-0" : sourceIndex === trend.points.length - 1 ? "-translate-x-full" : "-translate-x-1/2"
-                    }`}
-                    style={{ left: `${x}%`, top: `${y}%` }}
-                  >
-                    {point.value}
-                  </span>
-                </Fragment>
-              );
-            })}
-          </div>
-          <div className="mt-3 grid gap-1" style={{ gridTemplateColumns: `repeat(${labelIndexes.length}, minmax(0, 1fr))` }}>
-            {visibleChartPoints.map((point) => (
-              <p key={`${point.label}-label`} className="text-center text-[10px] font-medium text-stone-500">
-                {point.shortLabel}
-              </p>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {!hasFocusMinutes ? (
-        <p className="mt-4 rounded-lg border border-dashed border-stone-300 bg-stone-50 p-4 text-sm font-medium text-stone-600">
-          No Focused Minutes Logged In This Range Yet.
-        </p>
-      ) : null}
-    </div>
+    <LineTrendChart
+      ariaLabel={`${focusTrendModeLabels[mode]} Focused Minutes Over The Last ${trend.days} Days`}
+      emptyMessage="No Focused Minutes Logged In This Range Yet."
+      getLabel={(point) => point.label}
+      getShortLabel={(point) => point.shortLabel}
+      getValue={(point) => point.minutes}
+      hasActivityBeforeRange={trend.hasActivityBeforeRange}
+      isLoading={isLoading}
+      maxLabels={trend.days === 7 ? 7 : 10}
+      minY={25}
+      mode={mode}
+      points={trend.points}
+    />
   );
-}
-
-function FocusTrendSkeleton() {
-  return (
-    <div className="mt-6 grid grid-cols-[3rem_1fr] gap-3">
-      <div className="h-64" />
-      <div className="h-64 rounded-lg border border-dashed border-stone-300 bg-stone-50" />
-    </div>
-  );
-}
-
-function getTrendLabelIndexes(days: FocusTrendRange) {
-  const count = days === 7 ? 7 : 10;
-  const lastIndex = days - 1;
-  const indexes = Array.from({ length: count }, (_, index) => Math.round((index / Math.max(1, count - 1)) * lastIndex));
-  return Array.from(new Set(indexes));
 }
 
 function HeroMetric({ detail, label, value }: { detail: string; label: string; value: string }) {
