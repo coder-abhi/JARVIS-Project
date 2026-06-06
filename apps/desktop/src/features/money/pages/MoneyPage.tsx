@@ -289,7 +289,7 @@ export default function MoneyPage() {
         </section>
 
         <section className="ops-panel span-6">
-          <PanelHeader label="Bank Accounts" detail={`${data.accounts.length} accounts`} action={<AddButton onClick={() => openCreate("account")} />} />
+          <PanelHeader label="Bank Accounts" detail={`${money(summary.accountBalance)} total balance`} action={<AddButton onClick={() => openCreate("account")} />} />
           <div className="money-card-list">
             {data.accounts.length ? data.accounts.map((account) => (
               <article className="money-account-card" key={account.id}>
@@ -396,7 +396,7 @@ export default function MoneyPage() {
         </section>
 
         <section className="ops-panel span-5">
-          <PanelHeader label="Expected Income" detail="Forward cash events" action={<AddButton onClick={() => openCreate("income")} />} />
+          <PanelHeader label="Expected Income" detail={`${money(summary.expectedIncome)} expected`} action={<AddButton onClick={() => openCreate("income")} />} />
           <div className="money-income-list">
             {[...data.incomes].sort((a, b) => a.expectedDate.localeCompare(b.expectedDate)).map((income) => (
               <article key={income.id}>
@@ -613,6 +613,7 @@ function calculateSummary(data: MoneyData) {
   const cardDebt = sum(data.cards.map((card) => card.currentBalance));
   const creditLimit = sum(data.cards.map((card) => card.creditLimit));
   const goalSaved = sum(data.goals.map((goal) => goal.savedAmount));
+  const expectedIncome = sum(data.incomes.map((income) => income.amount));
   const totalSavings = sum(data.accounts.filter((account) => account.accountType === "Savings").map((account) => account.balance)) + goalSaved;
   const assets = cash + investmentValue + receivables;
   const debt = loanDebt + cardDebt;
@@ -624,11 +625,13 @@ function calculateSummary(data: MoneyData) {
     debt,
     netWorth: assets - debt,
     totalSavings,
+    accountBalance: cash,
     investmentValue,
     invested,
     cardDebt,
     creditLimit,
     goalSaved,
+    expectedIncome,
     runwayMonths: monthlyExpense > 0 ? Math.max(cash, 0) / monthlyExpense : null,
   };
 }
