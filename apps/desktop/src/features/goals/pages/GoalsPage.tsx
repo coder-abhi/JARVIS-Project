@@ -239,7 +239,7 @@ export default function GoalsPage() {
   }
 
   return (
-    <main className="ops-screen pb-36">
+    <main className="ops-screen">
       <section className="ops-header">
         <div>
           <p className="ops-kicker">MISSION CONTROL</p>
@@ -407,6 +407,8 @@ export default function GoalsPage() {
         </section>
       </div>
 
+      <div className="mission-log-spacer" aria-hidden="true" />
+
       {isCreateProjectOpen ? (
         <div className="mission-modal-backdrop">
           <form onSubmit={handleCreateProject} className="mission-control-modal">
@@ -473,18 +475,18 @@ export default function GoalsPage() {
         </div>
       ) : null}
 
-      <form onSubmit={handleLogSubmit} className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-[#f4f6f3]/95 px-4 py-2.5 shadow-2xl shadow-stone-950/20 backdrop-blur">
-        <div className="mx-auto flex max-w-4xl items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 shadow-lg shadow-stone-900/10">
+      <form onSubmit={handleLogSubmit} className="mission-log-dock">
+        <div className="mission-log-control">
           <input
             value={logText}
             onChange={(event) => setLogText(event.target.value)}
             placeholder="+ Add objective or - log completed objective"
-            className="min-h-9 flex-1 rounded-full border-0 px-3 text-xs outline-none"
+            className="mission-log-input"
           />
           <button
             type="submit"
             disabled={isLogging || !logText.trim()}
-            className="grid h-9 w-9 place-items-center rounded-full bg-teal-600 text-base text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-stone-300"
+            className="mission-log-submit"
             aria-label="Send log"
             title="Send log"
           >
