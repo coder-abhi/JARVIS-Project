@@ -208,6 +208,86 @@ class AiResponseCacheTests(unittest.TestCase):
         self.assertEqual(result, {"value": "configured"})
         self.assertEqual(FakeOpenAI.requested_models, ["gpt-5.4-mini"])
 
+    def test_supported_model_snapshots_use_model_specific_pricing(self) -> None:
+        mini_cost, mini_available, mini_source = ai_service.estimate_cost_usd(
+            model="gpt-5.4-mini-2026-03-17",
+            input_tokens=1_000_000,
+            cached_input_tokens=0,
+            output_tokens=1_000_000,
+        )
+        full_cost, full_available, full_source = ai_service.estimate_cost_usd(
+            model="gpt-5.4-2026-03-05",
+            input_tokens=1_000_000,
+            cached_input_tokens=0,
+            output_tokens=1_000_000,
+        )
+
+        self.assertTrue(mini_available)
+        self.assertAlmostEqual(mini_cost, 5.25)
+        self.assertEqual(mini_source, "OpenAI standard token pricing for gpt-5.4-mini")
+        self.assertTrue(full_available)
+        self.assertAlmostEqual(full_cost, 17.50)
+        self.assertEqual(full_source, "OpenAI standard token pricing for gpt-5.4")
+
+    def test_cost_summary_backfills_existing_unpriced_supported_models(self) -> None:
+        with self.session_factory() as session:
+            event = ai_models.AiUsageEvent(
+                user_id="user-1",
+                feature="captain_compass",
+                model="gpt-5.4-mini-2026-03-17",
+                input_tokens=1_000_000,
+                cached_input_tokens=0,
+                output_tokens=0,
+                total_tokens=1_000_000,
+                estimated_cost_usd=0,
+                pricing_available=False,
+                pricing_source=None,
+                status="success",
+            )
+            session.add(event)
+            session.commit()
+
+            summary = ai_service.get_cost_summary(
+                session,
+                user_id="user-1",
+                days=0,
+                timezone_offset_minutes=0,
+            )
+            session.refresh(event)
+
+            self.assertEqual(summary["unpriced_requests"], 0)
+            self.assertAlmostEqual(summary["total_cost_cents"], 75.0)
+            self.assertTrue(summary["recent_requests"][0]["pricing_available"])
+            self.assertTrue(event.pricing_available)
+            self.assertAlmostEqual(event.estimated_cost_usd, 0.75)
+            self.assertEqual(event.pricing_source, "OpenAI standard token pricing for gpt-5.4-mini")
+
+    def test_environment_pricing_override_is_scoped_to_its_model(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "OPENAI_PRICING_MODEL": "gpt-5.4",
+                "OPENAI_INPUT_COST_PER_MILLION": "9",
+                "OPENAI_CACHED_INPUT_COST_PER_MILLION": "8",
+                "OPENAI_OUTPUT_COST_PER_MILLION": "7",
+            },
+        ):
+            overridden = ai_service.estimate_cost_usd(
+                model="gpt-5.4-2026-03-05",
+                input_tokens=1_000_000,
+                cached_input_tokens=0,
+                output_tokens=0,
+            )
+            standard = ai_service.estimate_cost_usd(
+                model="gpt-5.4-mini-2026-03-17",
+                input_tokens=1_000_000,
+                cached_input_tokens=0,
+                output_tokens=0,
+            )
+
+        self.assertEqual(overridden, (9.0, True, "environment override for gpt-5.4"))
+        self.assertEqual(standard, (0.75, True, "OpenAI standard token pricing for gpt-5.4-mini"))
+
     def test_unknown_ai_feature_setting_is_rejected(self) -> None:
         with self.session_factory() as session:
             updated = ai_service.update_ai_feature_setting(
@@ -436,11 +516,47 @@ class AiResponseCacheTests(unittest.TestCase):
         )
         project.tasks = [task]
 
-        first = crud.generate_captain_compass([goal], [project], [], user_id="user-1")
+        automatic = crud.generate_captain_compass(
+            [goal],
+            [project],
+            [],
+            user_id="user-1",
+            cache_only=True,
+        )
+        first = crud.generate_captain_compass(
+            [goal],
+            [project],
+            [],
+            user_id="user-1",
+            force_refresh=True,
+        )
+        cached = crud.generate_captain_compass(
+            [goal],
+            [project],
+            [],
+            user_id="user-1",
+            cache_only=True,
+        )
         task.title = "Publish signed build"
-        second = crud.generate_captain_compass([goal], [project], [], user_id="user-1")
+        changed_automatic = crud.generate_captain_compass(
+            [goal],
+            [project],
+            [],
+            user_id="user-1",
+            cache_only=True,
+        )
+        second = crud.generate_captain_compass(
+            [goal],
+            [project],
+            [],
+            user_id="user-1",
+            force_refresh=True,
+        )
 
+        self.assertIsInstance(automatic["overall_rating"], int)
         self.assertEqual(first["overall_rating"], 7)
+        self.assertEqual(cached["overall_rating"], 7)
+        self.assertIsInstance(changed_automatic["overall_rating"], int)
         self.assertEqual(second["overall_rating"], 7)
         self.assertEqual(FakeOpenAI.calls, 2)
         self.assertEqual(FakeOpenAI.requested_models, ["gpt-5.4-mini", "gpt-5.4-mini"])

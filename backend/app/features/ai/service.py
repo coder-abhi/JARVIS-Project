@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -63,10 +64,12 @@ FEATURE_DEFAULT_MODELS = {
     "captain_compass": "gpt-5.4-mini",
 }
 
-# USD per one million tokens. The app's default model and snapshot share these rates.
+# Standard-processing USD per one million tokens.
 MODEL_PRICING_PER_MILLION = {
+    "gpt-5.4-mini": (0.75, 0.075, 4.50),
+    "gpt-5.4": (2.50, 0.25, 15.00),
+    "gpt-5-mini": (0.25, 0.025, 2.00),
     "gpt-4.1-mini": (0.40, 0.10, 1.60),
-    "gpt-4.1-mini-2025-04-14": (0.40, 0.10, 1.60),
 }
 
 
@@ -348,6 +351,7 @@ def get_cost_summary(
     timezone_offset_minutes: int,
 ) -> dict:
     events = repository.list_usage_events(db, user_id)
+    _backfill_unpriced_events(db, events)
     now_utc = datetime.now(timezone.utc)
     local_now = now_utc - timedelta(minutes=timezone_offset_minutes)
     local_today = local_now.date()
@@ -464,21 +468,61 @@ def _pricing_for_model(model: str) -> tuple[float, float, float, str] | None:
         "OPENAI_CACHED_INPUT_COST_PER_MILLION",
         "OPENAI_OUTPUT_COST_PER_MILLION",
     )
-    if all(os.getenv(name) for name in override_names):
+    override_model = os.getenv("OPENAI_PRICING_MODEL") or os.getenv("OPENAI_MODEL")
+    if override_model and _model_matches_alias(model, override_model) and all(os.getenv(name) for name in override_names):
         try:
             return (
                 float(os.environ[override_names[0]]),
                 float(os.environ[override_names[1]]),
                 float(os.environ[override_names[2]]),
-                "environment override",
+                f"environment override for {override_model}",
             )
         except ValueError:
             logger.warning("OpenAI pricing overrides must be numeric.")
 
-    rates = MODEL_PRICING_PER_MILLION.get(model)
+    priced_model = next(
+        (
+            candidate
+            for candidate in sorted(MODEL_PRICING_PER_MILLION, key=len, reverse=True)
+            if _model_matches_alias(model, candidate)
+        ),
+        None,
+    )
+    rates = MODEL_PRICING_PER_MILLION.get(priced_model) if priced_model else None
     if rates is None:
         return None
-    return (*rates, "OpenAI standard token pricing")
+    return (*rates, f"OpenAI standard token pricing for {priced_model}")
+
+
+def _model_matches_alias(model: str, alias: str) -> bool:
+    return model == alias or re.fullmatch(rf"{re.escape(alias)}-\d{{4}}-\d{{2}}-\d{{2}}", model) is not None
+
+
+def _backfill_unpriced_events(db: Session, events: list[models.AiUsageEvent]) -> None:
+    updated = 0
+    for event in events:
+        if event.pricing_available:
+            continue
+        cost_usd, pricing_available, pricing_source = estimate_cost_usd(
+            model=event.model,
+            input_tokens=event.input_tokens,
+            cached_input_tokens=event.cached_input_tokens,
+            output_tokens=event.output_tokens,
+        )
+        if not pricing_available:
+            continue
+        event.estimated_cost_usd = cost_usd
+        event.pricing_available = True
+        event.pricing_source = pricing_source
+        updated += 1
+
+    if not updated:
+        return
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Could not backfill OpenAI pricing for existing usage telemetry.")
 
 
 def _cost_cents(events: list[models.AiUsageEvent]) -> float:

@@ -782,6 +782,7 @@ def get_captain_compass(
         user_id=user.id,
         usage_db=db,
         force_refresh=force_refresh,
+        cache_only=not force_refresh,
     )
     return schemas.CaptainCompassRead(**assessment)
 
@@ -945,6 +946,7 @@ def generate_captain_compass(
     user_id: str | None = None,
     usage_db: Session | None = None,
     force_refresh: bool = False,
+    cache_only: bool = False,
 ) -> dict:
     fallback = _fallback_captain_compass(goals, projects, completion_logs)
     fallback["model"] = ai_service.resolve_ai_model(user_id=user_id, feature="captain_compass")
@@ -1010,6 +1012,7 @@ def generate_captain_compass(
         user_id=user_id,
         usage_db=usage_db,
         force_refresh=force_refresh,
+        cache_only=cache_only,
     )
     if not isinstance(data, dict):
         return fallback
@@ -1777,6 +1780,7 @@ def _call_openai_json(
     usage_db: Session | None = None,
     use_cache: bool = True,
     force_refresh: bool = False,
+    cache_only: bool = False,
 ) -> dict:
     if not ai_service.is_ai_feature_enabled(user_id=user_id, feature=feature):
         return {}
@@ -1799,6 +1803,11 @@ def _call_openai_json(
         )
         if cached is not None:
             return cached
+        if cache_only:
+            return {}
+
+    if cache_only:
+        return {}
 
     if not use_cache:
         return _request_openai_json(

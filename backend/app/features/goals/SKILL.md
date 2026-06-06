@@ -11,5 +11,6 @@ API endpoints:
 - `PUT /goals/completions/{completion_id}/restore`
 - `POST /goals/personality/refresh`
 - `GET /goals/next-actions?refresh=false` (`refresh=true` forces a new AI result)
+- `GET /goals/captain-compass?refresh=false` (cache/fallback only; `refresh=true` makes a new AI request)
 
 Depends on auth, projects, and tasks. AI enrichment is optional and has deterministic fallbacks.

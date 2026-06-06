@@ -12,4 +12,6 @@ Successful and failed OpenAI calls are recorded with their feature, model, token
 
 Successful JSON responses are cached persistently by user, feature, model, prompts, token limit, and normalized input. Automatic reloads reuse the cache without creating usage events; explicit refresh actions can force one new OpenAI request.
 
+Captain Compass is cache-only during automatic dashboard loads. Its manual refresh action is the only path that requests a new assessment from OpenAI.
+
 Feature settings are per user and default to enabled. Disabled features bypass cached AI output and new OpenAI requests, allowing each caller's deterministic local fallback to run.
