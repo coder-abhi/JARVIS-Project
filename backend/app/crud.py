@@ -98,7 +98,10 @@ def list_project_summaries(db: Session, user: models.User) -> list[schemas.Proje
             schemas.ProjectSummary(
                 id=project.id,
                 name=project.name,
+                description=project.description,
                 type=project.type,
+                goal_id=project.goal_id,
+                linked_goals=[project.parent_goal] if project.parent_goal else [],
                 created_at=project.created_at,
                 total_tasks=len(tasks),
                 completed_tasks=sum(task.status == models.TaskStatus.done for task in tasks),
@@ -867,11 +870,8 @@ def _get_or_create_general_work_project(db: Session, user: models.User) -> model
         .order_by(models.Project.created_at.asc())
     )
     if project is not None:
-        if project.type != models.ProjectType.continuous or project.parent_goal is not None or not project.description:
-            project.type = models.ProjectType.continuous
-            project.parent_goal = None
-            if not project.description:
-                project.description = "General tasks that do not clearly fit another project."
+        if not project.description:
+            project.description = "General tasks that do not clearly fit another project."
             db.commit()
         return project
     project = models.Project(

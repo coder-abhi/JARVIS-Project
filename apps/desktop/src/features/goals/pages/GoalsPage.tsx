@@ -345,18 +345,6 @@ export default function GoalsPage() {
           />
         </section>
 
-        <section className="span-12 grid gap-4 md:grid-cols-2">
-          {categoryOrder.map((category) => (
-            <GoalCategorySection
-              key={category}
-              category={category}
-              goals={goalsByCategory[category]}
-              isCreating={creatingGoalCategory === category}
-              onCreate={() => handleCreateGoal(category)}
-            />
-          ))}
-        </section>
-
         <section className="ops-panel span-12">
           <div className="ops-panel-head">
             <h2>Execution Patterns</h2>
@@ -404,6 +392,18 @@ export default function GoalsPage() {
               <p className="bg-stone-50 p-3 text-xs text-stone-600">No completed work logged yet. Use a - prefix below when you finish something.</p>
             )}
           </div>
+        </section>
+
+        <section className="span-12 grid gap-4 md:grid-cols-2">
+          {categoryOrder.map((category) => (
+            <GoalCategorySection
+              key={category}
+              category={category}
+              goals={goalsByCategory[category]}
+              isCreating={creatingGoalCategory === category}
+              onCreate={() => handleCreateGoal(category)}
+            />
+          ))}
         </section>
       </div>
 

@@ -29,7 +29,8 @@
 }
 
 .project-metadata-editor input,
-.project-metadata-editor textarea {
+.project-metadata-editor textarea,
+.project-metadata-editor select {
   border: 1px solid var(--ops-border);
   background: #050505;
   color: var(--ops-text);
@@ -40,6 +41,12 @@
 
 .project-metadata-editor textarea {
   resize: vertical;
+}
+
+.project-metadata-selects {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.5fr) minmax(14rem, 1fr);
+  gap: 0.75rem;
 }
 
 .project-metadata-actions {
@@ -247,6 +254,14 @@
   padding-top: 0.55rem;
 }
 
+.project-session-line.interactive {
+  cursor: pointer;
+}
+
+.project-session-line.interactive:hover p:first-child {
+  color: var(--ops-signal);
+}
+
 .project-empty-line {
   margin: 0;
   border-bottom: 1px solid var(--ops-border);
@@ -257,6 +272,10 @@
 
 @media (max-width: 900px) {
   .project-section-head {
+    grid-template-columns: 1fr;
+  }
+
+  .project-metadata-selects {
     grid-template-columns: 1fr;
   }
 

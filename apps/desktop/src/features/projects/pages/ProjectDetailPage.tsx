@@ -6,13 +6,16 @@ import { useParams } from "react-router-dom";
 import { TaskEditor } from "@/components/TaskEditor";
 import {
   createTask,
+  getGoalsOverview,
   getProjectPomodoroSessions,
   getProjects,
   getProjectTasks,
   updateProject,
   updateTask,
+  type Goal,
   type PomodoroProjectSession,
   type Project,
+  type ProjectType,
   type Task,
   type TaskPriority,
   type TaskStatus,
@@ -46,6 +49,9 @@ export default function ProjectDetailPage() {
   const [isEditingProject, setIsEditingProject] = useState(false);
   const [projectNameDraft, setProjectNameDraft] = useState("");
   const [projectDescriptionDraft, setProjectDescriptionDraft] = useState("");
+  const [projectTypeDraft, setProjectTypeDraft] = useState<ProjectType>("fixed");
+  const [projectGoalIdDraft, setProjectGoalIdDraft] = useState("");
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,15 +66,19 @@ export default function ProjectDetailPage() {
     async function loadProject() {
       setIsLoading(true);
       setError(null);
-      const [projects, projectTasks, projectSessions] = await Promise.all([
+      const [projects, projectTasks, projectSessions, goalsOverview] = await Promise.all([
         getProjects(),
         getProjectTasks(projectId),
         getProjectPomodoroSessions(projectId),
+        getGoalsOverview(),
       ]);
       const currentProject = projects.find((item) => item.id === projectId) ?? null;
       setProject(currentProject);
       setProjectNameDraft(currentProject?.name ?? "");
       setProjectDescriptionDraft(currentProject?.description ?? "");
+      setProjectTypeDraft(currentProject?.type ?? "fixed");
+      setProjectGoalIdDraft(currentProject?.goal_id ?? "");
+      setGoals(goalsOverview.goals);
       setTasks(projectTasks);
       setSessions(projectSessions);
       setIsLoading(false);
@@ -128,6 +138,8 @@ export default function ProjectDetailPage() {
       const updated = await updateProject(project.id, {
         name: projectNameDraft.trim(),
         description: projectDescriptionDraft.trim() || null,
+        type: projectTypeDraft,
+        goal_id: projectGoalIdDraft || null,
       });
       setProject(updated);
       setIsEditingProject(false);
@@ -151,6 +163,7 @@ export default function ProjectDetailPage() {
   const completedTasks = tasks.filter((task) => task.status === "done").length;
   const activeTasks = tasks.length - completedTasks;
   const sessionTimelineGroups = formatProjectSessionTimeline(sessions);
+  const continuousTimelineItems = formatContinuousProjectTimeline(tasks, sessions);
   const filteredTasks = tasks.filter((task) => {
     const matchesStatus =
       statusFilter === "all" ||
@@ -224,8 +237,44 @@ export default function ProjectDetailPage() {
               placeholder="What kind of tasks belong in this project?"
             />
           </label>
+          <div className="project-metadata-selects">
+            <label>
+              <span>Project type</span>
+              <select
+                value={projectTypeDraft}
+                onChange={(event) => setProjectTypeDraft(event.target.value as ProjectType)}
+              >
+                <option value="continuous">Continuous</option>
+                <option value="fixed">Fixed</option>
+              </select>
+            </label>
+            <label>
+              <span>Attached goal</span>
+              <select
+                value={projectGoalIdDraft}
+                onChange={(event) => setProjectGoalIdDraft(event.target.value)}
+              >
+                <option value="">No attached goal</option>
+                {goals.map((goal) => (
+                  <option key={goal.id} value={goal.id}>
+                    {goal.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <div className="project-metadata-actions">
-            <button type="button" onClick={() => setIsEditingProject(false)} className="ops-button">
+            <button
+              type="button"
+              onClick={() => {
+                setProjectNameDraft(project?.name ?? "");
+                setProjectDescriptionDraft(project?.description ?? "");
+                setProjectTypeDraft(project?.type ?? "fixed");
+                setProjectGoalIdDraft(project?.goal_id ?? "");
+                setIsEditingProject(false);
+              }}
+              className="ops-button"
+            >
               Cancel
             </button>
             <button disabled={isSavingProject || !projectNameDraft.trim()} className="ops-button primary">
@@ -308,28 +357,53 @@ export default function ProjectDetailPage() {
           <h2>Timeline</h2>
           <p className="project-meta-line">{investedMinutes} min logged</p>
         </div>
-        <div className="project-timeline-list">
-          {tasks.map((task) => (
-            <ProjectTimelineRow key={task.id} task={task} onEdit={setEditingTask} />
-          ))}
-        </div>
-        <div className="project-session-log">
-          {sessionTimelineGroups.length === 0 ? <p>No completed session descriptions yet.</p> : null}
-          {sessionTimelineGroups.map((group) => (
-            <div key={group.date} className="project-session-group">
-              <div className="project-session-lines">
-                {group.sessions.map((session) => (
-                  <div key={session.id} className="project-session-line">
-                    <p>
-                      {group.date} --&gt; {session.minutes} minutes
-                    </p>
-                    <p>{session.description?.trim() || "(No description)"}</p>
-                  </div>
-                ))}
+        {project?.type === "continuous" ? (
+          <div className="project-session-log">
+            {continuousTimelineItems.length === 0 ? <p>No activity logged yet.</p> : null}
+            {continuousTimelineItems.map((item) => (
+              <div
+                key={item.id}
+                role={item.task ? "button" : undefined}
+                tabIndex={item.task ? 0 : undefined}
+                onClick={() => {
+                  if (item.task) setEditingTask(item.task);
+                }}
+                onKeyDown={(event) => {
+                  if (item.task && (event.key === "Enter" || event.key === " ")) setEditingTask(item.task);
+                }}
+                className={item.task ? "project-session-line interactive" : "project-session-line"}
+              >
+                <p>{item.date} --&gt; {item.minutes} minutes</p>
+                <p>{item.description}</p>
               </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="project-timeline-list">
+              {tasks.map((task) => (
+                <ProjectTimelineRow key={task.id} task={task} onEdit={setEditingTask} />
+              ))}
             </div>
-          ))}
-        </div>
+            <div className="project-session-log">
+              {sessionTimelineGroups.length === 0 ? <p>No completed session descriptions yet.</p> : null}
+              {sessionTimelineGroups.map((group) => (
+                <div key={group.date} className="project-session-group">
+                  <div className="project-session-lines">
+                    {group.sessions.map((session) => (
+                      <div key={session.id} className="project-session-line">
+                        <p>
+                          {group.date} --&gt; {session.minutes} minutes
+                        </p>
+                        <p>{session.description?.trim() || "(No description)"}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </section>
 
       {isCreateTaskOpen ? (
@@ -557,4 +631,33 @@ function formatProjectSessionTimeline(sessions: PomodoroProjectSession[]) {
       date: group.date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
       sessions: group.sessions.sort((a, b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime()),
     }));
+}
+
+function formatContinuousProjectTimeline(tasks: Task[], sessions: PomodoroProjectSession[]) {
+  return [
+    ...sessions.map((session) => ({
+      id: `session-${session.id}`,
+      timestamp: new Date(session.completed_at).getTime(),
+      date: new Date(session.completed_at).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+      minutes: session.minutes,
+      description: session.description?.trim() || "(No description)",
+      task: null,
+    })),
+    ...tasks.map((task) => ({
+      id: `task-${task.id}`,
+      timestamp: new Date(task.created_at).getTime(),
+      date: new Date(task.created_at).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+      minutes: Math.round(task.eta_hours * 60),
+      description: `${task.title} / ${task.status.replace("_", " ")}`,
+      task,
+    })),
+  ].sort((a, b) => b.timestamp - a.timestamp);
 }

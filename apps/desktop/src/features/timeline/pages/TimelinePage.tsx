@@ -3,10 +3,21 @@
 import Link from "next/link";
 import { type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { TaskEditor } from "@/components/TaskEditor";
-import { getProjectTasks, getProjects, updateTask, type Project, type Task, type TaskStatus, type TaskUpdate } from "@/lib/api";
+import {
+  getProjectTasks,
+  getProjects,
+  updateTask,
+  type Project,
+  type Task,
+  type TaskPriority,
+  type TaskStatus,
+  type TaskUpdate,
+} from "@/lib/api";
 import "./TimelinePage.css";
 
 type TimelineView = "3day" | "week" | "month";
+type TimelineStatusFilter = "all" | "active" | "incomplete" | "in_progress" | "done";
+type TimelinePriorityFilter = "all" | TaskPriority;
 
 type TimelineTask = {
   id: string;
@@ -14,6 +25,7 @@ type TimelineTask = {
   title: string;
   projectName: string;
   status: TaskStatus;
+  priority: TaskPriority;
   etaHours: number;
   timeSpentHours: number;
   startDate: Date | null;
@@ -39,7 +51,10 @@ export default function TimelinePage({ embedded = false }: { embedded?: boolean 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<TimelineView>("week");
-  const [activeTodayOnly, setActiveTodayOnly] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<TimelineStatusFilter>("all");
+  const [priorityFilter, setPriorityFilter] = useState<TimelinePriorityFilter>("all");
+  const [maxRequiredMinutes, setMaxRequiredMinutes] = useState("");
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -71,10 +86,22 @@ export default function TimelinePage({ embedded = false }: { embedded?: boolean 
     [items],
   );
 
-  const visibleTasks = useMemo(
-    () => (activeTodayOnly ? timelineTasks.filter((task) => isTaskActiveOn(task, today)) : timelineTasks),
-    [activeTodayOnly, timelineTasks, today],
-  );
+  const visibleTasks = useMemo(() => {
+    const maximumMinutes = Number(maxRequiredMinutes);
+
+    return timelineTasks.filter((task) => {
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" && isTaskActiveOn(task, today)) ||
+        (statusFilter === "incomplete" && task.status !== "done") ||
+        task.status === statusFilter;
+      const matchesPriority = priorityFilter === "all" || task.priority === priorityFilter;
+      const matchesRequiredTime =
+        !maxRequiredMinutes || !Number.isFinite(maximumMinutes) || Math.round(task.etaHours * 60) <= maximumMinutes;
+
+      return matchesStatus && matchesPriority && matchesRequiredTime;
+    });
+  }, [maxRequiredMinutes, priorityFilter, statusFilter, timelineTasks, today]);
   const timelineDates = useMemo(() => buildTimelineDates(visibleTasks, today, viewOptions[view].days), [today, view, visibleTasks]);
   const groupedTasks = groupTasksByProject(visibleTasks);
   const totalPlanned = timelineTasks.reduce((sum, task) => sum + task.etaHours, 0);
@@ -91,6 +118,8 @@ export default function TimelinePage({ embedded = false }: { embedded?: boolean 
   const timeAllocation = buildTimeAllocation(timelineTasks);
   const fixedProjects = items.filter((item) => item.project.type === "fixed");
   const continuousProjects = items.filter((item) => item.project.type === "continuous");
+  const activeFilterCount =
+    Number(statusFilter !== "all") + Number(priorityFilter !== "all") + Number(Boolean(maxRequiredMinutes));
 
   function recalibrateToToday() {
     scrollerRef.current?.scrollTo({ left: Math.max(currentTimeOffset - 24, 0), behavior: "smooth" });
@@ -167,14 +196,70 @@ export default function TimelinePage({ embedded = false }: { embedded?: boolean 
                   </button>
                 ))}
               </div>
-              <label className="timeline-filter">
-                <input
-                  type="checkbox"
-                  checked={activeTodayOnly}
-                  onChange={(event) => setActiveTodayOnly(event.target.checked)}
-                />
-                Active
-              </label>
+              <div className="timeline-filter-menu">
+                <button
+                  type="button"
+                  onClick={() => setIsFilterOpen((current) => !current)}
+                  className={activeFilterCount ? "timeline-filter-button active" : "timeline-filter-button"}
+                  aria-expanded={isFilterOpen}
+                >
+                  Filter{activeFilterCount ? ` (${activeFilterCount})` : ""}
+                </button>
+                {isFilterOpen ? (
+                  <div className="timeline-filter-popover">
+                    <label>
+                      <span>Status</span>
+                      <select
+                        value={statusFilter}
+                        onChange={(event) => setStatusFilter(event.target.value as TimelineStatusFilter)}
+                      >
+                        <option value="all">All</option>
+                        <option value="active">Active today</option>
+                        <option value="incomplete">Incomplete</option>
+                        <option value="in_progress">In progress</option>
+                        <option value="done">Done</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Priority</span>
+                      <select
+                        value={priorityFilter}
+                        onChange={(event) => setPriorityFilter(event.target.value as TimelinePriorityFilter)}
+                      >
+                        <option value="all">All priorities</option>
+                        <option value="high">High</option>
+                        <option value="medium">Medium</option>
+                        <option value="low">Low</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Time required up to</span>
+                      <div className="timeline-minute-input">
+                        <input
+                          type="number"
+                          min="0"
+                          step="5"
+                          value={maxRequiredMinutes}
+                          onChange={(event) => setMaxRequiredMinutes(event.target.value)}
+                          placeholder="Any"
+                        />
+                        <strong>min</strong>
+                      </div>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStatusFilter("all");
+                        setPriorityFilter("all");
+                        setMaxRequiredMinutes("");
+                      }}
+                      className="timeline-filter-clear"
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                ) : null}
+              </div>
               <button
                 type="button"
                 onClick={recalibrateToToday}
@@ -196,8 +281,8 @@ export default function TimelinePage({ embedded = false }: { embedded?: boolean 
 
           {!isLoading && timelineTasks.length > 0 && visibleTasks.length === 0 ? (
             <div className="timeline-message">
-              <strong>No active tasks today</strong>
-              <p>Turn off the filter to see the full timeline.</p>
+              <strong>No tasks match these filters</strong>
+              <p>Clear or adjust the filters to see more of the schedule.</p>
             </div>
           ) : null}
 
@@ -535,6 +620,7 @@ function toTimelineTask(task: Task, projectName: string): TimelineTask {
     title: task.title,
     projectName,
     status: task.status,
+    priority: task.priority,
     etaHours: task.eta_hours,
     timeSpentHours: task.time_spent_hours,
     startDate: task.start_date ? new Date(task.start_date) : null,

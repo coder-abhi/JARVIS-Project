@@ -5,15 +5,14 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import {
-  createProject,
   getGoalsOverview,
   getProjectSummaries,
   updateGoal,
+  updateProject,
   type CompletedGoalLog,
   type Goal,
   type GoalTask,
   type ProjectSummary,
-  type ProjectType,
 } from "@/lib/api";
 import "./GoalDetailPage.css";
 
@@ -31,6 +30,7 @@ export default function GoalDetailPage() {
   const goalId = params.id ?? "";
   const [goal, setGoal] = useState<Goal | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [allProjects, setAllProjects] = useState<ProjectSummary[]>([]);
   const [activeTasks, setActiveTasks] = useState<GoalTask[]>([]);
   const [completions, setCompletions] = useState<CompletedGoalLog[]>([]);
   const [nameDraft, setNameDraft] = useState("");
@@ -38,11 +38,9 @@ export default function GoalDetailPage() {
   const [isEditing, setIsEditing] = useState(searchParams.get("edit") === "1");
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
-  const [projectName, setProjectName] = useState("");
-  const [projectDescription, setProjectDescription] = useState("");
-  const [projectType, setProjectType] = useState<ProjectType>("fixed");
-  const [isSavingProject, setIsSavingProject] = useState(false);
+  const [isAttachProjectOpen, setIsAttachProjectOpen] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [isAttachingProject, setIsAttachingProject] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -68,6 +66,7 @@ export default function GoalDetailPage() {
     setNameDraft(currentGoal.title);
     setDescriptionDraft(currentGoal.description ?? "");
     setProjects(attachedProjects);
+    setAllProjects(summaries);
     setActiveTasks(overview.active_tasks.filter((task) => task.linked_goals.some((linkedGoal) => linkedGoal.id === goalId)));
     setCompletions(
       overview.recent_completed_tasks.filter(
@@ -104,28 +103,21 @@ export default function GoalDetailPage() {
     }
   }
 
-  async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
+  async function handleAttachProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!projectName.trim() || !goal || isSavingProject) return;
-    setIsSavingProject(true);
+    if (!selectedProjectId || !goal || isAttachingProject) return;
+    setIsAttachingProject(true);
     setError(null);
     try {
-      await createProject({
-        name: projectName.trim(),
-        description: projectDescription.trim() || null,
-        type: projectType,
-        goal_id: goal.id,
-      });
-      setProjectName("");
-      setProjectDescription("");
-      setProjectType("fixed");
-      setIsCreateProjectOpen(false);
+      await updateProject(selectedProjectId, { goal_id: goal.id });
+      setSelectedProjectId("");
+      setIsAttachProjectOpen(false);
       setMessage("Project attached to this goal.");
       await loadGoal();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create project");
+      setError(err instanceof Error ? err.message : "Could not attach project");
     } finally {
-      setIsSavingProject(false);
+      setIsAttachingProject(false);
     }
   }
 
@@ -145,6 +137,7 @@ export default function GoalDetailPage() {
   const completionPercentage = totals.tasks ? Math.round((totals.completed / totals.tasks) * 100) : 0;
   const nextDeadline = getNextDeadline(projects);
   const timelineItems = buildTimeline(goal, projects, completions);
+  const attachableProjects = allProjects.filter((project) => !projects.some((attached) => attached.id === project.id));
 
   if (isLoading) {
     return <main className="ops-screen goal-detail-state">Loading goal...</main>;
@@ -262,8 +255,8 @@ export default function GoalDetailPage() {
               <div>
                 <div className="goal-title-line">
                   <h2>Attached Projects</h2>
-                  <button type="button" onClick={() => setIsCreateProjectOpen((current) => !current)} className="ops-button primary">
-                    {isCreateProjectOpen ? "Close" : "Add Project"}
+                  <button type="button" onClick={() => setIsAttachProjectOpen((current) => !current)} className="ops-button primary">
+                    {isAttachProjectOpen ? "Close" : "Attach Project"}
                   </button>
                 </div>
                 <p className="goal-meta-line">{projects.length} projects advancing this goal</p>
@@ -271,29 +264,30 @@ export default function GoalDetailPage() {
               <p className="goal-meta-line">{totals.investedMinutes} min invested across the portfolio</p>
             </div>
 
-            {isCreateProjectOpen ? (
-              <form onSubmit={handleCreateProject} className="goal-project-creator">
+            {isAttachProjectOpen ? (
+              <form onSubmit={handleAttachProject} className="goal-project-creator">
                 <label>
-                  <span>Project name</span>
-                  <input value={projectName} onChange={(event) => setProjectName(event.target.value)} autoFocus />
-                </label>
-                <label className="wide">
-                  <span>Description</span>
-                  <input
-                    value={projectDescription}
-                    onChange={(event) => setProjectDescription(event.target.value)}
-                    placeholder="What work belongs in this project?"
-                  />
-                </label>
-                <label>
-                  <span>Type</span>
-                  <select value={projectType} onChange={(event) => setProjectType(event.target.value as ProjectType)}>
-                    <option value="fixed">Fixed</option>
-                    <option value="continuous">Continuous</option>
+                  <span>Choose project</span>
+                  <select
+                    value={selectedProjectId}
+                    onChange={(event) => setSelectedProjectId(event.target.value)}
+                    autoFocus
+                  >
+                    <option value="">Select an existing project</option>
+                    {attachableProjects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {formatProjectOption(project)}
+                      </option>
+                    ))}
                   </select>
                 </label>
-                <button disabled={isSavingProject || !projectName.trim()} className="ops-button primary">
-                  {isSavingProject ? "Attaching..." : "Create + Attach"}
+                <p>
+                  {attachableProjects.length
+                    ? "Attaching a project already linked to another goal will move it here."
+                    : "Every project is already attached to this goal."}
+                </p>
+                <button disabled={isAttachingProject || !selectedProjectId} className="ops-button primary">
+                  {isAttachingProject ? "Attaching..." : "Attach Project"}
                 </button>
               </form>
             ) : null}
@@ -305,7 +299,7 @@ export default function GoalDetailPage() {
                 ))}
               </div>
             ) : (
-              <p className="goal-empty-line">No projects are attached yet. Add the first project that will move this goal forward.</p>
+              <p className="goal-empty-line">No projects are attached yet. Attach an existing project that will move this goal forward.</p>
             )}
           </section>
 
@@ -454,4 +448,9 @@ function formatDeadlineState(value: string) {
 
 function formatNumber(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function formatProjectOption(project: ProjectSummary) {
+  const currentGoal = project.linked_goals[0]?.title;
+  return `${project.name} / ${project.type}${currentGoal ? ` / currently: ${currentGoal}` : ""}`;
 }

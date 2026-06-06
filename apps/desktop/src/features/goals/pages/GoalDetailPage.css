@@ -194,12 +194,19 @@
 
 .goal-project-creator {
   display: grid;
-  grid-template-columns: minmax(12rem, 0.8fr) minmax(16rem, 1.5fr) 9rem auto;
+  grid-template-columns: minmax(16rem, 1fr) minmax(16rem, 1fr) auto;
   gap: 0.6rem;
   align-items: end;
   margin-top: 0.6rem;
   border-bottom: 1px solid var(--ops-border);
   padding: 0 0 0.75rem;
+}
+
+.goal-project-creator > p {
+  margin: 0 0 0.65rem;
+  color: var(--ops-muted);
+  font-size: 0.65rem;
+  line-height: 1.45;
 }
 
 .goal-project-list {

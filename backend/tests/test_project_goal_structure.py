@@ -107,14 +107,53 @@ class ProjectGoalStructureTests(unittest.TestCase):
         updated = crud.update_project(
             self.session,
             project.id,
-            schemas.ProjectUpdate(name="Content Engine", description="Posts, essays, and publishing tasks."),
+            schemas.ProjectUpdate(
+                name="Content Engine",
+                description="Posts, essays, and publishing tasks.",
+                type=models.ProjectType.fixed,
+                goal_id=second_goal.id,
+            ),
             self.user,
         )
 
         self.assertIsNotNone(updated)
         self.assertEqual(updated.name, "Content Engine")
         self.assertEqual(updated.description, "Posts, essays, and publishing tasks.")
-        self.assertEqual(updated.parent_goal.id, first_goal.id)
+        self.assertEqual(updated.type, models.ProjectType.fixed)
+        self.assertEqual(updated.parent_goal.id, second_goal.id)
+        summary = next(item for item in crud.list_project_summaries(self.session, self.user) if item.id == project.id)
+        self.assertEqual(summary.description, "Posts, essays, and publishing tasks.")
+        self.assertEqual(summary.goal_id, second_goal.id)
+        self.assertEqual([goal.id for goal in summary.linked_goals], [second_goal.id])
+
+    def test_general_work_metadata_is_not_reset_when_reused(self) -> None:
+        goal = models.Goal(
+            id="goal-1",
+            user_id=self.user.id,
+            category=models.GoalCategory.monthly,
+            title="Clear the backlog",
+        )
+        self.session.add(goal)
+        self.session.commit()
+        project = crud.create_project(
+            self.session,
+            schemas.ProjectCreate(
+                name="General Work",
+                type=models.ProjectType.continuous,
+            ),
+            self.user,
+        )
+
+        crud.update_project(
+            self.session,
+            project.id,
+            schemas.ProjectUpdate(type=models.ProjectType.fixed, goal_id=goal.id),
+            self.user,
+        )
+        reused = crud._get_or_create_general_work_project(self.session, self.user)
+
+        self.assertEqual(reused.type, models.ProjectType.fixed)
+        self.assertEqual(reused.parent_goal.id, goal.id)
 
     def test_goal_log_uses_existing_project_or_general_work_only(self) -> None:
         project = crud.create_project(
