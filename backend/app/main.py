@@ -1,4 +1,5 @@
 import os
+import uuid
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +22,7 @@ def ensure_sqlite_compatibility() -> None:
 
     project_columns = {column["name"] for column in inspector.get_columns("projects")} if "projects" in table_names else set()
     task_columns = {column["name"] for column in inspector.get_columns("tasks")} if "tasks" in table_names else set()
+    goal_columns = {column["name"] for column in inspector.get_columns("goals")} if "goals" in table_names else set()
     goal_project_columns = {column["name"] for column in inspector.get_columns("goal_projects")} if "goal_projects" in table_names else set()
     completed_goal_log_columns = {column["name"] for column in inspector.get_columns("completed_goal_logs")} if "completed_goal_logs" in table_names else set()
     book_columns = {column["name"] for column in inspector.get_columns("books")} if "books" in table_names else set()
@@ -31,6 +33,13 @@ def ensure_sqlite_compatibility() -> None:
         if project_columns and "user_id" not in project_columns:
             connection.execute(text("ALTER TABLE projects ADD COLUMN user_id VARCHAR(36)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS ix_projects_user_id ON projects (user_id)"))
+        if project_columns and "goal_id" not in project_columns:
+            connection.execute(text("ALTER TABLE projects ADD COLUMN goal_id VARCHAR(36)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_projects_goal_id ON projects (goal_id)"))
+        if project_columns and "description" not in project_columns:
+            connection.execute(text("ALTER TABLE projects ADD COLUMN description TEXT"))
+        if goal_columns and "description" not in goal_columns:
+            connection.execute(text("ALTER TABLE goals ADD COLUMN description TEXT"))
         if book_columns and "user_id" not in book_columns:
             connection.execute(text("ALTER TABLE books ADD COLUMN user_id VARCHAR(36)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS ix_books_user_id ON books (user_id)"))
@@ -54,6 +63,30 @@ def ensure_sqlite_compatibility() -> None:
                     JOIN projects ON projects.id = tasks.project_id
                     WHERE tasks.goal_id IS NOT NULL
                       AND goals.user_id = projects.user_id
+                    """
+                )
+            )
+        if project_columns and "goal_id" not in project_columns and {"goal_id", "project_id"} <= goal_project_columns:
+            connection.execute(
+                text(
+                    """
+                    UPDATE projects
+                    SET goal_id = (
+                        SELECT goal_projects.goal_id
+                        FROM goal_projects
+                        JOIN goals ON goals.id = goal_projects.goal_id
+                        WHERE goal_projects.project_id = projects.id
+                          AND goals.user_id = projects.user_id
+                        ORDER BY goals.created_at ASC
+                        LIMIT 1
+                    )
+                    WHERE EXISTS (
+                        SELECT 1
+                        FROM goal_projects
+                        JOIN goals ON goals.id = goal_projects.goal_id
+                        WHERE goal_projects.project_id = projects.id
+                          AND goals.user_id = projects.user_id
+                    )
                     """
                 )
             )
@@ -113,9 +146,114 @@ def ensure_sqlite_compatibility() -> None:
         if completed_goal_log_columns and "task_id" not in completed_goal_log_columns:
             connection.execute(text("ALTER TABLE completed_goal_logs ADD COLUMN task_id VARCHAR(36)"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS ix_completed_goal_logs_task_id ON completed_goal_logs (task_id)"))
+        if completed_goal_log_columns and "project_id" not in completed_goal_log_columns:
+            connection.execute(text("ALTER TABLE completed_goal_logs ADD COLUMN project_id VARCHAR(36)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_completed_goal_logs_project_id ON completed_goal_logs (project_id)"))
+            if task_columns:
+                connection.execute(
+                    text(
+                        """
+                        UPDATE completed_goal_logs
+                        SET project_id = (
+                            SELECT tasks.project_id
+                            FROM tasks
+                            WHERE tasks.id = completed_goal_logs.task_id
+                        )
+                        WHERE task_id IS NOT NULL
+                        """
+                    )
+                )
+
+        if project_columns and task_columns:
+            migrate_legacy_goal_inbox_projects(connection, table_names)
 
     if "goal_id" in task_columns:
         drop_legacy_task_goal_id()
+
+
+def migrate_legacy_goal_inbox_projects(connection, table_names: list[str]) -> None:
+    legacy_rows = connection.execute(
+        text(
+            """
+            SELECT projects.id, projects.user_id
+            FROM projects
+            LEFT JOIN goals ON goals.id = projects.goal_id
+            WHERE projects.user_id IS NOT NULL
+              AND (
+                projects.name = 'Goal Inbox'
+                OR (goals.id IS NOT NULL AND projects.name = substr(goals.title || ' Actions', 1, 160))
+                OR (goals.id IS NOT NULL AND projects.type = 'continuous' AND projects.name LIKE '% Actions')
+              )
+            """
+        )
+    ).fetchall()
+
+    for legacy_project_id, user_id in legacy_rows:
+        general_project_id = connection.execute(
+            text(
+                """
+                SELECT id
+                FROM projects
+                WHERE user_id = :user_id AND name = 'General Work' AND id != :legacy_project_id
+                ORDER BY created_at ASC
+                LIMIT 1
+                """
+            ),
+            {"user_id": user_id, "legacy_project_id": legacy_project_id},
+        ).scalar_one_or_none()
+        if general_project_id is None:
+            general_project_id = str(uuid.uuid4())
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO projects (id, user_id, goal_id, name, description, type, created_at)
+                    VALUES (
+                        :id,
+                        :user_id,
+                        NULL,
+                        'General Work',
+                        'General tasks that do not clearly fit another project.',
+                        'continuous',
+                        CURRENT_TIMESTAMP
+                    )
+                    """
+                ),
+                {"id": general_project_id, "user_id": user_id},
+            )
+        else:
+            connection.execute(
+                text(
+                    """
+                    UPDATE projects
+                    SET type = 'continuous',
+                        goal_id = NULL,
+                        description = COALESCE(NULLIF(description, ''), 'General tasks that do not clearly fit another project.')
+                    WHERE id = :id
+                    """
+                ),
+                {"id": general_project_id},
+            )
+
+        connection.execute(
+            text("UPDATE tasks SET project_id = :general_id WHERE project_id = :legacy_id"),
+            {"general_id": general_project_id, "legacy_id": legacy_project_id},
+        )
+        if "pomodoro_session_logs" in table_names:
+            connection.execute(
+                text("UPDATE pomodoro_session_logs SET project_id = :general_id WHERE project_id = :legacy_id"),
+                {"general_id": general_project_id, "legacy_id": legacy_project_id},
+            )
+        if "completed_goal_logs" in table_names:
+            connection.execute(
+                text("UPDATE completed_goal_logs SET project_id = :general_id WHERE project_id = :legacy_id"),
+                {"general_id": general_project_id, "legacy_id": legacy_project_id},
+            )
+        if "goal_projects" in table_names:
+            connection.execute(
+                text("DELETE FROM goal_projects WHERE project_id = :legacy_id"),
+                {"legacy_id": legacy_project_id},
+            )
+        connection.execute(text("DELETE FROM projects WHERE id = :legacy_id"), {"legacy_id": legacy_project_id})
 
 
 def drop_legacy_task_goal_id() -> None:

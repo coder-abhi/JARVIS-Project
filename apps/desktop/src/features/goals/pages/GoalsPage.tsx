@@ -21,6 +21,7 @@ import {
   type ProjectSummary,
   type ProjectType,
 } from "@/lib/api";
+import TimelinePage from "@/features/timeline/pages/TimelinePage";
 import "./GoalsPage.css";
 
 const categoryLabels: Record<GoalCategory, string> = {
@@ -36,6 +37,7 @@ const projectTypes: { value: ProjectType; label: string; description: string }[]
   { value: "continuous", label: "Continuous", description: "Persistent operating loop or habit system." },
 ];
 type SortMode = "importance" | "time" | "goal";
+type GoalDraft = { title: string; description: string; target: string; current: string; unit: string };
 
 export default function GoalsPage() {
   const [overview, setOverview] = useState<GoalsOverview | null>(null);
@@ -43,7 +45,7 @@ export default function GoalsPage() {
   const [nextActions, setNextActions] = useState<GoalNextAction[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("importance");
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState({ title: "", target: "", current: "", unit: "" });
+  const [editDraft, setEditDraft] = useState<GoalDraft>({ title: "", description: "", target: "", current: "", unit: "" });
   const [logText, setLogText] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isLogging, setIsLogging] = useState(false);
@@ -54,7 +56,9 @@ export default function GoalsPage() {
   const [creatingGoalCategory, setCreatingGoalCategory] = useState<GoalCategory | null>(null);
   const [restoringCompletionId, setRestoringCompletionId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("");
+  const [projectDescription, setProjectDescription] = useState("");
   const [projectType, setProjectType] = useState<ProjectType>("fixed");
+  const [projectGoalId, setProjectGoalId] = useState("");
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -81,11 +85,6 @@ export default function GoalsPage() {
       .catch((err: Error) => setError(err.message))
       .finally(() => setIsLoading(false));
   }, []);
-
-  const activeMissions = useMemo(
-    () => [...projects].sort((a, b) => getMissionRisk(b) - getMissionRisk(a)),
-    [projects],
-  );
 
   const sortedTasks = useMemo(() => {
     const tasks = [...(overview?.active_tasks ?? [])];
@@ -115,6 +114,7 @@ export default function GoalsPage() {
     setEditingGoalId(goal.id);
     setEditDraft({
       title: goal.title,
+      description: goal.description ?? "",
       target: goal.target_value == null ? "" : String(goal.target_value),
       current: String(goal.current_value ?? 0),
       unit: goal.unit ?? "",
@@ -128,6 +128,7 @@ export default function GoalsPage() {
     try {
       await updateGoal(goalId, {
         title: editDraft.title.trim(),
+        description: editDraft.description.trim() || null,
         target_value: editDraft.target.trim() ? Number(editDraft.target) : null,
         current_value: Number(editDraft.current) || 0,
         unit: editDraft.unit.trim() || null,
@@ -155,7 +156,7 @@ export default function GoalsPage() {
         unit: null,
       });
       setEditingGoalId(goal.id);
-      setEditDraft({ title: goal.title, target: "", current: "0", unit: "" });
+      setEditDraft({ title: goal.title, description: "", target: "", current: "0", unit: "" });
       setMessage("Goal added.");
       await loadGoals();
       await loadNextActions();
@@ -255,10 +256,18 @@ export default function GoalsPage() {
     setIsSavingProject(true);
     setError(null);
     try {
-      await createProject({ name: projectName.trim(), type: projectType });
+      await createProject({
+        name: projectName.trim(),
+        description: projectDescription.trim() || null,
+        type: projectType,
+        goal_id: projectGoalId || null,
+      });
       await loadProjects();
+      await loadGoals();
       setProjectName("");
+      setProjectDescription("");
       setProjectType("fixed");
+      setProjectGoalId("");
       setIsCreateProjectOpen(false);
       setMessage("Mission initialized.");
     } catch (err) {
@@ -276,11 +285,16 @@ export default function GoalsPage() {
           <h1>Mission Control</h1>
           <p className="ops-subtitle">Mission queue, campaign planning horizons, AI assessment, and execution profile.</p>
         </div>
-        <div className="ops-mini-metrics">
-          <Metric label="Open Tasks" value={overview?.active_tasks.length ?? 0} />
-          <Metric label="Projects" value={projects.length} />
-          <Metric label="Goals" value={overview?.goals.length ?? 0} />
-          <Metric label="Completed" value={overview?.recent_completed_tasks.length ?? 0} />
+        <div className="grid gap-3">
+          <div className="ops-mini-metrics">
+            <Metric label="Open Tasks" value={overview?.active_tasks.length ?? 0} />
+            <Metric label="Projects" value={projects.length} />
+            <Metric label="Goals" value={overview?.goals.length ?? 0} />
+            <Metric label="Completed" value={overview?.recent_completed_tasks.length ?? 0} />
+          </div>
+          <button type="button" onClick={() => setIsCreateProjectOpen(true)} className="ops-button primary justify-self-end">
+            New Mission
+          </button>
         </div>
       </section>
 
@@ -288,55 +302,9 @@ export default function GoalsPage() {
         {error ? <p className="ops-alert danger span-12">{error}</p> : null}
         {message ? <p className="ops-alert signal span-12">{message}</p> : null}
 
-        <section className="ops-panel span-12">
-          <div className="mission-control-section-head">
-            <div>
-              <p className="ops-kicker">PROJECT MISSIONS</p>
-              <h2>Active Missions</h2>
-            </div>
-            <div className="mission-control-section-actions">
-              <span>{activeMissions.length} tracked operations</span>
-              <button type="button" onClick={() => setIsCreateProjectOpen(true)} className="ops-button primary">
-                New Mission
-              </button>
-            </div>
-          </div>
-          <div className="ops-table">
-            <div className="ops-row ops-row-head mission-control-row">
-              <span>Mission</span>
-              <span>Progress</span>
-              <span>Status</span>
-              <span>ETA</span>
-            </div>
-            {isLoading ? <p className="ops-empty">Loading mission telemetry...</p> : null}
-            {!isLoading && activeMissions.length === 0 ? (
-              <button type="button" onClick={() => setIsCreateProjectOpen(true)} className="ops-empty action">
-                No active missions. Initialize first mission.
-              </button>
-            ) : null}
-            {activeMissions.map((project) => {
-              const progress = getProjectProgress(project);
-              return (
-                <a key={project.id} href={`/project/${project.id}`} className="ops-row mission-control-row">
-                  <span className="truncate">
-                    <span className="ops-dot" />
-                    {project.name}
-                  </span>
-                  <span>
-                    <span className="ops-progress">
-                      <span style={{ width: `${progress}%` }} />
-                    </span>
-                    <b>{progress}%</b>
-                  </span>
-                  <span className={project.overdue_tasks > 0 ? "ops-status danger" : project.in_progress_tasks > 0 ? "ops-status signal" : "ops-status"}>
-                    {project.overdue_tasks > 0 ? "RISK" : project.in_progress_tasks > 0 ? "ACTIVE" : "QUEUED"}
-                  </span>
-                  <span>{formatProjectEta(project)}</span>
-                </a>
-              );
-            })}
-          </div>
-        </section>
+        <div id="schedule" className="span-12 mission-control-schedule">
+          <TimelinePage embedded />
+        </div>
 
         <section className="ops-panel span-8">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -361,7 +329,7 @@ export default function GoalsPage() {
                   <span>Task</span>
                   <span>Time</span>
                   <span>Importance</span>
-                  <span>Mission</span>
+                  <span>Parent Goal</span>
                   <span>Project</span>
                 </div>
                 {sortedTasks.map((task) => (
@@ -435,51 +403,16 @@ export default function GoalsPage() {
           ))}
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[1fr_0.9fr] span-12">
-          <div className="ops-panel">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="ops-kicker">RECOMMENDED NEXT ACTIONS</p>
-                <h2 className="mt-1 text-lg font-semibold">AI Mission Orders</h2>
-              </div>
-              <button
-                type="button"
-                onClick={handleRefreshNextActions}
-                disabled={isRefreshingNextActions}
-                className="rounded-full bg-stone-950 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-stone-800 disabled:bg-stone-300"
-              >
-                {isRefreshingNextActions ? "Refreshing..." : "Refresh"}
-              </button>
-            </div>
-            <div className="mt-4 grid gap-2">
-              {nextActions.length ? (
-                nextActions.map((action, index) => (
-                  <div key={`${action.title}-${index}`} className="rounded-lg border border-stone-200 bg-white p-3">
-                    <p className="text-sm font-semibold leading-5 text-stone-950">{action.title}</p>
-                    <p className="mt-1 text-xs text-stone-600">{action.related_goal}</p>
-                    <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold">
-                      <span className="rounded-full bg-teal-50 px-2 py-0.5 text-teal-800">Importance {action.importance}/5</span>
-                      <span className="rounded-full bg-rose-50 px-2 py-0.5 text-rose-800">Urgency {action.urgency}/5</span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="rounded-lg bg-stone-50 p-3 text-xs text-stone-600">Suggestions will appear after your goals load.</p>
-              )}
-            </div>
+        <section className="ops-panel span-12">
+          <div className="ops-panel-head">
+            <h2>Execution Patterns</h2>
+            <span>strengths / weaknesses</span>
           </div>
-
-          <div className="ops-panel">
-            <div className="ops-panel-head">
-              <h2>Execution Patterns</h2>
-              <span>strengths / weaknesses</span>
-            </div>
-            <div className="system-metrics">
-              <div className="system-metric signal"><span>Strength</span><strong>Prioritization</strong></div>
-              <div className="system-metric"><span>Weakness</span><strong>Context Switching</strong></div>
-              <div className="system-metric"><span>Pattern</span><strong>{sortedTasks.length ? "Action-biased" : "Planning mode"}</strong></div>
-              <div className="system-metric"><span>Next Move</span><strong>{nextActions[0]?.title ?? "Log next objective"}</strong></div>
-            </div>
+          <div className="system-metrics">
+            <div className="system-metric signal"><span>Strength</span><strong>Prioritization</strong></div>
+            <div className="system-metric"><span>Weakness</span><strong>Context Switching</strong></div>
+            <div className="system-metric"><span>Pattern</span><strong>{sortedTasks.length ? "Action-biased" : "Planning mode"}</strong></div>
+            <div className="system-metric"><span>Next Move</span><strong>{nextActions[0]?.title ?? "Log next objective"}</strong></div>
           </div>
         </section>
 
@@ -536,6 +469,33 @@ export default function GoalsPage() {
             <label className="mission-modal-field" htmlFor="project-name">
               Mission name
               <input id="project-name" value={projectName} onChange={(event) => setProjectName(event.target.value)} autoFocus />
+            </label>
+
+            <label className="mission-modal-field" htmlFor="project-description">
+              Mission description
+              <textarea
+                id="project-description"
+                value={projectDescription}
+                onChange={(event) => setProjectDescription(event.target.value)}
+                rows={4}
+                placeholder="Describe the work that belongs here so AI can allocate tasks correctly."
+              />
+            </label>
+
+            <label className="mission-modal-field" htmlFor="project-goal">
+              Parent goal (optional)
+              <select
+                id="project-goal"
+                value={projectGoalId}
+                onChange={(event) => setProjectGoalId(event.target.value)}
+              >
+                <option value="">No parent goal</option>
+                {(overview?.goals ?? []).map((goal) => (
+                  <option key={goal.id} value={goal.id}>
+                    {goal.title}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <div className="mission-type-grid">
@@ -598,12 +558,12 @@ function GoalCategorySection({
   category: GoalCategory;
   goals: Goal[];
   editingGoalId: string | null;
-  draft: { title: string; target: string; current: string; unit: string };
+  draft: GoalDraft;
   savingGoalId: string | null;
   isCreating: boolean;
   onCreate: () => void;
   onBeginEdit: (goal: Goal) => void;
-  onDraftChange: (draft: { title: string; target: string; current: string; unit: string }) => void;
+  onDraftChange: (draft: GoalDraft) => void;
   onSave: (goalId: string) => void;
   onCancel: () => void;
 }) {
@@ -669,10 +629,10 @@ function GoalCard({
 }: {
   goal: Goal;
   isEditing: boolean;
-  draft: { title: string; target: string; current: string; unit: string };
+  draft: GoalDraft;
   isSaving: boolean;
   onBeginEdit: () => void;
-  onDraftChange: (draft: { title: string; target: string; current: string; unit: string }) => void;
+  onDraftChange: (draft: GoalDraft) => void;
   onSave: () => void;
   onCancel: () => void;
 }) {
@@ -681,6 +641,12 @@ function GoalCard({
       <div className="rounded-lg border border-teal-200 bg-white p-3 shadow-sm">
         <div className="grid gap-2">
           <input value={draft.title} onChange={(event) => onDraftChange({ ...draft, title: event.target.value })} className="field-input py-2 text-xs" autoFocus />
+          <textarea
+            value={draft.description}
+            onChange={(event) => onDraftChange({ ...draft, description: event.target.value })}
+            className="field-input min-h-20 resize-y py-2 text-xs"
+            placeholder="What kinds of projects and tasks belong under this goal?"
+          />
           <div className="grid grid-cols-2 gap-2">
             <input type="number" min="0" step="0.25" placeholder="Target" value={draft.target} onChange={(event) => onDraftChange({ ...draft, target: event.target.value })} className="field-input py-2 text-xs" />
             <input type="number" min="0" step="0.25" placeholder="Current" value={draft.current} onChange={(event) => onDraftChange({ ...draft, current: event.target.value })} className="field-input py-2 text-xs" />
@@ -702,6 +668,7 @@ function GoalCard({
   return (
     <button type="button" onClick={onBeginEdit} className="rounded-lg border border-stone-200 bg-white p-3 text-left transition hover:border-teal-200 hover:bg-teal-50/30">
       <h3 className="text-sm font-semibold leading-5 text-stone-950">{goal.title}</h3>
+      {goal.description ? <p className="mt-1.5 text-xs leading-5 text-stone-600">{goal.description}</p> : null}
       {goal.measurable && goal.progress_percentage != null ? (
         <div className="mt-2.5">
           <div className="flex justify-between text-[11px] font-semibold text-stone-500">
@@ -715,7 +682,7 @@ function GoalCard({
           </div>
         </div>
       ) : (
-        <p className="mt-2 text-xs font-medium text-stone-500">Click to edit or add measurable mission telemetry.</p>
+        <p className="mt-2 text-xs font-medium text-stone-500">Click to edit its description or measurable telemetry.</p>
       )}
     </button>
   );
@@ -800,23 +767,4 @@ function formatDate(value: string) {
 
 function formatNumber(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
-function getProjectProgress(project: ProjectSummary) {
-  const progressBasis = project.completed_hours + project.remaining_hours;
-  if (project.type === "continuous") {
-    const spentMinutes = Math.round(project.time_spent_hours * 60);
-    return Math.min(Math.round(((spentMinutes % 6000) / 6000) * 100), 100);
-  }
-  return progressBasis === 0 ? 0 : Math.min(Math.round((project.completed_hours / progressBasis) * 100), 100);
-}
-
-function getMissionRisk(project: ProjectSummary) {
-  return project.overdue_tasks * 10 + project.in_progress_tasks + project.remaining_hours;
-}
-
-function formatProjectEta(project: ProjectSummary) {
-  if (project.next_deadline) return new Date(project.next_deadline).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  if (project.type === "continuous") return `${Math.round(project.time_spent_hours * 60)}m logged`;
-  return `${Math.round(project.remaining_hours * 60)}m rem`;
 }

@@ -31,6 +31,7 @@ class AuthRead(BaseModel):
 
 class ProjectBase(BaseModel):
     name: str = Field(min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=4000)
     type: ProjectType
 
 
@@ -51,7 +52,25 @@ class LinkedProjectRead(BaseModel):
 
 
 class ProjectCreate(ProjectBase):
+    goal_id: str | None = None
     linked_goal_ids: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def normalize_goal_parent(self):
+        linked_goal_ids = list(dict.fromkeys(self.linked_goal_ids))
+        if len(linked_goal_ids) > 1:
+            raise ValueError("A project can have at most one parent goal")
+        if self.goal_id and linked_goal_ids and self.goal_id != linked_goal_ids[0]:
+            raise ValueError("goal_id and linked_goal_ids must identify the same goal")
+        self.goal_id = self.goal_id or (linked_goal_ids[0] if linked_goal_ids else None)
+        return self
+
+
+class ProjectUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=4000)
+    type: ProjectType | None = None
+    goal_id: str | None = None
 
 
 class ProjectRead(ProjectBase):
@@ -59,6 +78,7 @@ class ProjectRead(ProjectBase):
 
     id: str
     created_at: datetime
+    goal_id: str | None = None
     linked_goals: list[LinkedGoalRead] = Field(default_factory=list)
 
 
@@ -150,6 +170,7 @@ class PomodoroSessionLogRead(PomodoroSessionLogBase):
 class GoalBase(BaseModel):
     category: GoalCategory
     title: str = Field(min_length=1, max_length=260)
+    description: str | None = Field(default=None, max_length=4000)
     target_value: float | None = Field(default=None, ge=0)
     current_value: float = Field(default=0, ge=0)
     unit: str | None = Field(default=None, max_length=40)
@@ -161,6 +182,7 @@ class GoalCreate(GoalBase):
 
 class GoalUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=260)
+    description: str | None = Field(default=None, max_length=4000)
     target_value: float | None = Field(default=None, ge=0)
     current_value: float | None = Field(default=None, ge=0)
     unit: str | None = Field(default=None, max_length=40)
@@ -196,6 +218,7 @@ class CompletedGoalLogRead(BaseModel):
 
     id: str
     goal_id: str | None
+    project_id: str | None
     task_id: str | None
     title: str
     goal_label: str

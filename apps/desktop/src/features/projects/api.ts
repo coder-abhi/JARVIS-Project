@@ -1,1 +1,10 @@
-export { createProject, createTask, getProjectPomodoroSessions, getProjects, getProjectSummaries, getProjectTasks, updateTask } from "@/lib/api";
+export {
+  createProject,
+  createTask,
+  getProjectPomodoroSessions,
+  getProjects,
+  getProjectSummaries,
+  getProjectTasks,
+  updateProject,
+  updateTask,
+} from "@/lib/api";

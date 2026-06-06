@@ -12,7 +12,6 @@ import ShelfPage from "@/features/library/pages/ShelfPage";
 import PomodoroHistoryPage from "@/features/pomodoro/pages/PomodoroHistoryPage";
 import PomodoroPage from "@/features/pomodoro/pages/PomodoroPage";
 import ProjectDetailPage from "@/features/projects/pages/ProjectDetailPage";
-import TimelinePage from "@/features/timeline/pages/TimelinePage";
 
 export const router = createBrowserRouter([
   {
@@ -22,7 +21,7 @@ export const router = createBrowserRouter([
       { index: true, element: <DashboardPage /> },
       { path: "goals", element: <GoalsPage /> },
       { path: "project/:id", element: <ProjectDetailPage /> },
-      { path: "timeline", element: <TimelinePage /> },
+      { path: "timeline", element: <Navigate to="/goals#schedule" replace /> },
       { path: "pomodoro", element: <PomodoroPage /> },
       { path: "pomodoro/history", element: <PomodoroHistoryPage /> },
       { path: "library", element: <LibraryPage /> },

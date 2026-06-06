@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { TaskEditor } from "@/components/TaskEditor";
@@ -9,6 +9,7 @@ import {
   getProjectPomodoroSessions,
   getProjects,
   getProjectTasks,
+  updateProject,
   updateTask,
   type PomodoroProjectSession,
   type Project,
@@ -24,6 +25,7 @@ type StatusFilter = "all" | "incomplete" | TaskStatus;
 type PriorityFilter = "all" | TaskPriority;
 
 export default function ProjectDetailPage() {
+  const router = useRouter();
   const params = useParams<{ id: string }>();
   const [projectId, setProjectId] = useState<string>("");
   const [project, setProject] = useState<Project | null>(null);
@@ -41,6 +43,10 @@ export default function ProjectDetailPage() {
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
+  const [isEditingProject, setIsEditingProject] = useState(false);
+  const [projectNameDraft, setProjectNameDraft] = useState("");
+  const [projectDescriptionDraft, setProjectDescriptionDraft] = useState("");
+  const [isSavingProject, setIsSavingProject] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -59,7 +65,10 @@ export default function ProjectDetailPage() {
         getProjectTasks(projectId),
         getProjectPomodoroSessions(projectId),
       ]);
-      setProject(projects.find((item) => item.id === projectId) ?? null);
+      const currentProject = projects.find((item) => item.id === projectId) ?? null;
+      setProject(currentProject);
+      setProjectNameDraft(currentProject?.name ?? "");
+      setProjectDescriptionDraft(currentProject?.description ?? "");
       setTasks(projectTasks);
       setSessions(projectSessions);
       setIsLoading(false);
@@ -110,6 +119,25 @@ export default function ProjectDetailPage() {
     setEditingTask((current) => (current?.id === taskId ? updated : current));
   }
 
+  async function handleProjectSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!project || !projectNameDraft.trim()) return;
+    setIsSavingProject(true);
+    setError(null);
+    try {
+      const updated = await updateProject(project.id, {
+        name: projectNameDraft.trim(),
+        description: projectDescriptionDraft.trim() || null,
+      });
+      setProject(updated);
+      setIsEditingProject(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update project");
+    } finally {
+      setIsSavingProject(false);
+    }
+  }
+
   const totals = tasks.reduce(
     (acc, task) => ({
       eta: acc.eta + task.eta_hours,
@@ -134,21 +162,36 @@ export default function ProjectDetailPage() {
 
   return (
     <main className="ops-screen">
-      <Link href="/" className="ops-button">
-        Back to Command Overview
-      </Link>
+      <button type="button" onClick={() => router.back()} className="ops-button">
+        Back
+      </button>
 
       <header className="ops-header mt-4">
         <div>
           <p className="ops-kicker">{project?.type ?? "MISSION"}</p>
-          <h1>{project?.name ?? "Mission Detail"}</h1>
-          <p className="ops-subtitle">Objective queue, time telemetry, and execution log.</p>
+          <div className="project-heading-line">
+            <h1>{project?.name ?? "Mission Detail"}</h1>
+            {project ? (
+              <button type="button" onClick={() => setIsEditingProject(true)} className="ops-button">
+                Edit Project
+              </button>
+            ) : null}
+          </div>
+          <p className="ops-subtitle">
+            {project?.description || "Objective queue, time telemetry, and execution log."}
+          </p>
         </div>
         <div className="system-metrics sm:min-w-80">
           <div>
             <p className="text-sm text-gray-500">Invested Time</p>
             <p className="mt-1 text-3xl font-semibold text-gray-950">{investedMinutes} min</p>
           </div>
+          {project?.type === "fixed" ? (
+            <div>
+              <p className="text-sm text-gray-500">Time Need</p>
+              <p className="mt-1 text-3xl font-semibold text-gray-950">{Math.round(totals.eta * 60)} min</p>
+            </div>
+          ) : null}
           <div className="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-600">
             <p>
               <span className="font-semibold text-gray-950">{activeTasks}</span> active
@@ -161,6 +204,36 @@ export default function ProjectDetailPage() {
       </header>
 
       {error ? <p className="ops-alert danger">{error}</p> : null}
+
+      {isEditingProject ? (
+        <form onSubmit={handleProjectSave} className="project-metadata-editor">
+          <label>
+            <span>Project name</span>
+            <input
+              value={projectNameDraft}
+              onChange={(event) => setProjectNameDraft(event.target.value)}
+              autoFocus
+            />
+          </label>
+          <label>
+            <span>Project description</span>
+            <textarea
+              value={projectDescriptionDraft}
+              onChange={(event) => setProjectDescriptionDraft(event.target.value)}
+              rows={3}
+              placeholder="What kind of tasks belong in this project?"
+            />
+          </label>
+          <div className="project-metadata-actions">
+            <button type="button" onClick={() => setIsEditingProject(false)} className="ops-button">
+              Cancel
+            </button>
+            <button disabled={isSavingProject || !projectNameDraft.trim()} className="ops-button primary">
+              {isSavingProject ? "Saving..." : "Save Project"}
+            </button>
+          </div>
+        </form>
+      ) : null}
 
       <section className="project-text-section">
         <div className="project-section-head">

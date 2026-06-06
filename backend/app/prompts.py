@@ -50,14 +50,16 @@ POMODORO_ASSIGNMENT_USER_PROMPT = (
 )
 
 GOAL_LOG_SYSTEM_PROMPT = (
-    "You are a careful personal productivity classifier. Correct spelling mistakes conservatively, connect work to "
-    "the user's stated goals, estimate effort, and rate importance from the full goal horizon. Reply with valid JSON only."
+    "You are a careful personal productivity classifier. Correct spelling mistakes conservatively and allocate work to "
+    "one existing project using project names, project descriptions, and optional parent-goal context. Never invent a "
+    "project. Estimate effort and rate importance from the full goal horizon. Reply with valid JSON only."
 )
 
 GOAL_LOG_USER_PROMPT = (
-    "Classify this log entry. Use only goal IDs from the provided goals; if no goal clearly matches, return goal_id=null "
-    "and related_goal='General'. Return JSON with corrected_text string, goal_id string or null, related_goal string, "
-    "estimated_minutes integer from 5 to 480, importance integer 1 to 5."
+    "Classify this log entry. Use only project IDs from the provided projects. Select a project only when its name, "
+    "description, or parent goal clearly fits the task; otherwise return project_id=null so the app can use General Work. "
+    "Return JSON with corrected_text string, project_id string or null, estimated_minutes integer from 5 to 480, "
+    "importance integer 1 to 5."
 )
 
 GOAL_NEXT_ACTIONS_SYSTEM_PROMPT = (

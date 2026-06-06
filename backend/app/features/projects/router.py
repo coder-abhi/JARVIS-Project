@@ -29,6 +29,22 @@ async def create_project(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
+@router.put("/{project_id}", response_model=schemas.ProjectRead)
+async def update_project(
+    project_id: str,
+    project: schemas.ProjectUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    try:
+        db_project = crud.update_project(db, project_id, project, current_user)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if db_project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return db_project
+
+
 @router.get("/{project_id}/tasks", response_model=list[schemas.TaskRead])
 async def list_project_tasks(
     project_id: str,

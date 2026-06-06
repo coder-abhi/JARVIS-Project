@@ -44,7 +44,7 @@ FEATURE_DESCRIPTIONS = {
     "book_metadata": "Corrects book details and generates chapters when a book is added or chapters are regenerated.",
     "book_recommendations": "Suggests new books to buy from your reading history.",
     "next_reading_recommendations": "Prioritizes which already-owned unread book to read next.",
-    "goal_log_classification": "Corrects goal log text, links it to a goal, and estimates effort and importance.",
+    "goal_log_classification": "Corrects mission log text, allocates it to an existing project, and estimates effort and importance.",
     "goal_next_actions": "Generates mission analysis and recommended next actions from goals and tasks.",
     "personality_insight": "Generates the working-style insight shown on the Goals page.",
     "pomodoro_assignment": "Matches a completed Pomodoro note to the most relevant project and task.",

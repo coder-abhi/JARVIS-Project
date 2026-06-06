@@ -34,13 +34,7 @@ const viewOptions: Record<TimelineView, { label: string; days: number; columnWid
   month: { label: "Month", days: 30, columnWidth: 44 },
 };
 
-const statusLabels: Record<TaskStatus, string> = {
-  todo: "Todo",
-  in_progress: "In Progress",
-  done: "Done",
-};
-
-export default function TimelinePage() {
+export default function TimelinePage({ embedded = false }: { embedded?: boolean }) {
   const [items, setItems] = useState<ProjectWithTasks[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +88,6 @@ export default function TimelinePage() {
   const timelineWidth = timelineDates.length * columnWidth;
   const currentTimeOffset = getDayDifference(today, timelineDates[0]) * columnWidth + getDayProgress(currentTime) * columnWidth;
   const currentTimeLabel = currentTime.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  const weeklyOperationDates = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(today, index)), [today]);
   const timeAllocation = buildTimeAllocation(timelineTasks);
   const fixedProjects = items.filter((item) => item.project.type === "fixed");
   const continuousProjects = items.filter((item) => item.project.type === "continuous");
@@ -124,8 +117,19 @@ export default function TimelinePage() {
     setEditingTask((current) => (current?.id === taskId ? updated : current));
   }
 
+  const Container = embedded ? "section" : "main";
+
   return (
-    <main className="ops-screen">
+    <Container className={embedded ? "mission-schedule-embedded" : "ops-screen"}>
+      {embedded ? (
+        <div className="mission-schedule-embedded-head">
+          <div>
+            <p className="ops-kicker">MISSION SCHEDULE</p>
+            <h2>Operations Schedule</h2>
+            <p>Weekly planning, timeline control, queue state, and time allocation.</p>
+          </div>
+        </div>
+      ) : (
       <header className="ops-header">
         <div>
           <p className="ops-kicker">MISSION SCHEDULE</p>
@@ -139,38 +143,9 @@ export default function TimelinePage() {
           Add Objective
         </Link>
       </header>
+      )}
 
       {error ? <p className="ops-alert danger">{error}</p> : null}
-
-      <section className="ops-panel">
-        <div className="ops-panel-head">
-          <h2>Weekly Operations Summary</h2>
-          <span>{visibleTasks.length} scheduled objectives</span>
-        </div>
-        <div className="weekly-ops-grid">
-          {weeklyOperationDates.map((date) => {
-            const dayTasks = timelineTasks.filter((task) => isTaskActiveOn(task, date)).slice(0, 4);
-            return (
-              <div key={date.toISOString()} className="weekly-day">
-                <div>
-                  <strong>{date.toLocaleDateString(undefined, { weekday: "short" })}</strong>
-                  <span>{date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
-                </div>
-                {dayTasks.length ? (
-                  dayTasks.map((task) => (
-                    <button key={task.id} type="button" onClick={() => onTimelineTaskEdit(task)} className={`weekly-task ${task.status}`}>
-                      <span>{task.title}</span>
-                      <b>{Math.round(task.etaHours * 60)}m</b>
-                    </button>
-                  ))
-                ) : (
-                  <p className="ops-empty compact">No blocks</p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </section>
 
       <section className="mt-4 grid gap-5 lg:grid-cols-[1fr_320px]">
         <div className="ops-panel timeline-plan">
@@ -299,29 +274,15 @@ export default function TimelinePage() {
         </aside>
       </section>
 
-      <section className="mt-4 grid gap-4 md:grid-cols-3">
-        {(["todo", "in_progress", "done"] as TaskStatus[]).map((status) => (
-          <StatusCard key={status} status={status} tasks={timelineTasks.filter((task) => task.status === status)} onEdit={setEditingTaskFromTimeline} />
-        ))}
-      </section>
-
       <section className="timeline-project-register">
         <ProjectRegister title="Fixed Projects" items={fixedProjects} emptyText="No fixed projects" />
         <ProjectRegister title="Continuous Projects" items={continuousProjects} emptyText="No continuous projects" />
       </section>
 
       <TaskEditor task={editingTask} onClose={() => setEditingTask(null)} onSave={handleTaskSave} />
-    </main>
+    </Container>
   );
 
-  function setEditingTaskFromTimeline(task: TimelineTask) {
-    const fullTask = items.flatMap((item) => item.tasks).find((item) => item.id === task.id);
-    if (fullTask) setEditingTask(fullTask);
-  }
-
-  function onTimelineTaskEdit(task: TimelineTask) {
-    setEditingTaskFromTimeline(task);
-  }
 }
 
 function TimelineGrid({
@@ -506,33 +467,6 @@ function SummaryMetric({
     <div className="timeline-text-row">
       <span>{label}</span>
       <strong>{value}</strong>
-    </div>
-  );
-}
-
-function StatusCard({ onEdit, status, tasks }: { onEdit: (task: TimelineTask) => void; status: TaskStatus; tasks: TimelineTask[] }) {
-  return (
-    <div className="ops-panel">
-      <div className="ops-panel-head">
-        <h2>Queue / {statusLabels[status]}</h2>
-        <span>{tasks.length} tasks</span>
-      </div>
-      <div className="timeline-queue-list">
-        {tasks.length === 0 ? <p className="ops-empty compact">No tasks</p> : null}
-        {tasks.slice(0, 3).map((task) => {
-          return (
-            <button
-              key={task.id}
-              type="button"
-              onClick={() => onEdit(task)}
-              className="timeline-queue-row"
-            >
-              <span>{task.title}</span>
-              <small>{task.projectName}</small>
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }

@@ -69,7 +69,9 @@ class Project(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    goal_id: Mapped[str | None] = mapped_column(ForeignKey("goals.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     type: Mapped[ProjectType] = mapped_column(Enum(ProjectType), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
@@ -84,11 +86,17 @@ class Project(Base):
         cascade="all, delete-orphan",
         order_by="PomodoroSessionLog.completed_at.desc()",
     )
-    linked_goals: Mapped[list["Goal"]] = relationship(
-        secondary=goal_projects,
-        back_populates="linked_projects",
-        order_by="Goal.created_at",
-    )
+    parent_goal: Mapped["Goal | None"] = relationship(back_populates="linked_projects")
+
+    @property
+    def linked_goals(self) -> list["Goal"]:
+        return [self.parent_goal] if self.parent_goal is not None else []
+
+    @linked_goals.setter
+    def linked_goals(self, goals: list["Goal"]) -> None:
+        if len(goals) > 1:
+            raise ValueError("A project can have at most one parent goal")
+        self.parent_goal = goals[0] if goals else None
 
 
 class Task(Base):
@@ -117,6 +125,7 @@ class Goal(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     category: Mapped[GoalCategory] = mapped_column(Enum(GoalCategory), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(260), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     target_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     current_value: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     unit: Mapped[str | None] = mapped_column(String(40), nullable=True)
@@ -127,8 +136,7 @@ class Goal(Base):
     user: Mapped[User] = relationship(back_populates="goals")
     completed_logs: Mapped[list["CompletedGoalLog"]] = relationship(back_populates="goal")
     linked_projects: Mapped[list[Project]] = relationship(
-        secondary=goal_projects,
-        back_populates="linked_goals",
+        back_populates="parent_goal",
         order_by="Project.created_at",
     )
 
@@ -149,6 +157,7 @@ class CompletedGoalLog(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     goal_id: Mapped[str | None] = mapped_column(ForeignKey("goals.id"), nullable=True, index=True)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
     task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(260), nullable=False)
     goal_label: Mapped[str] = mapped_column(String(80), default="General", nullable=False)

@@ -1,63 +1,25 @@
-.weekly-ops-grid {
+.mission-schedule-embedded {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.5rem;
-  margin-top: 0.75rem;
+  gap: 1rem;
 }
 
-.weekly-day {
-  min-width: 0;
-  border-left: 1px solid var(--ops-border);
-  padding: 0.25rem 0.55rem 0.4rem;
+.mission-schedule-embedded-head {
+  border-bottom: 1px solid var(--ops-border-strong);
+  padding-bottom: 0.7rem;
 }
 
-.weekly-day:first-child {
-  border-left: 0;
-}
-
-.weekly-day > div:first-child {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.35rem;
-  margin-bottom: 0.45rem;
-  color: var(--ops-muted);
+.mission-schedule-embedded-head h2 {
+  margin: 0.15rem 0 0;
+  color: var(--ops-text);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 0.64rem;
+  font-size: 1rem;
   text-transform: uppercase;
 }
 
-.weekly-day strong {
-  color: var(--ops-text);
-}
-
-.weekly-task {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.4rem;
-  width: 100%;
-  border: 0;
-  border-top: 1px solid var(--ops-border);
-  background: transparent;
+.mission-schedule-embedded-head p:last-child {
+  margin: 0.3rem 0 0;
   color: var(--ops-muted);
-  padding: 0.42rem 0;
-  text-align: left;
-}
-
-.weekly-task:hover,
-.weekly-task:focus-visible {
-  color: var(--ops-text);
-}
-
-.weekly-task b {
-  color: var(--ops-text);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 0.65rem;
-}
-
-.weekly-task.in_progress b,
-.weekly-task.done b {
-  color: var(--ops-signal);
+  font-size: 0.72rem;
 }
 
 .timeline-plan {
@@ -317,7 +279,6 @@
 }
 
 .timeline-text-list,
-.timeline-queue-list,
 .timeline-project-list {
   margin-top: 0.55rem;
 }
@@ -349,39 +310,6 @@
 
 .timeline-text-row strong {
   color: var(--ops-text);
-}
-
-.timeline-queue-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 0.75rem;
-  width: 100%;
-  border: 0;
-  border-top: 1px solid var(--ops-border);
-  background: transparent;
-  padding: 0.55rem 0.1rem;
-  color: var(--ops-text);
-  text-align: left;
-}
-
-.timeline-queue-row:hover {
-  color: var(--ops-signal);
-}
-
-.timeline-queue-row span {
-  overflow: hidden;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.timeline-queue-row small {
-  color: var(--ops-dim);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 0.6rem;
-  text-transform: uppercase;
 }
 
 .timeline-project-register {
@@ -422,27 +350,12 @@
 }
 
 @media (max-width: 1200px) {
-  .weekly-ops-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .weekly-day,
-  .weekly-day:first-child {
-    border-left: 0;
-    border-top: 1px solid var(--ops-border);
-    padding-top: 0.55rem;
-  }
-
   .timeline-project-register {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 720px) {
-  .weekly-ops-grid {
-    grid-template-columns: 1fr;
-  }
-
   .timeline-plan-head {
     align-items: stretch;
     flex-direction: column;

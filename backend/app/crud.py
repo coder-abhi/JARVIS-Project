@@ -37,9 +37,12 @@ logger = logging.getLogger(__name__)
 
 
 def create_project(db: Session, project: schemas.ProjectCreate, user: models.User) -> models.Project:
-    project_data = project.model_dump(exclude={"linked_goal_ids"})
-    linked_goals = _get_user_goals_by_ids(db, project.linked_goal_ids, user)
-    db_project = models.Project(**project_data, user_id=user.id, linked_goals=linked_goals)
+    project_data = project.model_dump(exclude={"goal_id", "linked_goal_ids"})
+    parent_goal = get_goal(db, project.goal_id, user) if project.goal_id else None
+    if project.goal_id and parent_goal is None:
+        raise ValueError("Parent goal was not found")
+    project_data["description"] = _clean_text(project_data.get("description"))
+    db_project = models.Project(**project_data, user_id=user.id, parent_goal=parent_goal)
     db.add(db_project)
     db.commit()
     db.refresh(db_project)
@@ -50,7 +53,7 @@ def list_projects(db: Session, user: models.User) -> list[models.Project]:
     query = (
         select(models.Project)
         .where(models.Project.user_id == user.id)
-        .options(selectinload(models.Project.linked_goals))
+        .options(selectinload(models.Project.parent_goal))
         .order_by(models.Project.created_at.desc())
     )
     return list(db.scalars(query))
@@ -63,7 +66,7 @@ def list_project_summaries(db: Session, user: models.User) -> list[schemas.Proje
         .options(
             selectinload(models.Project.tasks),
             selectinload(models.Project.pomodoro_sessions),
-            selectinload(models.Project.linked_goals),
+            selectinload(models.Project.parent_goal),
         )
         .order_by(models.Project.created_at.desc())
     )
@@ -119,7 +122,38 @@ def _as_aware(value: datetime) -> datetime:
 
 
 def get_project(db: Session, project_id: str, user: models.User) -> models.Project | None:
-    return db.scalar(select(models.Project).where(models.Project.id == project_id, models.Project.user_id == user.id))
+    return db.scalar(
+        select(models.Project)
+        .where(models.Project.id == project_id, models.Project.user_id == user.id)
+        .options(selectinload(models.Project.parent_goal))
+    )
+
+
+def update_project(
+    db: Session,
+    project_id: str,
+    project: schemas.ProjectUpdate,
+    user: models.User,
+) -> models.Project | None:
+    db_project = get_project(db, project_id, user)
+    if db_project is None:
+        return None
+
+    changes = project.model_dump(exclude_unset=True, exclude={"goal_id"})
+    if "description" in changes:
+        changes["description"] = _clean_text(changes["description"])
+    for key, value in changes.items():
+        setattr(db_project, key, value)
+
+    if "goal_id" in project.model_fields_set:
+        parent_goal = get_goal(db, project.goal_id, user) if project.goal_id else None
+        if project.goal_id and parent_goal is None:
+            raise ValueError("Parent goal was not found")
+        db_project.parent_goal = parent_goal
+
+    db.commit()
+    db.refresh(db_project)
+    return db_project
 
 
 def create_task(db: Session, task: schemas.TaskCreate) -> models.Task:
@@ -203,7 +237,7 @@ def match_pomodoro_assignment(db: Session, request: schemas.PomodoroAssignmentRe
     query = (
         select(models.Project)
         .where(models.Project.user_id == user.id)
-        .options(selectinload(models.Project.tasks))
+        .options(selectinload(models.Project.tasks), selectinload(models.Project.parent_goal))
         .order_by(models.Project.created_at.desc())
     )
     if request.project_ids:
@@ -213,7 +247,9 @@ def match_pomodoro_assignment(db: Session, request: schemas.PomodoroAssignmentRe
         {
             "project_id": project.id,
             "project_name": project.name,
+            "project_description": project.description,
             "project_type": project.type.value,
+            "goal": _goal_context(project.parent_goal) if project.parent_goal else None,
             "tasks": [
                 {
                     "task_id": task.id,
@@ -299,24 +335,28 @@ GOAL_CATEGORY_LABELS = {
 DEFAULT_GOALS = {
     models.GoalCategory.monthly: {
         "title": "Complete 20 study hours this month",
+        "description": "Study sessions, coursework, deliberate practice, and learning reviews.",
         "target_value": 20,
         "current_value": 0,
         "unit": "study hours",
     },
     models.GoalCategory.quarterly: {
         "title": "Ship one meaningful project improvement this quarter",
+        "description": "Product improvements, releases, and concrete project milestones.",
         "target_value": None,
         "current_value": 0,
         "unit": None,
     },
     models.GoalCategory.yearly: {
         "title": "Build a durable personal execution system this year",
+        "description": "Planning, focus, review, and productivity-system improvements.",
         "target_value": None,
         "current_value": 0,
         "unit": None,
     },
     models.GoalCategory.five_year: {
         "title": "Grow into a deeply capable, independent builder over five years",
+        "description": "Long-term technical depth, independent creation, and professional growth.",
         "target_value": None,
         "current_value": 0,
         "unit": None,
@@ -364,7 +404,10 @@ def get_goal(db: Session, goal_id: str, user: models.User) -> models.Goal | None
 def create_goal(db: Session, goal: schemas.GoalCreate, user: models.User) -> models.Goal:
     goal_data = goal.model_dump(exclude={"linked_project_ids"})
     linked_projects = _get_user_projects_by_ids(db, goal.linked_project_ids, user)
-    db_goal = models.Goal(**goal_data, user_id=user.id, linked_projects=linked_projects)
+    goal_data["description"] = _clean_text(goal_data.get("description"))
+    db_goal = models.Goal(**goal_data, user_id=user.id)
+    for project in linked_projects:
+        project.parent_goal = db_goal
     db.add(db_goal)
     db.commit()
     db.refresh(db_goal)
@@ -377,11 +420,19 @@ def update_goal(db: Session, goal_id: str, goal: schemas.GoalUpdate, user: model
         return None
 
     changes = goal.model_dump(exclude_unset=True, exclude={"linked_project_ids"})
+    if "description" in changes:
+        changes["description"] = _clean_text(changes["description"])
     for key, value in changes.items():
         setattr(db_goal, key, value)
 
     if "linked_project_ids" in goal.model_fields_set:
-        db_goal.linked_projects = _get_user_projects_by_ids(db, goal.linked_project_ids or [], user)
+        linked_projects = _get_user_projects_by_ids(db, goal.linked_project_ids or [], user)
+        linked_project_ids = {project.id for project in linked_projects}
+        for project in list(db_goal.linked_projects):
+            if project.id not in linked_project_ids:
+                project.parent_goal = None
+        for project in linked_projects:
+            project.parent_goal = db_goal
 
     db.commit()
     db.refresh(db_goal)
@@ -407,7 +458,7 @@ def list_goal_active_tasks(db: Session, user: models.User) -> list[models.Task]:
         select(models.Task)
         .join(models.Project)
         .where(models.Project.user_id == user.id, models.Task.status != models.TaskStatus.done)
-        .options(selectinload(models.Task.project).selectinload(models.Project.linked_goals))
+        .options(selectinload(models.Task.project).selectinload(models.Project.parent_goal))
         .order_by(models.Task.importance_rating.desc(), models.Task.created_at.desc())
     )
     return list(db.scalars(query))
@@ -429,19 +480,21 @@ def log_goal_entry(db: Session, request: schemas.GoalLogRequest, user: models.Us
     marker = raw_text[0]
     body = raw_text[1:].strip() if marker in {"+", "-"} else raw_text
     goals = ensure_default_goals(db, user)
-    classification = classify_goal_log(body, goals, user_id=user.id, usage_db=db)
+    projects = list_projects(db, user)
+    classification = classify_goal_log(body, goals, projects, user_id=user.id, usage_db=db)
     corrected_text = str(classification.get("corrected_text") or body).strip()[:220]
-    goal_id = _clean_text(classification.get("goal_id"))
-    db_goal = get_goal(db, goal_id, user) if goal_id else None
-    related_goal = db_goal.title if db_goal else str(classification.get("related_goal") or "General")[:80]
+    project_id = _clean_text(classification.get("project_id"))
+    db_project = get_project(db, project_id, user) if project_id else None
+    if db_project is None:
+        db_project = _get_or_create_general_work_project(db, user)
+    db_goal = db_project.parent_goal
+    related_goal = db_goal.title if db_goal else "General"
 
     if marker == "+":
         task = create_goal_task_from_log(
             db=db,
-            user=user,
             title=corrected_text,
-            goal=db_goal,
-            related_goal=related_goal,
+            project=db_project,
             estimated_minutes=_bounded_int(classification.get("estimated_minutes"), 5, 480, 60),
             importance=_bounded_int(classification.get("importance"), 1, 5, 3),
         )
@@ -452,7 +505,7 @@ def log_goal_entry(db: Session, request: schemas.GoalLogRequest, user: models.Us
             task=_goal_task_read(task),
         )
 
-    completion = create_goal_completion_log(db, user, corrected_text, db_goal, related_goal)
+    completion = create_goal_completion_log(db, user, corrected_text, db_project)
     return schemas.GoalLogResponse(
         mode="completed_task",
         corrected_text=corrected_text,
@@ -463,25 +516,23 @@ def log_goal_entry(db: Session, request: schemas.GoalLogRequest, user: models.Us
 
 def create_goal_task_from_log(
     db: Session,
-    user: models.User,
     title: str,
-    goal: models.Goal | None,
-    related_goal: str,
+    project: models.Project,
     estimated_minutes: int,
     importance: int,
 ) -> models.Task:
-    project = _get_or_create_goal_inbox_project(db, user, goal)
     priority = models.TaskPriority.high if importance >= 4 else models.TaskPriority.low if importance <= 2 else models.TaskPriority.medium
     db_task = models.Task(
         project_id=project.id,
         title=title,
-        description=f"Related goal: {related_goal}",
+        description=None,
         status=models.TaskStatus.todo,
         priority=priority,
         importance_rating=importance,
         eta_hours=round(estimated_minutes / 60, 2),
         time_spent_hours=0,
     )
+    db_task.project = project
     db.add(db_task)
     db.commit()
     db.refresh(db_task)
@@ -493,13 +544,13 @@ def complete_goal_task(db: Session, task_id: str, user: models.User) -> schemas.
         select(models.Task)
         .join(models.Project)
         .where(models.Task.id == task_id, models.Project.user_id == user.id)
-        .options(selectinload(models.Task.project).selectinload(models.Project.linked_goals))
+        .options(selectinload(models.Task.project).selectinload(models.Project.parent_goal))
     )
     if db_task is None:
         return None
 
     db_task.status = models.TaskStatus.done
-    linked_goals = list(db_task.project.linked_goals)
+    linked_goals = _task_linked_goals(db_task)
     for goal in linked_goals:
         if goal.measurable:
             goal.current_value = min(goal.current_value + _task_progress_delta(db_task, goal), goal.target_value or 0)
@@ -508,6 +559,7 @@ def complete_goal_task(db: Session, task_id: str, user: models.User) -> schemas.
     db_log = models.CompletedGoalLog(
         user_id=user.id,
         goal_id=logged_goal.id if logged_goal else None,
+        project_id=db_task.project_id,
         task_id=db_task.id,
         title=db_task.title,
         goal_label=goal_label[:80],
@@ -533,11 +585,12 @@ def restore_goal_completion(db: Session, completion_id: str, user: models.User) 
             select(models.Task)
             .join(models.Project)
             .where(models.Task.id == db_log.task_id, models.Project.user_id == user.id)
-            .options(selectinload(models.Task.project).selectinload(models.Project.linked_goals))
+            .options(selectinload(models.Task.project).selectinload(models.Project.parent_goal))
         )
 
     if db_task is None:
-        project = _get_or_create_goal_inbox_project(db, user, db_log.goal)
+        project = get_project(db, db_log.project_id, user) if db_log.project_id else None
+        project = project or _get_or_create_general_work_project(db, user)
         db_task = models.Task(
             project_id=project.id,
             title=db_log.title,
@@ -554,7 +607,7 @@ def restore_goal_completion(db: Session, completion_id: str, user: models.User) 
         db_task.status = models.TaskStatus.todo
         db_task.start_date = None
 
-    linked_goals = list(db_task.project.linked_goals)
+    linked_goals = _task_linked_goals(db_task)
     for goal in linked_goals:
         if goal.measurable:
             delta = _task_progress_delta(db_task, goal) if db_log.task_id else _extract_progress_delta(db_log.title, goal)
@@ -570,9 +623,9 @@ def create_goal_completion_log(
     db: Session,
     user: models.User,
     title: str,
-    goal: models.Goal | None,
-    goal_label: str,
+    project: models.Project,
 ) -> models.CompletedGoalLog:
+    goal = project.parent_goal
     if goal and goal.measurable:
         delta = _extract_progress_delta(title, goal)
         if delta > 0:
@@ -580,8 +633,9 @@ def create_goal_completion_log(
     db_log = models.CompletedGoalLog(
         user_id=user.id,
         goal_id=goal.id if goal else None,
+        project_id=project.id,
         title=title,
-        goal_label=goal_label[:80],
+        goal_label=project.name[:80],
     )
     db.add(db_log)
     db.commit()
@@ -630,10 +684,12 @@ def suggest_goal_next_actions(
 def classify_goal_log(
     text: str,
     goals: list[models.Goal],
+    projects: list[models.Project] | None = None,
     user_id: str | None = None,
     usage_db: Session | None = None,
 ) -> dict:
-    fallback = _fallback_goal_log_classification(text, goals)
+    projects = projects or []
+    fallback = _fallback_goal_log_classification(text, projects)
     context = {
         "text": text,
         "goals": [
@@ -641,11 +697,22 @@ def classify_goal_log(
                 "goal_id": goal.id,
                 "category": goal.category.value,
                 "title": goal.title,
+                "description": goal.description,
                 "target_value": goal.target_value,
                 "current_value": goal.current_value,
                 "unit": goal.unit,
             }
             for goal in goals
+        ],
+        "projects": [
+            {
+                "project_id": project.id,
+                "name": project.name,
+                "description": project.description,
+                "type": project.type.value,
+                "parent_goal_id": project.goal_id,
+            }
+            for project in projects
         ],
     }
     data = _call_openai_json(
@@ -658,13 +725,12 @@ def classify_goal_log(
     )
     if not isinstance(data, dict):
         return fallback
-    if _clean_text(data.get("goal_id")) and _clean_text(data.get("goal_id")) not in {goal.id for goal in goals}:
-        data["goal_id"] = None
-        data["related_goal"] = "General"
+    project_id = _clean_text(data.get("project_id"))
+    if project_id not in {project.id for project in projects}:
+        project_id = None
     return {
         "corrected_text": _clean_text(data.get("corrected_text")) or fallback["corrected_text"],
-        "goal_id": _clean_text(data.get("goal_id")),
-        "related_goal": _clean_text(data.get("related_goal")) or fallback["related_goal"],
+        "project_id": project_id,
         "estimated_minutes": _bounded_int(data.get("estimated_minutes"), 5, 480, fallback["estimated_minutes"]),
         "importance": _bounded_int(data.get("importance"), 1, 5, fallback["importance"]),
     }
@@ -793,30 +859,26 @@ def _goal_task_read(task: models.Task) -> schemas.GoalTaskRead:
     )
 
 
-def _get_or_create_goal_inbox_project(
-    db: Session,
-    user: models.User,
-    goal: models.Goal | None = None,
-) -> models.Project:
-    if goal is not None and goal.linked_projects:
-        return goal.linked_projects[0]
-
-    project_name = "Goal Inbox" if goal is None else f"{goal.title} Actions"[:160]
+def _get_or_create_general_work_project(db: Session, user: models.User) -> models.Project:
     project = db.scalar(
         select(models.Project)
-        .where(models.Project.user_id == user.id, models.Project.name == project_name)
-        .options(selectinload(models.Project.linked_goals))
+        .where(models.Project.user_id == user.id, models.Project.name == "General Work")
+        .options(selectinload(models.Project.parent_goal))
+        .order_by(models.Project.created_at.asc())
     )
     if project is not None:
-        if goal is not None and goal not in project.linked_goals:
-            project.linked_goals.append(goal)
+        if project.type != models.ProjectType.continuous or project.parent_goal is not None or not project.description:
+            project.type = models.ProjectType.continuous
+            project.parent_goal = None
+            if not project.description:
+                project.description = "General tasks that do not clearly fit another project."
             db.commit()
         return project
     project = models.Project(
         user_id=user.id,
-        name=project_name,
+        name="General Work",
+        description="General tasks that do not clearly fit another project.",
         type=models.ProjectType.continuous,
-        linked_goals=[goal] if goal is not None else [],
     )
     db.add(project)
     db.commit()
@@ -856,35 +918,52 @@ def _get_user_projects_by_ids(db: Session, project_ids: list[str], user: models.
     return projects
 
 
-def _fallback_goal_log_classification(text: str, goals: list[models.Goal]) -> dict:
+def _fallback_goal_log_classification(text: str, projects: list[models.Project]) -> dict:
     cleaned = " ".join(text.strip().split())
-    matched_goal = _match_goal_by_words(cleaned, goals)
+    matched_project = _match_project_by_words(cleaned, projects)
     estimated_minutes = _extract_minutes(cleaned) or 60
     importance = 3
+    matched_goal = matched_project.parent_goal if matched_project else None
     if matched_goal and matched_goal.category in {models.GoalCategory.monthly, models.GoalCategory.quarterly}:
         importance = 4
     if matched_goal and matched_goal.category == models.GoalCategory.five_year:
         importance = 5
     return {
         "corrected_text": cleaned[:220],
-        "goal_id": matched_goal.id if matched_goal else None,
-        "related_goal": matched_goal.title if matched_goal else "General",
+        "project_id": matched_project.id if matched_project else None,
         "estimated_minutes": estimated_minutes,
         "importance": importance,
     }
 
 
-def _match_goal_by_words(text: str, goals: list[models.Goal]) -> models.Goal | None:
-    words = {word.strip(".,:;!?()[]").lower() for word in text.split() if len(word.strip(".,:;!?()[]")) > 3}
-    best_goal = None
+def _match_project_by_words(text: str, projects: list[models.Project]) -> models.Project | None:
+    words = _meaningful_words(text)
+    best_project = None
     best_score = 0
-    for goal in goals:
-        goal_words = {word.strip(".,:;!?()[]").lower() for word in goal.title.split() if len(word.strip(".,:;!?()[]")) > 3}
-        score = len(words & goal_words)
+    tied = False
+    for project in projects:
+        project_words = _meaningful_words(f"{project.name} {project.description or ''}")
+        goal_words = _meaningful_words(
+            f"{project.parent_goal.title} {project.parent_goal.description or ''}"
+            if project.parent_goal
+            else ""
+        )
+        score = len(words & project_words) * 2 + len(words & goal_words)
         if score > best_score:
             best_score = score
-            best_goal = goal
-    return best_goal if best_score > 0 else None
+            best_project = project
+            tied = False
+        elif score > 0 and score == best_score:
+            tied = True
+    return best_project if best_score > 0 and not tied else None
+
+
+def _meaningful_words(text: str) -> set[str]:
+    return {
+        word.strip(".,:;!?()[]").lower()
+        for word in text.split()
+        if len(word.strip(".,:;!?()[]")) > 3
+    }
 
 
 def _extract_minutes(text: str) -> int | None:
@@ -944,9 +1023,9 @@ def _fallback_goal_next_actions(goals: list[models.Goal], active_tasks: list[mod
 
 
 def _task_linked_goals(task: models.Task) -> list[models.Goal]:
-    if task.project is None:
+    if task.project is None or task.project.parent_goal is None:
         return []
-    return list(task.project.linked_goals)
+    return [task.project.parent_goal]
 
 
 def _goal_context(goal: models.Goal) -> dict:
@@ -954,6 +1033,7 @@ def _goal_context(goal: models.Goal) -> dict:
         "goal_id": goal.id,
         "category": goal.category.value,
         "title": goal.title,
+        "description": goal.description,
         "target_value": goal.target_value,
         "current_value": goal.current_value,
         "unit": goal.unit,

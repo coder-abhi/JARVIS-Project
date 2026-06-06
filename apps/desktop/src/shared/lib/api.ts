@@ -21,7 +21,9 @@ export type LinkedProject = {
 export type Project = {
   id: string;
   name: string;
+  description?: string | null;
   type: ProjectType;
+  goal_id?: string | null;
   created_at: string;
   linked_goals: LinkedGoal[];
 };
@@ -53,9 +55,11 @@ export type Task = {
   created_at: string;
 };
 
-export type ProjectInput = Pick<Project, "name" | "type"> & {
+export type ProjectInput = Pick<Project, "name" | "type" | "description"> & {
+  goal_id?: string | null;
   linked_goal_ids?: string[];
 };
+export type ProjectUpdate = Partial<Pick<Project, "name" | "description" | "type" | "goal_id">>;
 export type TaskInput = Omit<Task, "id" | "created_at" | "importance_rating"> & {
   importance_rating?: number;
 };
@@ -65,6 +69,7 @@ export type Goal = {
   id: string;
   category: GoalCategory;
   title: string;
+  description?: string | null;
   target_value?: number | null;
   current_value: number;
   unit?: string | null;
@@ -77,7 +82,7 @@ export type Goal = {
 export type GoalInput = Omit<Goal, "id" | "created_at" | "measurable" | "progress_percentage" | "linked_projects"> & {
   linked_project_ids?: string[];
 };
-export type GoalUpdate = Partial<Pick<Goal, "title" | "target_value" | "current_value" | "unit">> & {
+export type GoalUpdate = Partial<Pick<Goal, "title" | "description" | "target_value" | "current_value" | "unit">> & {
   linked_project_ids?: string[];
 };
 
@@ -98,6 +103,7 @@ export type GoalTask = {
 export type CompletedGoalLog = {
   id: string;
   goal_id?: string | null;
+  project_id?: string | null;
   task_id?: string | null;
   title: string;
   goal_label: string;
@@ -347,6 +353,13 @@ export function getProjectSummaries() {
 export function createProject(project: ProjectInput) {
   return request<Project>("/projects", {
     method: "POST",
+    body: JSON.stringify(project),
+  });
+}
+
+export function updateProject(projectId: string, project: ProjectUpdate) {
+  return request<Project>(`/projects/${projectId}`, {
+    method: "PUT",
     body: JSON.stringify(project),
   });
 }

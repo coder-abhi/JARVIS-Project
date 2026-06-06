@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
@@ -68,6 +69,103 @@ class ProjectGoalStructureTests(unittest.TestCase):
         self.assertIsNotNone(completion)
         self.session.refresh(goal)
         self.assertEqual(goal.current_value, 1)
+
+    def test_project_has_one_optional_goal_parent_and_editable_metadata(self) -> None:
+        first_goal = models.Goal(
+            id="goal-1",
+            user_id=self.user.id,
+            category=models.GoalCategory.monthly,
+            title="Publish consistently",
+            description="Writing, editing, and publishing work.",
+        )
+        second_goal = models.Goal(
+            id="goal-2",
+            user_id=self.user.id,
+            category=models.GoalCategory.yearly,
+            title="Build an audience",
+        )
+        self.session.add_all([first_goal, second_goal])
+        self.session.commit()
+
+        with self.assertRaises(ValueError):
+            schemas.ProjectCreate(
+                name="Content",
+                type=models.ProjectType.continuous,
+                linked_goal_ids=[first_goal.id, second_goal.id],
+            )
+
+        project = crud.create_project(
+            self.session,
+            schemas.ProjectCreate(
+                name="Content",
+                description="LinkedIn posts and long-form writing.",
+                type=models.ProjectType.continuous,
+                goal_id=first_goal.id,
+            ),
+            self.user,
+        )
+        updated = crud.update_project(
+            self.session,
+            project.id,
+            schemas.ProjectUpdate(name="Content Engine", description="Posts, essays, and publishing tasks."),
+            self.user,
+        )
+
+        self.assertIsNotNone(updated)
+        self.assertEqual(updated.name, "Content Engine")
+        self.assertEqual(updated.description, "Posts, essays, and publishing tasks.")
+        self.assertEqual(updated.parent_goal.id, first_goal.id)
+
+    def test_goal_log_uses_existing_project_or_general_work_only(self) -> None:
+        project = crud.create_project(
+            self.session,
+            schemas.ProjectCreate(
+                name="Content Engine",
+                description="LinkedIn posts, essays, and publishing tasks.",
+                type=models.ProjectType.continuous,
+            ),
+            self.user,
+        )
+
+        with patch.object(
+            crud,
+            "_call_openai_json",
+            return_value={
+                "corrected_text": "Draft a LinkedIn post",
+                "project_id": project.id,
+                "estimated_minutes": 45,
+                "importance": 4,
+            },
+        ):
+            response = crud.log_goal_entry(
+                self.session,
+                schemas.GoalLogRequest(text="+ draft linkedin post"),
+                self.user,
+            )
+
+        self.assertEqual(response.task.project_id, project.id)
+        self.assertEqual(len(crud.list_projects(self.session, self.user)), 1)
+
+        with patch.object(
+            crud,
+            "_call_openai_json",
+            return_value={
+                "corrected_text": "Handle an unmatched errand",
+                "project_id": None,
+                "estimated_minutes": 20,
+                "importance": 2,
+            },
+        ):
+            fallback_response = crud.log_goal_entry(
+                self.session,
+                schemas.GoalLogRequest(text="+ handle unmatched errand"),
+                self.user,
+            )
+
+        fallback_project = crud.get_project(self.session, fallback_response.task.project_id, self.user)
+        self.assertEqual(fallback_project.name, "General Work")
+        self.assertEqual(fallback_project.type, models.ProjectType.continuous)
+        self.assertFalse(any(item.name.endswith(" Actions") for item in crud.list_projects(self.session, self.user)))
 
 
 if __name__ == "__main__":

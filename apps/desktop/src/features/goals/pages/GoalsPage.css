@@ -1,26 +1,9 @@
-.mission-control-section-head,
-.mission-control-section-actions,
 .mission-modal-head,
 .mission-modal-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-}
-
-.mission-control-section-actions {
-  justify-content: end;
-}
-
-.mission-control-section-actions > span {
-  color: var(--ops-dim);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 0.65rem;
-  text-transform: uppercase;
-}
-
-.mission-control-row {
-  grid-template-columns: minmax(0, 1.7fr) minmax(8rem, 1fr) 5rem 6rem;
 }
 
 .mission-modal-backdrop {
@@ -78,6 +61,28 @@
   text-transform: uppercase;
 }
 
+.mission-modal-field input,
+.mission-modal-field textarea,
+.mission-modal-field select {
+  border: 1px solid var(--ops-border);
+  background: #050505;
+  color: var(--ops-text);
+  padding: 0.65rem;
+  font: inherit;
+  text-transform: none;
+}
+
+.mission-modal-field textarea {
+  resize: vertical;
+}
+
+.mission-control-schedule {
+  min-width: 0;
+  border: 1px solid var(--ops-border-strong);
+  background: #000;
+  padding: 1rem;
+}
+
 .mission-type-grid {
   display: grid;
   gap: 0.5rem;
@@ -101,16 +106,4 @@
   margin-top: 0.25rem;
   color: var(--ops-muted);
   font-size: 0.72rem;
-}
-
-@media (max-width: 860px) {
-  .mission-control-section-head,
-  .mission-control-section-actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .mission-control-row {
-    grid-template-columns: 1fr;
-  }
 }
