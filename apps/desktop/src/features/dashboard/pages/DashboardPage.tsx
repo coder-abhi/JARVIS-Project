@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   getAiCosts,
   getAiStatus,
   getProjectSummaries,
+  logGoalEntry,
   type AiCostSummary,
   type AiStatus,
   type ProjectSummary,
@@ -28,6 +29,9 @@ export default function DashboardPage() {
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
   const [isAiReachable, setIsAiReachable] = useState(true);
   const [now, setNow] = useState(() => new Date());
+  const [logText, setLogText] = useState("");
+  const [isLogging, setIsLogging] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
 
   async function loadDashboard() {
     setError(null);
@@ -124,6 +128,30 @@ export default function DashboardPage() {
   const dateLabel = now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
   const clockLabel = `${dateLabel} : ${timeLabel}`;
 
+  async function handleLogSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = logText.trim();
+    if (!trimmed || isLogging) return;
+    if (!trimmed.startsWith("+") && !trimmed.startsWith("-")) {
+      setError("Start the log with + for a new task or - for a completed task.");
+      return;
+    }
+
+    setIsLogging(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await logGoalEntry(trimmed);
+      setLogText("");
+      setMessage(response.mode === "created_task" ? `Added task: ${response.corrected_text}` : `Logged completion: ${response.corrected_text}`);
+      await loadDashboard();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not log entry");
+    } finally {
+      setIsLogging(false);
+    }
+  }
+
   return (
     <main className="ops-screen">
       <section className="ops-header">
@@ -149,6 +177,7 @@ export default function DashboardPage() {
       </section>
 
       {error ? <p className="ops-alert danger">{error}</p> : null}
+      {message ? <p className="ops-alert signal">{message}</p> : null}
 
       <section className="ops-grid overview-grid">
         <div className="ops-panel span-4">
@@ -158,21 +187,12 @@ export default function DashboardPage() {
             <TextMetric label="Overdue Tasks" value={stats.overdueTasks} danger={stats.overdueTasks > 0} />
             <TextMetric label="Today's Focus Time" value={`${focusMetrics.minutesToday}m`} signal />
             <TextMetric label="Current Momentum" value={`${focusMetrics.momentum}%`} signal />
+            <TextMetric label="Fixed Remaining" value={`${stats.fixedRemainingMinutes}m`} />
           </div>
         </div>
 
         <div className="ops-panel span-4">
           <PanelHeader label="System Metrics" detail="Current project inventory" />
-          <div className="dashboard-text-list">
-            <TextMetric label="Total Missions" value={stats.totalProjects} />
-            <TextMetric label="Task Queue" value={stats.totalTasks} />
-            <TextMetric label="Todo" value={stats.todoTasks} />
-            <TextMetric label="Active" value={stats.activeTasks} signal />
-            <TextMetric label="Completed" value={stats.completedTasks} signal />
-            <TextMetric label="Overdue" value={stats.overdueTasks} danger={stats.overdueTasks > 0} />
-            <TextMetric label="Time Invested" value={`${stats.spentMinutes}m`} />
-            <TextMetric label="Fixed Remaining" value={`${stats.fixedRemainingMinutes}m`} />
-          </div>
         </div>
 
         <div className="ops-panel span-4">
@@ -185,16 +205,38 @@ export default function DashboardPage() {
 
         <div className="ops-panel span-12">
           <PanelHeader label="Live Feed" detail="Recent activity log" />
-          <div className="ops-feed">
+          <div className="ops-feed dashboard-live-feed">
             {liveFeed.map((item) => (
               <div key={`${item.time}-${item.text}`} className="feed-line">
                 <span>{item.time}</span>
-                <p>{item.text}</p>
+                <p>--&gt; {item.text}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
+
+      <div className="mission-log-spacer" aria-hidden="true" />
+
+      <form onSubmit={handleLogSubmit} className="mission-log-dock">
+        <div className="mission-log-control">
+          <input
+            value={logText}
+            onChange={(event) => setLogText(event.target.value)}
+            placeholder="+ Add objective or - log completed objective"
+            className="mission-log-input"
+          />
+          <button
+            type="submit"
+            disabled={isLogging || !logText.trim()}
+            className="mission-log-submit"
+            aria-label="Send log"
+            title="Send log"
+          >
+            Go
+          </button>
+        </div>
+      </form>
     </main>
   );
 }

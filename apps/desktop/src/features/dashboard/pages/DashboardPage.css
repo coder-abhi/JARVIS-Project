@@ -151,10 +151,94 @@
   text-align: right;
 }
 
-.overview-grid .feed-line {
+.dashboard-live-feed {
+  gap: 0;
+}
+
+.overview-grid .dashboard-live-feed .feed-line {
+  grid-template-columns: 5.25rem minmax(0, 1fr);
   border: 0;
+  border-bottom: 1px solid var(--ops-border);
   background: transparent;
-  padding: 0.35rem 0.1rem;
+  padding: 0.45rem 0.1rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.overview-grid .dashboard-live-feed .feed-line:last-child {
+  border-bottom: 0;
+}
+
+.dashboard-live-feed .feed-line span {
+  color: var(--ops-dim);
+}
+
+.dashboard-live-feed .feed-line p {
+  color: var(--ops-text);
+  font-family: inherit;
+}
+
+.mission-log-spacer {
+  height: 4.75rem;
+}
+
+.mission-log-dock {
+  position: fixed;
+  bottom: 0.65rem;
+  left: calc(13.75rem + 1rem);
+  right: 1rem;
+  z-index: 40;
+}
+
+.mission-log-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--ops-border-strong);
+  background: transparent;
+  padding: 0.375rem 0.5rem;
+}
+
+.mission-log-input {
+  min-width: 0;
+  min-height: 2.25rem;
+  flex: 1;
+  border: 1px solid var(--ops-border);
+  border-radius: 0;
+  background: #000;
+  padding: 0 0.75rem;
+  color: var(--ops-text);
+  font-size: 0.75rem;
+  outline: none;
+}
+
+.mission-log-submit {
+  display: grid;
+  width: 3.5rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(34, 197, 94, 0.7);
+  border-radius: 0;
+  background: #000;
+  color: var(--ops-signal);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  transition: background 0.15s;
+}
+
+.mission-log-submit:hover {
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.mission-log-submit:disabled {
+  cursor: not-allowed;
+  border-color: var(--ops-border);
+  background: #050505;
+  color: var(--ops-dim);
 }
 
 .dashboard-text-metric.signal strong {
@@ -186,5 +270,10 @@
 
   .llm-status-tile {
     min-width: 0;
+  }
+
+  .mission-log-dock {
+    left: 0.65rem;
+    right: 0.65rem;
   }
 }

@@ -108,45 +108,6 @@ export default function AiCostPage() {
         </p>
       ) : null}
 
-      <section className="ops-panel ai-feature-controls">
-        <PanelHeader
-          label="OpenAI Feature Controls"
-          detail={`${enabledFeatureCount} of ${features.length || 7} enabled`}
-        />
-        <p className="ai-feature-controls-copy">
-          Disabled features never call OpenAI and use their local fallback behavior until you turn them on again.
-        </p>
-        {features.length ? (
-          <div className="ai-feature-control-list">
-            {features.map((feature) => {
-              const isSaving = savingFeature === feature.feature;
-              return (
-                <div className={feature.enabled ? "ai-feature-control enabled" : "ai-feature-control"} key={feature.feature}>
-                  <div>
-                    <strong>{feature.label}</strong>
-                    <p>{feature.description}</p>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={feature.enabled}
-                    aria-label={`${feature.enabled ? "Disable" : "Enable"} ${feature.label}`}
-                    className={feature.enabled ? "ai-feature-toggle enabled" : "ai-feature-toggle"}
-                    disabled={Boolean(savingFeature)}
-                    onClick={() => void toggleFeature(feature)}
-                  >
-                    <span aria-hidden="true" />
-                    <strong>{isSaving ? "Saving" : feature.enabled ? "On" : "Off"}</strong>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="ops-empty">{isLoading ? "Loading OpenAI feature controls..." : "Feature controls are unavailable."}</p>
-        )}
-      </section>
-
       <section className="ai-cost-metrics">
         <CostMetric label={`${rangeLabel} spend`} value={formatCents(summary?.total_cost_cents ?? 0)} signal />
         <CostMetric label="Today" value={formatCents(summary?.today_cost_cents ?? 0)} />
@@ -280,6 +241,45 @@ export default function AiCostPage() {
           </div>
         </section>
       ) : null}
+
+      <section className="ops-panel ai-feature-controls">
+        <PanelHeader
+          label="OpenAI Feature Controls"
+          detail={`${enabledFeatureCount} of ${features.length || 7} enabled`}
+        />
+        <p className="ai-feature-controls-copy">
+          Disabled features never call OpenAI and use their local fallback behavior until you turn them on again.
+        </p>
+        {features.length ? (
+          <div className="ai-feature-control-list">
+            {features.map((feature) => {
+              const isSaving = savingFeature === feature.feature;
+              return (
+                <div className={feature.enabled ? "ai-feature-control enabled" : "ai-feature-control"} key={feature.feature}>
+                  <div>
+                    <strong>{feature.label}</strong>
+                    <p>{feature.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={feature.enabled}
+                    aria-label={`${feature.enabled ? "Disable" : "Enable"} ${feature.label}`}
+                    className={feature.enabled ? "ai-feature-toggle enabled" : "ai-feature-toggle"}
+                    disabled={Boolean(savingFeature)}
+                    onClick={() => void toggleFeature(feature)}
+                  >
+                    <span aria-hidden="true" />
+                    <strong>{isSaving ? "Saving" : feature.enabled ? "On" : "Off"}</strong>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="ops-empty">{isLoading ? "Loading OpenAI feature controls..." : "Feature controls are unavailable."}</p>
+        )}
+      </section>
     </main>
   );
 }

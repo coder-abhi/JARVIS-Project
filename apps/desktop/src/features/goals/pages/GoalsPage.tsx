@@ -10,7 +10,6 @@ import {
   getGoalNextActions,
   getGoalsOverview,
   getProjectSummaries,
-  logGoalEntry,
   refreshPersonalityInsight,
   restoreCompletedGoal,
   type Goal,
@@ -45,9 +44,7 @@ export default function GoalsPage() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [nextActions, setNextActions] = useState<GoalNextAction[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("importance");
-  const [logText, setLogText] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [isLogging, setIsLogging] = useState(false);
   const [isRefreshingNextActions, setIsRefreshingNextActions] = useState(false);
   const [isRefreshingPersonality, setIsRefreshingPersonality] = useState(false);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
@@ -155,31 +152,6 @@ export default function GoalsPage() {
       setError(err instanceof Error ? err.message : "Could not restore completed task");
     } finally {
       setRestoringCompletionId(null);
-    }
-  }
-
-  async function handleLogSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmed = logText.trim();
-    if (!trimmed || isLogging) return;
-    if (!trimmed.startsWith("+") && !trimmed.startsWith("-")) {
-      setError("Start the log with + for a new task or - for a completed task.");
-      return;
-    }
-
-    setIsLogging(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const response = await logGoalEntry(trimmed);
-      setLogText("");
-      setMessage(response.mode === "created_task" ? `Added task: ${response.corrected_text}` : `Logged completion: ${response.corrected_text}`);
-      await loadGoals();
-      await loadNextActions();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not log entry");
-    } finally {
-      setIsLogging(false);
     }
   }
 
@@ -407,8 +379,6 @@ export default function GoalsPage() {
         </section>
       </div>
 
-      <div className="mission-log-spacer" aria-hidden="true" />
-
       {isCreateProjectOpen ? (
         <div className="mission-modal-backdrop">
           <form onSubmit={handleCreateProject} className="mission-control-modal">
@@ -475,25 +445,6 @@ export default function GoalsPage() {
         </div>
       ) : null}
 
-      <form onSubmit={handleLogSubmit} className="mission-log-dock">
-        <div className="mission-log-control">
-          <input
-            value={logText}
-            onChange={(event) => setLogText(event.target.value)}
-            placeholder="+ Add objective or - log completed objective"
-            className="mission-log-input"
-          />
-          <button
-            type="submit"
-            disabled={isLogging || !logText.trim()}
-            className="mission-log-submit"
-            aria-label="Send log"
-            title="Send log"
-          >
-            Go
-          </button>
-        </div>
-      </form>
     </main>
   );
 }

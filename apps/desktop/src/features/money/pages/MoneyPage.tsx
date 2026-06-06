@@ -18,6 +18,7 @@ type Transaction = {
   dateTime: string;
   sourceKind: SourceKind;
   sourceId: string;
+  tags: string[];
 };
 
 type BankAccount = {
@@ -119,6 +120,7 @@ export default function MoneyPage() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [modal, setModal] = useState<{ kind: EntryKind; id?: string } | null>(null);
   const [draft, setDraft] = useState<Draft>({});
+  const [tagFilter, setTagFilter] = useState("");
 
   useEffect(() => {
     const stored = window.localStorage.getItem(getScopedStorageKey(storageKey));
@@ -128,7 +130,10 @@ export default function MoneyPage() {
         setData({
           ...emptyData,
           ...parsed,
-          transactions: parsed.transactions ?? [],
+          transactions: (parsed.transactions ?? []).map((transaction) => ({
+            ...transaction,
+            tags: normalizeTags(transaction.tags ?? []),
+          })),
           accounts: parsed.accounts ?? [],
           cards: parsed.cards ?? [],
           loans: parsed.loans ?? [],
@@ -152,6 +157,18 @@ export default function MoneyPage() {
   const monthlyTrend = useMemo(() => buildMonthlyTrend(data.transactions), [data.transactions]);
   const categorySpend = useMemo(() => buildCategorySpend(data.transactions), [data.transactions]);
   const upcoming = useMemo(() => buildUpcoming(data), [data]);
+  const existingTags = useMemo(
+    () => [...new Set(data.transactions.flatMap((transaction) => transaction.tags))].sort((a, b) => a.localeCompare(b)),
+    [data.transactions],
+  );
+  const filteredTransactions = useMemo(
+    () =>
+      [...data.transactions]
+        .filter((transaction) => !tagFilter || transaction.tags.includes(tagFilter))
+        .sort((a, b) => b.dateTime.localeCompare(a.dateTime))
+        .slice(0, 30),
+    [data.transactions, tagFilter],
+  );
   const formatter = useMemo(
     () => new Intl.NumberFormat(undefined, { style: "currency", currency: data.currency, maximumFractionDigits: 0 }),
     [data.currency],
@@ -325,15 +342,31 @@ export default function MoneyPage() {
         </section>
 
         <section className="ops-panel span-12">
-          <PanelHeader label="Transaction Ledger" detail={`${data.transactions.length} entries`} action={<AddButton label="+ Transaction" onClick={() => openCreate("transaction")} />} />
+          <PanelHeader
+            label="Transaction Ledger"
+            detail={`${filteredTransactions.length} shown / ${data.transactions.length} entries`}
+            action={(
+              <div className="money-ledger-actions">
+                <label>
+                  Tag
+                  <select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}>
+                    <option value="">All tags</option>
+                    {existingTags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
+                  </select>
+                </label>
+                <AddButton label="+ Transaction" onClick={() => openCreate("transaction")} />
+              </div>
+            )}
+          />
           <div className="money-table-wrap">
             <div className="money-table transactions-table">
-              <div className="money-table-row money-table-head"><span>Date / Time</span><span>Reason</span><span>Category</span><span>Source</span><span>Amount</span><span>Actions</span></div>
-              {[...data.transactions].sort((a, b) => b.dateTime.localeCompare(a.dateTime)).slice(0, 30).map((transaction) => (
+              <div className="money-table-row money-table-head"><span>Date / Time</span><span>Reason</span><span>Category</span><span>Tags</span><span>Source</span><span>Amount</span><span>Actions</span></div>
+              {filteredTransactions.map((transaction) => (
                 <div className="money-table-row" key={transaction.id}>
                   <span>{formatDateTime(transaction.dateTime)}</span>
                   <strong>{transaction.description}</strong>
                   <span>{transaction.category}</span>
+                  <span className="money-transaction-tags">{transaction.tags.join(" ") || "-"}</span>
                   <span>{sourceLabel(transaction, data)}</span>
                   <strong className={transaction.type === "income" ? "money-positive" : "money-negative"}>{transaction.type === "income" ? "+" : "-"}{money(transaction.amount)}</strong>
                   <RowActions onEdit={() => openEdit("transaction", transaction)} onDelete={() => deleteEntry("transaction", transaction.id)} />
@@ -341,6 +374,7 @@ export default function MoneyPage() {
               ))}
             </div>
             {!data.transactions.length ? <EmptyState text="Your ledger is empty. Add income or an expense with its exact date and time." /> : null}
+            {data.transactions.length > 0 && !filteredTransactions.length ? <EmptyState text="No transactions use the selected tag." /> : null}
           </div>
         </section>
 
@@ -461,6 +495,7 @@ function EntryModal({
               <Field label="Why / Description" wide><input required value={draft.description} onChange={(e) => patch("description", e.target.value)} placeholder="What was this money for?" /></Field>
               <Field label="Category"><select value={draft.category} onChange={(e) => patch("category", e.target.value)}>{categories.map((category) => <option key={category}>{category}</option>)}</select></Field>
               <Field label="Date & Time"><input required type="datetime-local" value={draft.dateTime} onChange={(e) => patch("dateTime", e.target.value)} /></Field>
+              <Field label="Tags (optional)" wide><input value={draft.tags} onChange={(e) => patch("tags", e.target.value)} placeholder="#recurring #work or recurring, work" /></Field>
               <Field label="Paid Via"><select value={draft.sourceKind} onChange={(e) => patch("sourceKind", e.target.value)}>
                 <option value="cash">Cash / Untracked</option>
                 <option value="account">Bank Account</option>
@@ -692,7 +727,7 @@ function initialDraft(kind: EntryKind): Draft {
   const today = toDateValue(new Date());
   const now = toDateTimeValue(new Date());
   const drafts: Record<EntryKind, Draft> = {
-    transaction: { type: "expense", amount: "", description: "", category: "Food", dateTime: now, sourceKind: "cash", sourceId: "" },
+    transaction: { type: "expense", amount: "", description: "", category: "Food", dateTime: now, sourceKind: "cash", sourceId: "", tags: "" },
     account: { bankName: "", name: "", accountType: "Savings", balance: "" },
     card: { issuer: "", name: "", lastFour: "", creditLimit: "", currentBalance: "0", billDay: "1", dueDay: "15" },
     loan: { direction: "taken", person: "", principal: "", outstanding: "", interestRate: "0", expectedReturnDate: today, note: "" },
@@ -708,6 +743,7 @@ function entryToDraft(kind: EntryKind, entry: Entry): Draft {
     const item = entry as Transaction;
     return {
       ...stringifyValues(item),
+      tags: item.tags.join(" "),
       dateTime: item.dateTime.endsWith("Z") ? toDateTimeValue(new Date(item.dateTime)) : item.dateTime.slice(0, 16),
     };
   }
@@ -720,7 +756,17 @@ function draftToEntry(kind: EntryKind, draft: Draft, id: string): Entry | null {
     if (!draft.description?.trim() || number("amount") <= 0) return null;
     const type = draft.type as TransactionType;
     const sourceKind = type === "income" && draft.sourceKind === "card" ? "cash" : draft.sourceKind as SourceKind;
-    return { id, type, amount: number("amount"), description: draft.description.trim(), category: draft.category, dateTime: draft.dateTime, sourceKind, sourceId: sourceKind === "cash" ? "" : draft.sourceId };
+    return {
+      id,
+      type,
+      amount: number("amount"),
+      description: draft.description.trim(),
+      category: draft.category,
+      dateTime: draft.dateTime,
+      sourceKind,
+      sourceId: sourceKind === "cash" ? "" : draft.sourceId,
+      tags: normalizeTags(draft.tags),
+    };
   }
   if (kind === "account") return { id, bankName: draft.bankName.trim(), name: draft.name.trim(), accountType: draft.accountType, balance: number("balance") };
   if (kind === "card") return { id, issuer: draft.issuer.trim(), name: draft.name.trim(), lastFour: draft.lastFour, creditLimit: number("creditLimit"), currentBalance: number("currentBalance"), billDay: clampDay(number("billDay")), dueDay: clampDay(number("dueDay")) };
@@ -763,6 +809,16 @@ function sourceLabel(transaction: Transaction, data: MoneyData) {
 
 function stringifyValues(entry: Entry): Draft {
   return Object.fromEntries(Object.entries(entry).filter(([key]) => key !== "id").map(([key, value]) => [key, String(value ?? "")]));
+}
+
+function normalizeTags(value: string | string[]) {
+  const parts = Array.isArray(value) ? value : value.split(/[\s,]+/);
+  return [...new Set(
+    parts
+      .map((tag) => tag.trim().replace(/^#+/, "").toLowerCase())
+      .filter(Boolean)
+      .map((tag) => `#${tag}`),
+  )];
 }
 
 function createId() {
