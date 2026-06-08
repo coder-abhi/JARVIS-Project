@@ -9,6 +9,92 @@
   grid-row: span 2;
 }
 
+.marathon-panel {
+  margin-top: 0;
+}
+
+.marathon-grid {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.7fr) minmax(20rem, 1.3fr);
+  gap: 0.75rem;
+}
+
+.marathon-latest,
+.marathon-ranking {
+  border: 1px solid var(--ops-border);
+  background: rgba(10, 10, 10, 0.9);
+  padding: 0.85rem;
+}
+
+.marathon-latest {
+  display: grid;
+  align-content: center;
+  min-height: 9rem;
+}
+
+.marathon-latest > span,
+.marathon-ranking-head,
+.marathon-ranking-row,
+.marathon-empty {
+  color: var(--ops-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.marathon-latest strong {
+  margin-top: 0.35rem;
+  color: var(--ops-signal);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  line-height: 1;
+}
+
+.marathon-latest p {
+  margin-top: 0.55rem;
+  color: var(--ops-dim);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.marathon-ranking-head,
+.marathon-ranking-row {
+  display: grid;
+  grid-template-columns: 3rem 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.marathon-ranking-head {
+  grid-template-columns: 1fr auto;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--ops-border);
+}
+
+.marathon-ranking-row {
+  min-height: 2.1rem;
+  border-bottom: 1px solid var(--ops-border);
+}
+
+.marathon-ranking-row:last-child {
+  border-bottom: 0;
+}
+
+.marathon-ranking-row strong {
+  color: var(--ops-text);
+  font-size: 0.78rem;
+}
+
+.marathon-rank {
+  color: var(--ops-signal);
+}
+
+.marathon-empty {
+  padding: 1.5rem 0;
+  text-align: center;
+}
+
 .pomodoro-live-session,
 .pomodoro-recent-panel {
   border: 1px solid var(--ops-border);
@@ -167,6 +253,10 @@
 
   .focus-timer-panel {
     grid-row: auto;
+  }
+
+  .marathon-grid {
+    grid-template-columns: 1fr;
   }
 
   .pomodoro-live-session-grid,

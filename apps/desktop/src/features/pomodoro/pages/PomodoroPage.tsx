@@ -27,7 +27,13 @@ import {
   type PendingPomodoroCompletion,
   type PersistedPomodoroSession,
 } from "@/lib/pomodoroSession";
-import { getFocusMinutesToday, getFocusMomentum, pomodoroLogsStorageKey } from "@/lib/focusMetrics";
+import {
+  getFocusMarathonMetrics,
+  getFocusMinutesToday,
+  getFocusMomentum,
+  pomodoroLogsStorageKey,
+  type FocusMarathon,
+} from "@/lib/focusMetrics";
 import { LineTrendChart } from "@/components/LineTrendChart";
 import { addCalendarDays, dateKey, getSessionWorkDayDate, getWorkDayDate, isCurrentWorkDay, startOfCalendarDay, workDaysBetween } from "@/lib/workDay";
 import "./PomodoroPage.css";
@@ -360,6 +366,7 @@ export default function PomodoroPage() {
   const continuousProjects = projects.filter((project) => project.type === "continuous");
   const visibleRecentLogs = useMemo(() => getVisibleRecentLogs(logs, recentEntriesFilter), [logs, recentEntriesFilter]);
   const focusTrend = useMemo(() => buildFocusTrend(logs, focusTrendRange), [logs, focusTrendRange]);
+  const marathonMetrics = useMemo(() => getFocusMarathonMetrics(logs), [logs]);
   const focusLogs = logs.filter((log) => log.mode === "focus");
   const sevenDayMinutes = getFocusMinutesInLastDays(focusLogs, 7);
   const thirtyDayMinutes = getFocusMinutesInLastDays(focusLogs, 30);
@@ -834,6 +841,8 @@ export default function PomodoroPage() {
       </section>
 
       <section className="grid gap-5">
+        <MarathonMetrics metrics={marathonMetrics} />
+
         {sessionState !== "idle" ? (
           <div className="pomodoro-live-session">
             <div className="pomodoro-live-session-grid">
@@ -901,6 +910,56 @@ export default function PomodoroPage() {
       ) : null}
     </main>
   );
+}
+
+function MarathonMetrics({ metrics }: { metrics: ReturnType<typeof getFocusMarathonMetrics> }) {
+  return (
+    <section className="ops-panel marathon-panel">
+      <div className="ops-panel-head">
+        <h2>Longest Marathon</h2>
+        <span>maximum 10 minute gap</span>
+      </div>
+      <div className="marathon-grid">
+        <div className="marathon-latest">
+          <span>Most Recent Marathon</span>
+          {metrics.mostRecent ? (
+            <>
+              <strong>{metrics.mostRecent.minutes}m</strong>
+              <p>{formatMarathonDate(metrics.mostRecent)} / {metrics.mostRecent.sessionCount} sessions</p>
+            </>
+          ) : (
+            <>
+              <strong>0m</strong>
+              <p>Complete a focus session to begin.</p>
+            </>
+          )}
+        </div>
+        <div className="marathon-ranking">
+          <div className="marathon-ranking-head">
+            <span>Top 5 Milestones</span>
+            <span>Minutes / Achieved</span>
+          </div>
+          {metrics.longest.length > 0 ? metrics.longest.map((marathon, index) => (
+            <div className="marathon-ranking-row" key={`${marathon.startedAt}-${marathon.endedAt}`}>
+              <span className="marathon-rank">#{index + 1}</span>
+              <strong>{marathon.minutes}m</strong>
+              <span>{formatMarathonDate(marathon)}</span>
+            </div>
+          )) : (
+            <p className="marathon-empty">No marathon milestones yet.</p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function formatMarathonDate(marathon: FocusMarathon) {
+  return new Date(marathon.endedAt).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function createDraft(source: SessionDraft["source"], seed: Pick<SessionDraft, "mode" | "startAt" | "endAt" | "projectId" | "taskId">, done = ""): SessionDraft {
