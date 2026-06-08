@@ -505,6 +505,7 @@ class AiResponseCacheTests(unittest.TestCase):
             id="project-1",
             user_id="user-1",
             name="Release",
+            description="Ship a reliable customer-facing release.",
             type=models.ProjectType.fixed,
             created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
             linked_goals=[goal],
@@ -641,16 +642,41 @@ class AiResponseCacheTests(unittest.TestCase):
         self.assertEqual(FakeOpenAI.requested_models, ["gpt-5.4-mini", "gpt-5.4-mini"])
         user_prompt = FakeOpenAI.requests[0]["input"][1]["content"]
         context = json.loads(user_prompt.split("Context: ", 1)[1])
-        self.assertEqual(set(context), {"goals_by_horizon", "project_timelines"})
-        self.assertEqual(set(context["goals_by_horizon"]), {"monthly", "quarterly", "yearly", "five_year"})
-        monthly_goal = context["goals_by_horizon"]["monthly"][0]
-        self.assertEqual(monthly_goal["why"], "Deliver useful improvements reliably.")
         self.assertEqual(
-            {entry["kind"] for entry in monthly_goal["timeline"]},
-            {"goal_established", "project_attached", "next_deadline", "completion"},
+            set(context),
+            {
+                "time_context",
+                "goal_context",
+                "active_commitments",
+                "recent_execution",
+                "period_metrics",
+                "previous_period_metrics",
+                "data_quality_notes",
+            },
         )
-        self.assertEqual(context["project_timelines"]["selected_range_days"], 30)
-        project_timeline = context["project_timelines"]["projects"][0]["timeline"]
+        self.assertEqual(set(context["goal_context"]), {"monthly", "quarterly", "yearly", "five_year"})
+        monthly_goal = context["goal_context"]["monthly"][0]
+        self.assertEqual(monthly_goal["why"], "Deliver useful improvements reliably.")
+        self.assertEqual(monthly_goal["target_value"], 1)
+        self.assertEqual(monthly_goal["current_value"], 0)
+        self.assertEqual(monthly_goal["unit"], "release")
+        self.assertEqual(monthly_goal["progress_percentage"], 0)
+        self.assertEqual(
+            {entry["kind"] for entry in monthly_goal["background_events"]},
+            {"goal_established", "project_attached", "completion"},
+        )
+        self.assertEqual(
+            {entry["kind"] for entry in monthly_goal["recent_events"]},
+            {"completion"},
+        )
+        self.assertEqual(context["time_context"]["selected_range_days"], 30)
+        self.assertEqual(context["time_context"]["timezone_offset_minutes"], 0)
+        commitment = context["active_commitments"]["projects"][0]
+        self.assertEqual(commitment["project_description"], "Ship a reliable customer-facing release.")
+        self.assertEqual(commitment["active_tasks"][0]["title"], "Future release objective")
+        self.assertFalse(commitment["active_tasks"][0]["overdue"])
+        self.assertEqual(context["active_commitments"]["summary"]["active_tasks"], 1)
+        project_timeline = context["recent_execution"]["projects"][0]["timeline"]
         self.assertEqual(
             [entry["kind"] for entry in project_timeline],
             ["pomodoro_session", "completion_log", "completed_task"],
@@ -661,6 +687,16 @@ class AiResponseCacheTests(unittest.TestCase):
         )
         self.assertNotIn("Old planning session", json.dumps(project_timeline))
         self.assertNotIn("Old release milestone", json.dumps(project_timeline))
+        self.assertEqual(context["period_metrics"]["activity_entries"], 3)
+        self.assertEqual(context["period_metrics"]["pomodoro_sessions"], 1)
+        self.assertEqual(context["period_metrics"]["focused_minutes"], 25)
+        self.assertEqual(context["period_metrics"]["completion_logs"], 1)
+        self.assertEqual(context["period_metrics"]["completed_tasks"], 1)
+        self.assertEqual(context["previous_period_metrics"]["pomodoro_sessions"], 1)
+        self.assertEqual(context["previous_period_metrics"]["focused_minutes"], 50)
+        self.assertEqual(context["previous_period_metrics"]["completion_logs"], 1)
+        self.assertEqual(context["previous_period_metrics"]["completed_tasks"], 1)
+        self.assertEqual(context["data_quality_notes"], [])
 
         current_user = SimpleNamespace(id="user-1")
         db = object()
@@ -670,13 +706,20 @@ class AiResponseCacheTests(unittest.TestCase):
                 goals_router.captain_compass(
                     refresh=True,
                     days=90,
+                    timezone_offset_minutes=-330,
                     db=db,
                     current_user=current_user,
                 )
             )
 
         self.assertIs(result, compass)
-        get_compass.assert_called_once_with(db, current_user, force_refresh=True, context_days=90)
+        get_compass.assert_called_once_with(
+            db,
+            current_user,
+            force_refresh=True,
+            context_days=90,
+            timezone_offset_minutes=-330,
+        )
 
     def test_captain_compass_route_parses_string_days_query(self) -> None:
         app = FastAPI()
@@ -697,7 +740,9 @@ class AiResponseCacheTests(unittest.TestCase):
         }
 
         with patch.object(crud, "get_captain_compass", return_value=compass) as get_compass:
-            response = TestClient(app).get("/goals/captain-compass?refresh=true&days=7")
+            response = TestClient(app).get(
+                "/goals/captain-compass?refresh=true&days=7&timezone_offset_minutes=-330"
+            )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["context_days"], 7)
@@ -706,6 +751,7 @@ class AiResponseCacheTests(unittest.TestCase):
             ANY,
             force_refresh=True,
             context_days=7,
+            timezone_offset_minutes=-330,
         )
 
     def call_ai(

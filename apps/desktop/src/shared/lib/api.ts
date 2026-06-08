@@ -508,7 +508,10 @@ export function getGoalNextActions(refresh = false) {
 }
 
 export function getCaptainCompass(refresh = false, days: CaptainCompassContextDays = 30) {
-  return request<CaptainCompass>(`/goals/captain-compass?refresh=${refresh}&days=${days}`);
+  const timezoneOffsetMinutes = new Date().getTimezoneOffset();
+  return request<CaptainCompass>(
+    `/goals/captain-compass?refresh=${refresh}&days=${days}&timezone_offset_minutes=${timezoneOffsetMinutes}`,
+  );
 }
 
 export function getLibrarySummary() {

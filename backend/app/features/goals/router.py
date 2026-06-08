@@ -107,9 +107,16 @@ async def next_goal_actions(
 async def captain_compass(
     refresh: bool = Query(default=False),
     days: int = Query(default=30),
+    timezone_offset_minutes: int = Query(default=0, ge=-840, le=840),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
     if days not in crud.CAPTAIN_COMPASS_CONTEXT_DAYS:
         raise HTTPException(status_code=422, detail="days must be 7, 30, or 90")
-    return crud.get_captain_compass(db, current_user, force_refresh=refresh, context_days=days)
+    return crud.get_captain_compass(
+        db,
+        current_user,
+        force_refresh=refresh,
+        context_days=days,
+        timezone_offset_minutes=timezone_offset_minutes,
+    )
