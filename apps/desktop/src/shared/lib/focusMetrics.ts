@@ -1,3 +1,4 @@
+import { getUserDocument, saveUserDocument } from "@/lib/api";
 import { getScopedStorageKey } from "@/lib/auth";
 import { addCalendarDays, getSessionWorkDayDate, getWorkDayDate, isCurrentWorkDay } from "@/lib/workDay";
 
@@ -24,6 +25,7 @@ export type FocusMarathonMetrics = {
 };
 
 export const pomodoroLogsStorageKey = "personal-project-manager:pomodoro-logs";
+const pomodoroLogsDocumentKey = "pomodoro-history";
 const marathonBreakLimitMinutes = 10;
 
 export function readStoredPomodoroLogs(): FocusMetricLog[] {
@@ -37,6 +39,26 @@ export function readStoredPomodoroLogs(): FocusMetricLog[] {
   } catch {
     return [];
   }
+}
+
+export async function loadDurablePomodoroLogs<T extends { id: string }>(normalize: (value: unknown) => T[]) {
+  const localLogs = readLocalPomodoroLogs(normalize);
+  const document = await getUserDocument<unknown>(pomodoroLogsDocumentKey);
+  if (document.data == null) {
+    if (localLogs.length) await persistDurablePomodoroLogs(localLogs);
+    return localLogs;
+  }
+
+  const remoteLogs = normalize(document.data);
+  const merged = mergeLogs(remoteLogs, localLogs);
+  if (merged.length !== remoteLogs.length) await persistDurablePomodoroLogs(merged);
+  return merged;
+}
+
+export async function persistDurablePomodoroLogs<T>(logs: T[]) {
+  const normalized = JSON.parse(JSON.stringify(logs)) as T[];
+  window.localStorage.setItem(getScopedStorageKey(pomodoroLogsStorageKey), JSON.stringify(normalized));
+  await saveUserDocument(pomodoroLogsDocumentKey, normalized);
 }
 
 export function getFocusMinutesToday(logs: FocusMetricLog[]) {
@@ -112,6 +134,22 @@ function normalizeStoredPomodoroLogs(value: unknown): FocusMetricLog[] {
     && "minutes" in log
     && "mode" in log
   ));
+}
+
+function readLocalPomodoroLogs<T>(normalize: (value: unknown) => T[]) {
+  const savedLogs = window.localStorage.getItem(getScopedStorageKey(pomodoroLogsStorageKey));
+  if (!savedLogs) return [];
+  try {
+    return normalize(JSON.parse(savedLogs));
+  } catch {
+    return [];
+  }
+}
+
+function mergeLogs<T extends { id: string }>(remoteLogs: T[], localLogs: T[]) {
+  const merged = new Map(remoteLogs.map((log) => [log.id, log]));
+  localLogs.forEach((log) => merged.set(log.id, log));
+  return [...merged.values()];
 }
 
 type MarathonSession = {

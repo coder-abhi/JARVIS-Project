@@ -1,6 +1,7 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import PomodoroCompletionToast from "@/components/PomodoroCompletionToast";
 import { authChangedEvent, clearAuthSession, getStoredUser, type AuthUser } from "@/lib/auth";
+import { hydrateAppSettings } from "@/lib/appSettings";
 import { sidebarItems } from "./featureRegistry";
 import { useEffect, useState } from "react";
 import "./App.css";
@@ -23,6 +24,11 @@ export default function App() {
       window.removeEventListener(authChangedEvent, syncUser);
     };
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    void hydrateAppSettings().catch(() => undefined);
+  }, [user]);
 
   function logout() {
     clearAuthSession();

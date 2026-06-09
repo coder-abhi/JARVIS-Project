@@ -38,14 +38,14 @@ export default function SettingsPage() {
     const next = { ...behavior, ...changes };
     saveProjectBehaviorSettings(next);
     setBehavior(readProjectBehaviorSettings());
-    setMessage("Project behavior saved locally for this user.");
+    setMessage("Project behavior saved for this user.");
   }
 
   function updateMissionControl(changes: Partial<MissionControlVisibilitySettings>) {
     const next = { ...missionControl, ...changes };
     setMissionControl(next);
     saveMissionControlVisibilitySettings(next);
-    setMessage("Mission Control visibility saved locally for this user.");
+    setMessage("Mission Control visibility saved for this user.");
   }
 
   async function updateFeature(feature: AiFeatureSetting, changes: { enabled?: boolean; model?: string }) {

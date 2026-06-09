@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -27,6 +28,16 @@ class AuthRead(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserRead
+
+
+class UserDocumentWrite(BaseModel):
+    data: Any
+
+
+class UserDocumentRead(BaseModel):
+    key: str
+    data: Any
+    updated_at: datetime | None = None
 
 
 class ProjectBase(BaseModel):

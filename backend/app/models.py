@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Table, Text
+from sqlalchemy import Boolean, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Table, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -62,6 +62,26 @@ class User(Base):
     books: Mapped[list["Book"]] = relationship(back_populates="user")
     goals: Mapped[list["Goal"]] = relationship(back_populates="user")
     completed_goal_logs: Mapped[list["CompletedGoalLog"]] = relationship(back_populates="user")
+    documents: Mapped[list["UserDocument"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+
+class UserDocument(Base):
+    __tablename__ = "user_documents"
+    __table_args__ = (UniqueConstraint("user_id", "key", name="uq_user_documents_user_key"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    key: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    value_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        nullable=False,
+    )
+
+    user: Mapped[User] = relationship(back_populates="documents")
 
 
 class Project(Base):

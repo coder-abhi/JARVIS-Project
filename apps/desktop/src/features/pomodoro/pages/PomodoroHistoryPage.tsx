@@ -4,7 +4,7 @@ import Link from "next/link";
 import { type CSSProperties, type FormEvent, useEffect, useMemo, useState } from "react";
 import { PomodoroSessionModal, toDateTimeLocal, type PomodoroSessionDraft } from "../components/PomodoroSessionModal";
 import { deleteProjectPomodoroSession, getProjects, saveProjectPomodoroSession, type Project } from "@/lib/api";
-import { getScopedStorageKey } from "@/lib/auth";
+import { loadDurablePomodoroLogs, persistDurablePomodoroLogs } from "@/lib/focusMetrics";
 import "./PomodoroPage.css";
 
 type TimerMode = "focus" | "short" | "long";
@@ -25,7 +25,6 @@ type PomodoroLog = {
   savedProjectSessionIds?: string[];
 };
 
-const storageKey = "personal-project-manager:pomodoro-logs";
 const modeLabels: Record<TimerMode, string> = {
   focus: "Focus",
   short: "Short Break",
@@ -40,14 +39,9 @@ export default function PomodoroHistoryPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const savedLogs = window.localStorage.getItem(getScopedStorageKey(storageKey));
-    if (!savedLogs) return;
-
-    try {
-      setLogs(normalizeStoredPomodoroLogs(JSON.parse(savedLogs)));
-    } catch {
-      setLogs([]);
-    }
+    loadDurablePomodoroLogs(normalizeStoredPomodoroLogs)
+      .then(setLogs)
+      .catch((err: Error) => setError(err.message));
   }, []);
 
   useEffect(() => {
@@ -163,7 +157,7 @@ export default function PomodoroHistoryPage() {
       nextLog.savedProjectSessionIds = await saveProjectTimeLogs(previousLog, nextLog);
       const nextLogs = logs.map((log) => (log.id === nextLog.id ? nextLog : log));
       setLogs(nextLogs);
-      window.localStorage.setItem(getScopedStorageKey(storageKey), JSON.stringify(normalizeStoredPomodoroLogs(nextLogs)));
+      await persistDurablePomodoroLogs(normalizeStoredPomodoroLogs(nextLogs));
       setDraft(null);
       setError(null);
     } catch (err) {
@@ -181,7 +175,7 @@ export default function PomodoroHistoryPage() {
       await deleteProjectTimeLogs(previousLog);
       const nextLogs = logs.filter((log) => log.id !== draft.id);
       setLogs(nextLogs);
-      window.localStorage.setItem(getScopedStorageKey(storageKey), JSON.stringify(normalizeStoredPomodoroLogs(nextLogs)));
+      await persistDurablePomodoroLogs(normalizeStoredPomodoroLogs(nextLogs));
       setDraft(null);
       setError(null);
     } catch (err) {

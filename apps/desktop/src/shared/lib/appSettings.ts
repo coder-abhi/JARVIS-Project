@@ -1,5 +1,5 @@
 import { getScopedStorageKey } from "@/lib/auth";
-import type { ProjectType, TaskPriority, TaskStatus } from "@/lib/api";
+import { getUserDocument, saveUserDocument, type ProjectType, type TaskPriority, type TaskStatus } from "@/lib/api";
 
 export type ProjectBehaviorSettings = {
   defaultProjectType: ProjectType;
@@ -29,6 +29,7 @@ export const defaultMissionControlVisibilitySettings: MissionControlVisibilitySe
 
 const projectBehaviorStorageKey = "jarvis:project-behavior-settings";
 const missionControlStorageKey = "jarvis:mission-control-visibility";
+const databaseDocumentKey = "app-settings";
 export const appSettingsChangedEvent = "jarvis:app-settings-changed";
 
 export function readProjectBehaviorSettings(): ProjectBehaviorSettings {
@@ -58,6 +59,7 @@ export function saveProjectBehaviorSettings(settings: ProjectBehaviorSettings) {
     JSON.stringify({ ...settings, defaultTaskMinutes: clampMinutes(settings.defaultTaskMinutes) }),
   );
   announceSettingsChange();
+  void persistAppSettings().catch(() => undefined);
 }
 
 export function readMissionControlVisibilitySettings(): MissionControlVisibilitySettings {
@@ -80,6 +82,25 @@ export function readMissionControlVisibilitySettings(): MissionControlVisibility
 export function saveMissionControlVisibilitySettings(settings: MissionControlVisibilitySettings) {
   window.localStorage.setItem(getScopedStorageKey(missionControlStorageKey), JSON.stringify(settings));
   announceSettingsChange();
+  void persistAppSettings().catch(() => undefined);
+}
+
+export async function hydrateAppSettings() {
+  const document = await getUserDocument<{
+    projectBehavior?: Partial<ProjectBehaviorSettings>;
+    missionControl?: Partial<MissionControlVisibilitySettings>;
+  }>(databaseDocumentKey);
+
+  if (document.data) {
+    const behavior = normalizeProjectBehavior(document.data.projectBehavior);
+    const missionControl = normalizeMissionControl(document.data.missionControl);
+    window.localStorage.setItem(getScopedStorageKey(projectBehaviorStorageKey), JSON.stringify(behavior));
+    window.localStorage.setItem(getScopedStorageKey(missionControlStorageKey), JSON.stringify(missionControl));
+    announceSettingsChange();
+    return;
+  }
+
+  await persistAppSettings();
 }
 
 function clampMinutes(value: unknown) {
@@ -89,4 +110,31 @@ function clampMinutes(value: unknown) {
 
 function announceSettingsChange() {
   window.dispatchEvent(new Event(appSettingsChangedEvent));
+}
+
+function persistAppSettings() {
+  return saveUserDocument(databaseDocumentKey, {
+    projectBehavior: readProjectBehaviorSettings(),
+    missionControl: readMissionControlVisibilitySettings(),
+  });
+}
+
+function normalizeProjectBehavior(value: Partial<ProjectBehaviorSettings> | undefined): ProjectBehaviorSettings {
+  return {
+    defaultProjectType: value?.defaultProjectType === "continuous" ? "continuous" : "fixed",
+    defaultTaskPriority:
+      value?.defaultTaskPriority === "high" || value?.defaultTaskPriority === "low"
+        ? value.defaultTaskPriority
+        : "medium",
+    defaultTaskStatus: value?.defaultTaskStatus === "in_progress" ? "in_progress" : "todo",
+    defaultTaskMinutes: clampMinutes(value?.defaultTaskMinutes),
+  };
+}
+
+function normalizeMissionControl(value: Partial<MissionControlVisibilitySettings> | undefined): MissionControlVisibilitySettings {
+  return {
+    weekOperationsPlan: value?.weekOperationsPlan !== false,
+    efficiencyReport: value?.efficiencyReport !== false,
+    timeAllocation: value?.timeAllocation !== false,
+  };
 }

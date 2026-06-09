@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { getWealthData, saveWealthData } from "@/lib/api";
 import { getScopedStorageKey } from "@/lib/auth";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import "./MoneyPage.css";
@@ -9,6 +10,7 @@ type Currency = "INR" | "USD" | "EUR" | "GBP";
 type EntryKind = "transaction" | "account" | "card" | "loan" | "investment" | "goal" | "income" | "bill";
 type TransactionType = "expense" | "income";
 type SourceKind = "account" | "card" | "cash";
+type LedgerPeriod = "week" | "month" | "all";
 
 type Transaction = {
   id: string;
@@ -35,8 +37,8 @@ type CreditCard = {
   issuer: string;
   name: string;
   lastFour: string;
-  creditLimit: number;
-  currentBalance: number;
+  generatedBill: number;
+  currentBill: number;
   billDay: number;
   dueDay: number;
 };
@@ -67,6 +69,7 @@ type SavingGoal = {
   targetAmount: number;
   savedAmount: number;
   dueDate: string;
+  note: string;
 };
 
 type ExpectedIncome = {
@@ -104,6 +107,7 @@ type Entry = Transaction | BankAccount | CreditCard | Loan | Investment | Saving
 type Draft = Record<string, string>;
 
 const storageKey = "jarvis-money-command-v1";
+const storageBackupKey = `${storageKey}-backup`;
 const emptyData: MoneyData = {
   version: 1,
   currency: "INR",
@@ -132,41 +136,67 @@ const kindLabels: Record<EntryKind, string> = {
 export default function MoneyPage() {
   const [data, setData] = useState<MoneyData>(emptyData);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [canPersist, setCanPersist] = useState(false);
+  const [loadWarning, setLoadWarning] = useState("");
   const [modal, setModal] = useState<{ kind: EntryKind; id?: string } | null>(null);
   const [draft, setDraft] = useState<Draft>({});
   const [tagFilter, setTagFilter] = useState("");
+  const [ledgerPeriod, setLedgerPeriod] = useState<LedgerPeriod>("week");
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(getScopedStorageKey(storageKey));
-    if (stored) {
+    let isCancelled = false;
+
+    async function loadMoneyData() {
+      const localCandidates = readLocalMoneyCandidates();
       try {
-        const parsed = JSON.parse(stored) as Partial<MoneyData>;
-        setData({
-          ...emptyData,
-          ...parsed,
-          transactions: (parsed.transactions ?? []).map((transaction) => ({
-            ...transaction,
-            tags: normalizeTags(transaction.tags ?? []),
-          })),
-          accounts: parsed.accounts ?? [],
-          cards: parsed.cards ?? [],
-          loans: parsed.loans ?? [],
-          investments: parsed.investments ?? [],
-          goals: parsed.goals ?? [],
-          incomes: (parsed.incomes ?? []).map((income) => ({ ...income, accountId: income.accountId ?? "" })),
-          bills: (parsed.bills ?? []).map((bill) => ({ ...bill, accountId: bill.accountId ?? "" })),
-        });
+        const databaseData = normalizeMoneyData(await getWealthData<unknown>());
+        if (isCancelled) return;
+        const localData = localCandidates[0] ?? null;
+        const shouldRecoverLocalData = localData !== null && moneyDataSize(databaseData) === 0;
+        const nextData = shouldRecoverLocalData ? localData : databaseData;
+        setData(nextData);
+        setCanPersist(true);
+        if (shouldRecoverLocalData) {
+          await saveWealthData(nextData);
+        }
       } catch {
-        setData(emptyData);
+        if (isCancelled) return;
+        if (localCandidates.length) {
+          setData(localCandidates[0]);
+          setCanPersist(true);
+          setLoadWarning("Using the local finance cache because the database is unavailable.");
+        } else {
+          setLoadWarning("Wealth Command could not reach the local database.");
+        }
+      } finally {
+        if (!isCancelled) setIsLoaded(true);
       }
     }
-    setIsLoaded(true);
+
+    void loadMoneyData();
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    if (!isLoaded) return;
-    window.localStorage.setItem(getScopedStorageKey(storageKey), JSON.stringify(data));
-  }, [data, isLoaded]);
+    if (!isLoaded || !canPersist) return;
+    const scopedStorageKey = getScopedStorageKey(storageKey);
+    const scopedBackupKey = getScopedStorageKey(storageBackupKey);
+    const currentStoredValue = window.localStorage.getItem(scopedStorageKey);
+    if (currentStoredValue) {
+      try {
+        JSON.parse(currentStoredValue);
+        window.localStorage.setItem(scopedBackupKey, currentStoredValue);
+      } catch {
+        // Never replace a valid backup with unreadable data.
+      }
+    }
+    window.localStorage.setItem(scopedStorageKey, JSON.stringify(data));
+    void saveWealthData(data)
+      .then(() => setLoadWarning(""))
+      .catch(() => setLoadWarning("Changes are cached locally, but the finance database could not be updated."));
+  }, [canPersist, data, isLoaded]);
 
   const summary = useMemo(() => calculateSummary(data), [data]);
   const monthlyTrend = useMemo(() => buildMonthlyTrend(data.transactions), [data.transactions]);
@@ -179,11 +209,12 @@ export default function MoneyPage() {
   const matchingTransactions = useMemo(
     () =>
       [...data.transactions]
+        .filter((transaction) => isTransactionInPeriod(transaction, ledgerPeriod))
         .filter((transaction) => !tagFilter || transaction.tags.includes(tagFilter))
         .sort((a, b) => b.dateTime.localeCompare(a.dateTime)),
-    [data.transactions, tagFilter],
+    [data.transactions, ledgerPeriod, tagFilter],
   );
-  const filteredTransactions = useMemo(() => matchingTransactions.slice(0, 30), [matchingTransactions]);
+  const filteredTransactions = matchingTransactions;
   const filteredAmountTotal = useMemo(() => sum(matchingTransactions.map((transaction) => transaction.amount)), [matchingTransactions]);
   const formatter = useMemo(
     () => new Intl.NumberFormat(undefined, { style: "currency", currency: data.currency, maximumFractionDigits: 0 }),
@@ -277,6 +308,13 @@ export default function MoneyPage() {
     });
   }
 
+  function markCardBillPaid(id: string) {
+    setData((current) => ({
+      ...current,
+      cards: current.cards.map((card) => card.id === id ? { ...card, generatedBill: 0 } : card),
+    }));
+  }
+
   const nextIncome = [...data.incomes]
     .filter((income) => endOfDay(income.expectedDate) >= Date.now())
     .sort((a, b) => a.expectedDate.localeCompare(b.expectedDate))[0];
@@ -303,6 +341,7 @@ export default function MoneyPage() {
           <button type="button" className="ops-button" onClick={() => openCreate("account")}>+ Account</button>
         </div>
       </section>
+      {loadWarning ? <p className="ops-alert danger">{loadWarning}</p> : null}
 
       <section className="money-summary-grid">
         <SummaryCard label="Net Worth" value={money(summary.netWorth)} detail={`${money(summary.assets)} assets - ${money(summary.debt)} debt`} tone={summary.netWorth >= 0 ? "signal" : "danger"} />
@@ -372,13 +411,16 @@ export default function MoneyPage() {
                   <strong>{item.label}</strong>
                   <small>{item.detail}</small>
                 </div>
+                <strong className={item.tone === "signal" ? "money-positive" : item.tone === "danger" ? "money-negative" : ""}>
+                  {item.amount == null ? "-" : `${item.tone === "signal" ? "+" : item.tone === "danger" ? "-" : ""}${money(item.amount)}`}
+                </strong>
                 <span>{formatDate(item.date)}</span>
               </div>
             )) : <EmptyState text="No upcoming bills, returns, goals, or income scheduled." />}
           </div>
         </section>
 
-        <section className="ops-panel span-6">
+        <section className="ops-panel span-4">
           <PanelHeader label="Bank Accounts" detail={`${money(summary.accountBalance)} total balance`} action={<AddButton onClick={() => openCreate("account")} />} />
           <div className="money-card-list">
             {data.accounts.length ? data.accounts.map((account) => (
@@ -394,23 +436,41 @@ export default function MoneyPage() {
           </div>
         </section>
 
-        <section className="ops-panel span-6">
-          <PanelHeader label="Credit Cards" detail={`${money(summary.cardDebt)} outstanding`} action={<AddButton onClick={() => openCreate("card")} />} />
+        <section className="ops-panel span-8">
+          <PanelHeader label="Credit Cards" detail={`${money(summary.cardDebt)} total unpaid`} action={<AddButton onClick={() => openCreate("card")} />} />
           <div className="money-card-list">
             {data.cards.length ? data.cards.map((card) => {
-              const utilization = card.creditLimit ? Math.min((card.currentBalance / card.creditLimit) * 100, 100) : 0;
+              const payback = getCardPayback(card);
+              const generatedDue = getGeneratedBillDueDate(card);
+              const isDueThisMonth = card.generatedBill > 0 && isSameMonth(generatedDue, new Date());
               return (
                 <article className="money-credit-card" key={card.id}>
-                  <div className="money-card-title">
-                    <div><span>{card.issuer} / •••• {card.lastFour || "----"}</span><h3>{card.name}</h3></div>
-                    <strong>{money(card.currentBalance)}</strong>
+                  <div className="money-card-identity">
+                    <h3>•••• {card.lastFour || "----"}</h3>
+                    <span>{card.issuer} / {card.name}</span>
                   </div>
-                  <div className="money-progress"><span style={{ width: `${utilization}%` }} /></div>
-                  <div className="money-card-meta"><span>{Math.round(utilization)}% used</span><span>Bill {ordinal(card.billDay)} / Due {ordinal(card.dueDay)}</span></div>
-                  <RowActions onEdit={() => openEdit("card", card)} onDelete={() => deleteEntry("card", card.id)} />
+                  <div className={`money-card-amount ${isDueThisMonth ? "due" : ""}`}>
+                    <span>Bill Generated</span>
+                    <strong>{money(card.generatedBill)}</strong>
+                    <small>{card.generatedBill > 0 ? `Due ${formatDate(toDateValue(generatedDue))}` : "Paid"}</small>
+                  </div>
+                  <div className="money-card-amount">
+                    <span>Current Bill</span>
+                    <strong>{money(card.currentBill)}</strong>
+                    <small>Next statement {ordinal(card.billDay)}</small>
+                  </div>
+                  <div className="money-card-amount">
+                    <span>Payback Time</span>
+                    <strong>{payback.days} days</strong>
+                    <small>Spend today / due {formatDate(toDateValue(payback.dueDate))}</small>
+                  </div>
+                  <div className="money-card-actions">
+                    {card.generatedBill > 0 ? <button type="button" className="money-pay-button" onClick={() => markCardBillPaid(card.id)}>Mark Paid</button> : null}
+                    <RowActions onEdit={() => openEdit("card", card)} onDelete={() => deleteEntry("card", card.id)} />
+                  </div>
                 </article>
               );
-            }) : <EmptyState text="Add cards to monitor utilization and payment dates." />}
+            }) : <EmptyState text="Add cards to track generated bills, current spending, and payback time." />}
           </div>
         </section>
 
@@ -419,12 +479,20 @@ export default function MoneyPage() {
             label="Transaction Ledger"
             detail={(
               <>
-                <span>{filteredTransactions.length} shown / {data.transactions.length} entries</span>
-                {tagFilter ? <strong className="money-ledger-total">Total {money(filteredAmountTotal)}</strong> : null}
+                <span>{filteredTransactions.length} shown / {matchingTransactions.length} matching</span>
+                <strong className="money-ledger-total">Total {money(filteredAmountTotal)}</strong>
               </>
             )}
             action={(
               <div className="money-ledger-actions">
+                <label>
+                  Period
+                  <select value={ledgerPeriod} onChange={(event) => setLedgerPeriod(event.target.value as LedgerPeriod)}>
+                    <option value="week">This week</option>
+                    <option value="month">This month</option>
+                    <option value="all">All</option>
+                  </select>
+                </label>
                 <label>
                   Tag
                   <select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}>
@@ -452,7 +520,7 @@ export default function MoneyPage() {
               ))}
             </div>
             {!data.transactions.length ? <EmptyState text="Your ledger is empty. Add income or an expense with its exact date and time." /> : null}
-            {data.transactions.length > 0 && !filteredTransactions.length ? <EmptyState text="No transactions use the selected tag." /> : null}
+            {data.transactions.length > 0 && !filteredTransactions.length ? <EmptyState text="No transactions match the selected period and tag." /> : null}
           </div>
         </section>
 
@@ -512,7 +580,7 @@ export default function MoneyPage() {
           <div className="money-intelligence">
             <IntelligenceRow label="Emergency Runway" value={summary.runwayMonths == null ? "No spend data" : `${summary.runwayMonths.toFixed(1)} months`} signal={(summary.runwayMonths ?? 0) >= 3} />
             <IntelligenceRow label="Savings Rate" value={summary.monthlyIncome ? `${Math.round((summary.cashFlow / summary.monthlyIncome) * 100)}%` : "No income data"} signal={summary.cashFlow > 0} />
-            <IntelligenceRow label="Credit Utilization" value={summary.creditLimit ? `${Math.round((summary.cardDebt / summary.creditLimit) * 100)}%` : "No cards"} signal={summary.creditLimit > 0 && summary.cardDebt / summary.creditLimit < 0.3} />
+            <IntelligenceRow label="Unpaid Card Bills" value={money(summary.cardDebt)} signal={summary.cardDebt === 0} />
             <IntelligenceRow label="Investment Return" value={summary.invested ? `${formatSignedPercent(((summary.investmentValue - summary.invested) / summary.invested) * 100)}` : "No investments"} signal={summary.investmentValue >= summary.invested && summary.invested > 0} />
           </div>
         </section>
@@ -597,9 +665,9 @@ function EntryModal({
             <>
               <Field label="Issuer / Bank"><input required value={draft.issuer} onChange={(e) => patch("issuer", e.target.value)} /></Field>
               <Field label="Card Name"><input required value={draft.name} onChange={(e) => patch("name", e.target.value)} /></Field>
-              <Field label="Last 4 Digits"><input maxLength={4} inputMode="numeric" value={draft.lastFour} onChange={(e) => patch("lastFour", e.target.value.replace(/\D/g, ""))} /></Field>
-              <Field label="Credit Limit"><input required min="0" type="number" step="0.01" value={draft.creditLimit} onChange={(e) => patch("creditLimit", e.target.value)} /></Field>
-              <Field label="Current Outstanding"><input required min="0" type="number" step="0.01" value={draft.currentBalance} onChange={(e) => patch("currentBalance", e.target.value)} /></Field>
+              <Field label="Last 4 Digits"><input required maxLength={4} inputMode="numeric" pattern="\d{4}" value={draft.lastFour} onChange={(e) => patch("lastFour", e.target.value.replace(/\D/g, ""))} /></Field>
+              <Field label="Bill Generated Amount"><input required min="0" type="number" step="0.01" value={draft.generatedBill} onChange={(e) => patch("generatedBill", e.target.value)} /></Field>
+              <Field label="Current Bill"><input required min="0" type="number" step="0.01" value={draft.currentBill} onChange={(e) => patch("currentBill", e.target.value)} /></Field>
               <Field label="Statement Day"><input required min="1" max="31" type="number" value={draft.billDay} onChange={(e) => patch("billDay", e.target.value)} /></Field>
               <Field label="Payment Due Day"><input required min="1" max="31" type="number" value={draft.dueDay} onChange={(e) => patch("dueDay", e.target.value)} /></Field>
             </>
@@ -630,6 +698,7 @@ function EntryModal({
               <Field label="Target Amount"><input required min="0" type="number" step="0.01" value={draft.targetAmount} onChange={(e) => patch("targetAmount", e.target.value)} /></Field>
               <Field label="Already Saved"><input required min="0" type="number" step="0.01" value={draft.savedAmount} onChange={(e) => patch("savedAmount", e.target.value)} /></Field>
               <Field label="Due Date"><DateTimePicker mode="date" value={draft.dueDate} allowClear={false} onChange={(value) => patch("dueDate", value)} /></Field>
+              <Field label="Short Note" wide><textarea value={draft.note} onChange={(e) => patch("note", e.target.value)} placeholder="Optional context for this saving goal..." /></Field>
             </>
           ) : null}
           {kind === "income" ? (
@@ -840,8 +909,7 @@ function calculateSummary(data: MoneyData) {
   const invested = sum(data.investments.map((investment) => investment.investedAmount));
   const receivables = sum(data.loans.filter((loan) => loan.direction === "given").map((loan) => loan.outstanding));
   const loanDebt = sum(data.loans.filter((loan) => loan.direction === "taken").map((loan) => loan.outstanding));
-  const cardDebt = sum(data.cards.map((card) => card.currentBalance));
-  const creditLimit = sum(data.cards.map((card) => card.creditLimit));
+  const cardDebt = sum(data.cards.map((card) => card.generatedBill + card.currentBill));
   const goalSaved = sum(data.goals.map((goal) => goal.savedAmount));
   const expectedIncome = sum(data.incomes.map((income) => income.amount));
   const expectedBills = sum(data.bills.map((bill) => bill.amount));
@@ -860,7 +928,6 @@ function calculateSummary(data: MoneyData) {
     investmentValue,
     invested,
     cardDebt,
-    creditLimit,
     goalSaved,
     expectedIncome,
     expectedBills,
@@ -895,15 +962,16 @@ function buildCategorySpend(transactions: Transaction[]) {
 function buildUpcoming(data: MoneyData) {
   const today = startOfDay(new Date());
   const horizon = today.getTime() + 45 * 86_400_000;
-  const rows: { id: string; type: string; label: string; detail: string; date: string; tone: string }[] = [];
+  const rows: { id: string; type: string; label: string; detail: string; date: string; tone: string; amount: number | null }[] = [];
   data.cards.forEach((card) => {
-    const due = nextDayOfMonth(card.dueDay);
-    if (due.getTime() <= horizon) rows.push({ id: `card-${card.id}`, type: "Card", label: `${card.name} payment due`, detail: `${card.issuer} / outstanding balance`, date: toDateValue(due), tone: "danger" });
+    if (card.generatedBill <= 0) return;
+    const due = getGeneratedBillDueDate(card);
+    if (due.getTime() <= horizon) rows.push({ id: `card-${card.id}`, type: "Card", label: `${card.name} payment due`, detail: `${card.issuer} / •••• ${card.lastFour || "----"}`, date: toDateValue(due), tone: "danger", amount: card.generatedBill });
   });
-  data.loans.forEach((loan) => rows.push({ id: `loan-${loan.id}`, type: "Loan", label: `${loan.direction === "given" ? "Expected from" : "Repay"} ${loan.person}`, detail: loan.note || `${loan.direction} loan`, date: loan.expectedReturnDate, tone: loan.direction === "given" ? "signal" : "danger" }));
-  data.goals.forEach((goal) => rows.push({ id: `goal-${goal.id}`, type: "Goal", label: goal.name, detail: "Savings target deadline", date: goal.dueDate, tone: "neutral" }));
-  data.incomes.forEach((income) => rows.push({ id: `income-${income.id}`, type: "Income", label: income.source, detail: income.note || "Expected receipt", date: income.expectedDate, tone: "signal" }));
-  data.bills.forEach((bill) => rows.push({ id: `bill-${bill.id}`, type: "Bill", label: bill.payee, detail: bill.note || "Expected payment", date: bill.expectedDate, tone: "danger" }));
+  data.loans.forEach((loan) => rows.push({ id: `loan-${loan.id}`, type: "Loan", label: `${loan.direction === "given" ? "Expected from" : "Repay"} ${loan.person}`, detail: loan.note || `${loan.direction} loan`, date: loan.expectedReturnDate, tone: loan.direction === "given" ? "signal" : "danger", amount: loan.outstanding }));
+  data.goals.forEach((goal) => rows.push({ id: `goal-${goal.id}`, type: "Goal", label: goal.name, detail: "Savings target deadline", date: goal.dueDate, tone: "neutral", amount: goal.targetAmount }));
+  data.incomes.forEach((income) => rows.push({ id: `income-${income.id}`, type: "Income", label: income.source, detail: income.note || "Expected receipt", date: income.expectedDate, tone: "signal", amount: income.amount }));
+  data.bills.forEach((bill) => rows.push({ id: `bill-${bill.id}`, type: "Bill", label: bill.payee, detail: bill.note || "Expected payment", date: bill.expectedDate, tone: "danger", amount: bill.amount }));
   return rows.filter((row) => {
     const time = endOfDay(row.date);
     return time >= today.getTime() && time <= horizon;
@@ -917,7 +985,7 @@ function applyTransactionToSource(data: MoneyData, transaction: Transaction, dir
     data.accounts = data.accounts.map((account) => account.id === transaction.sourceId ? { ...account, balance: account.balance + delta } : account);
   }
   if (transaction.sourceKind === "card" && transaction.type === "expense") {
-    data.cards = data.cards.map((card) => card.id === transaction.sourceId ? { ...card, currentBalance: Math.max(card.currentBalance + transaction.amount * direction, 0) } : card);
+    data.cards = data.cards.map((card) => card.id === transaction.sourceId ? { ...card, currentBill: Math.max(card.currentBill + transaction.amount * direction, 0) } : card);
   }
 }
 
@@ -927,10 +995,10 @@ function initialDraft(kind: EntryKind): Draft {
   const drafts: Record<EntryKind, Draft> = {
     transaction: { type: "expense", amount: "", description: "", category: "Food", dateTime: now, sourceKind: "cash", sourceId: "", tags: "" },
     account: { bankName: "", name: "", accountType: "Savings", balance: "" },
-    card: { issuer: "", name: "", lastFour: "", creditLimit: "", currentBalance: "0", billDay: "1", dueDay: "15" },
+    card: { issuer: "", name: "", lastFour: "", generatedBill: "0", currentBill: "0", billDay: "1", dueDay: "15" },
     loan: { direction: "taken", person: "", principal: "", outstanding: "", interestRate: "0", expectedReturnDate: today, note: "" },
     investment: { type: "Mutual Fund", name: "", platform: "", investedAmount: "", currentValue: "" },
-    goal: { name: "", targetAmount: "", savedAmount: "0", dueDate: today },
+    goal: { name: "", targetAmount: "", savedAmount: "0", dueDate: today, note: "" },
     income: { source: "", amount: "", expectedDate: today, note: "", accountId: "" },
     bill: { payee: "", amount: "", expectedDate: today, note: "", accountId: "" },
   };
@@ -968,10 +1036,10 @@ function draftToEntry(kind: EntryKind, draft: Draft, id: string): Entry | null {
     };
   }
   if (kind === "account") return { id, bankName: draft.bankName.trim(), name: draft.name.trim(), accountType: draft.accountType, balance: number("balance") };
-  if (kind === "card") return { id, issuer: draft.issuer.trim(), name: draft.name.trim(), lastFour: draft.lastFour, creditLimit: number("creditLimit"), currentBalance: number("currentBalance"), billDay: clampDay(number("billDay")), dueDay: clampDay(number("dueDay")) };
+  if (kind === "card") return { id, issuer: draft.issuer.trim(), name: draft.name.trim(), lastFour: draft.lastFour, generatedBill: number("generatedBill"), currentBill: number("currentBill"), billDay: clampDay(number("billDay")), dueDay: clampDay(number("dueDay")) };
   if (kind === "loan") return { id, direction: draft.direction as Loan["direction"], person: draft.person.trim(), principal: number("principal"), outstanding: number("outstanding"), interestRate: number("interestRate"), expectedReturnDate: draft.expectedReturnDate, note: draft.note.trim() };
   if (kind === "investment") return { id, type: draft.type, name: draft.name.trim(), platform: draft.platform.trim(), investedAmount: number("investedAmount"), currentValue: number("currentValue") };
-  if (kind === "goal") return { id, name: draft.name.trim(), targetAmount: number("targetAmount"), savedAmount: number("savedAmount"), dueDate: draft.dueDate };
+  if (kind === "goal") return { id, name: draft.name.trim(), targetAmount: number("targetAmount"), savedAmount: number("savedAmount"), dueDate: draft.dueDate, note: draft.note.trim() };
   if (kind === "income") return { id, source: draft.source.trim(), amount: number("amount"), expectedDate: draft.expectedDate, note: draft.note.trim(), accountId: draft.accountId };
   return { id, payee: draft.payee.trim(), amount: number("amount"), expectedDate: draft.expectedDate, note: draft.note.trim(), accountId: draft.accountId };
 }
@@ -1020,6 +1088,157 @@ function normalizeTags(value: string | string[]) {
       .filter(Boolean)
       .map((tag) => `#${tag}`),
   )];
+}
+
+function readLocalMoneyCandidates() {
+  const scopedStorageKey = getScopedStorageKey(storageKey);
+  const scopedBackupKey = getScopedStorageKey(storageBackupKey);
+  const discovered = Object.keys(window.localStorage)
+    .filter((key) => key === storageKey || key.startsWith(`${storageKey}:`) || key === storageBackupKey || key.startsWith(`${storageBackupKey}:`))
+    .map((key) => window.localStorage.getItem(key));
+  const candidates = [
+    window.localStorage.getItem(scopedStorageKey),
+    window.localStorage.getItem(scopedBackupKey),
+    scopedStorageKey === storageKey ? null : window.localStorage.getItem(storageKey),
+    ...discovered,
+  ];
+  const readableData = [...new Set(candidates.filter((value): value is string => Boolean(value)))]
+    .flatMap((candidate) => {
+      try {
+        return [normalizeMoneyData(JSON.parse(candidate))];
+      } catch {
+        return [];
+      }
+    });
+  return readableData.sort((left, right) => moneyDataSize(right) - moneyDataSize(left));
+}
+
+function normalizeMoneyData(value: unknown): MoneyData {
+  const parsed = asRecord(value);
+  const today = toDateValue(new Date());
+  const now = toDateTimeValue(new Date());
+  const currency = parsed.currency;
+  return {
+    version: 1,
+    currency: currency === "USD" || currency === "EUR" || currency === "GBP" ? currency : "INR",
+    transactions: recordList(parsed.transactions).map((item) => ({
+      id: stringValue(item.id) || createId(),
+      type: item.type === "income" ? "income" : "expense",
+      amount: numberValue(item.amount),
+      description: stringValue(item.description),
+      category: stringValue(item.category) || "Other",
+      dateTime: stringValue(item.dateTime) || now,
+      sourceKind: item.sourceKind === "account" || item.sourceKind === "card" ? item.sourceKind : "cash",
+      sourceId: stringValue(item.sourceId),
+      tags: normalizeTags(Array.isArray(item.tags) || typeof item.tags === "string" ? item.tags as string | string[] : []),
+    })),
+    accounts: recordList(parsed.accounts).map((item) => ({
+      id: stringValue(item.id) || createId(),
+      bankName: stringValue(item.bankName),
+      name: stringValue(item.name),
+      accountType: stringValue(item.accountType) || "Savings",
+      balance: numberValue(item.balance),
+    })),
+    cards: recordList(parsed.cards).map(normalizeCard),
+    loans: recordList(parsed.loans).map((item) => ({
+      id: stringValue(item.id) || createId(),
+      direction: item.direction === "given" ? "given" : "taken",
+      person: stringValue(item.person),
+      principal: numberValue(item.principal),
+      outstanding: numberValue(item.outstanding),
+      interestRate: numberValue(item.interestRate),
+      expectedReturnDate: stringValue(item.expectedReturnDate) || today,
+      note: stringValue(item.note),
+    })),
+    investments: recordList(parsed.investments).map((item) => ({
+      id: stringValue(item.id) || createId(),
+      type: stringValue(item.type) || "Other",
+      name: stringValue(item.name),
+      platform: stringValue(item.platform),
+      investedAmount: numberValue(item.investedAmount),
+      currentValue: numberValue(item.currentValue),
+    })),
+    goals: recordList(parsed.goals).map((item) => ({
+      id: stringValue(item.id) || createId(),
+      name: stringValue(item.name),
+      targetAmount: numberValue(item.targetAmount),
+      savedAmount: numberValue(item.savedAmount),
+      dueDate: stringValue(item.dueDate) || today,
+      note: stringValue(item.note),
+    })),
+    incomes: recordList(parsed.incomes).map((item) => ({
+      id: stringValue(item.id) || createId(),
+      source: stringValue(item.source),
+      amount: numberValue(item.amount),
+      expectedDate: stringValue(item.expectedDate) || today,
+      note: stringValue(item.note),
+      accountId: stringValue(item.accountId),
+    })),
+    bills: recordList(parsed.bills).map((item) => ({
+      id: stringValue(item.id) || createId(),
+      payee: stringValue(item.payee),
+      amount: numberValue(item.amount),
+      expectedDate: stringValue(item.expectedDate) || today,
+      note: stringValue(item.note),
+      accountId: stringValue(item.accountId),
+    })),
+  };
+}
+
+function moneyDataSize(data: MoneyData) {
+  return data.transactions.length
+    + data.accounts.length
+    + data.cards.length
+    + data.loans.length
+    + data.investments.length
+    + data.goals.length
+    + data.incomes.length
+    + data.bills.length;
+}
+
+function normalizeCard(value: Record<string, unknown>): CreditCard {
+  const card = asRecord(value);
+  return {
+    id: stringValue(card.id) || createId(),
+    issuer: stringValue(card.issuer),
+    name: stringValue(card.name),
+    lastFour: stringValue(card.lastFour),
+    generatedBill: numberValue(card.generatedBill),
+    currentBill: numberValue(card.currentBill ?? card.currentBalance),
+    billDay: clampDay(numberValue(card.billDay) || 1),
+    dueDay: clampDay(numberValue(card.dueDay) || 15),
+  };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function recordList(value: unknown) {
+  return Array.isArray(value) ? value.map(asRecord).filter((item) => Object.keys(item).length > 0) : [];
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value : value == null ? "" : String(value);
+}
+
+function numberValue(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function isTransactionInPeriod(transaction: Transaction, period: LedgerPeriod) {
+  if (period === "all") return true;
+  const transactionDate = startOfDay(new Date(transaction.dateTime));
+  const today = startOfDay(new Date());
+  if (period === "month") {
+    return transactionDate.getFullYear() === today.getFullYear() && transactionDate.getMonth() === today.getMonth();
+  }
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - today.getDay());
+  const nextWeek = new Date(weekStart);
+  nextWeek.setDate(weekStart.getDate() + 7);
+  return transactionDate >= weekStart && transactionDate < nextWeek;
 }
 
 function getActiveTag(value: string, cursor: number) {
@@ -1075,14 +1294,33 @@ function endOfDay(value: string) {
   return new Date(`${value.slice(0, 10)}T23:59:59`).getTime();
 }
 
-function nextDayOfMonth(day: number) {
+function getCardPayback(card: CreditCard) {
   const today = startOfDay(new Date());
-  const candidate = new Date(today.getFullYear(), today.getMonth(), Math.min(day, daysInMonth(today.getFullYear(), today.getMonth())));
-  if (candidate < today) {
-    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-    return new Date(nextMonth.getFullYear(), nextMonth.getMonth(), Math.min(day, daysInMonth(nextMonth.getFullYear(), nextMonth.getMonth())));
-  }
-  return candidate;
+  const statementMonthOffset = today.getDate() <= Math.min(card.billDay, daysInMonth(today.getFullYear(), today.getMonth())) ? 0 : 1;
+  const statementDate = dateForMonthOffset(today, statementMonthOffset, card.billDay);
+  const dueMonthOffset = card.dueDay > card.billDay ? statementMonthOffset : statementMonthOffset + 1;
+  const dueDate = dateForMonthOffset(today, dueMonthOffset, card.dueDay);
+  return {
+    statementDate,
+    dueDate,
+    days: Math.max(Math.round((dueDate.getTime() - today.getTime()) / 86_400_000), 0),
+  };
+}
+
+function getGeneratedBillDueDate(card: CreditCard) {
+  const today = startOfDay(new Date());
+  const statementMonthOffset = today.getDate() >= Math.min(card.billDay, daysInMonth(today.getFullYear(), today.getMonth())) ? 0 : -1;
+  const dueMonthOffset = card.dueDay > card.billDay ? statementMonthOffset : statementMonthOffset + 1;
+  return dateForMonthOffset(today, dueMonthOffset, card.dueDay);
+}
+
+function dateForMonthOffset(base: Date, offset: number, day: number) {
+  const monthStart = new Date(base.getFullYear(), base.getMonth() + offset, 1);
+  return new Date(monthStart.getFullYear(), monthStart.getMonth(), Math.min(day, daysInMonth(monthStart.getFullYear(), monthStart.getMonth())));
+}
+
+function isSameMonth(left: Date, right: Date) {
+  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
 }
 
 function daysInMonth(year: number, month: number) {

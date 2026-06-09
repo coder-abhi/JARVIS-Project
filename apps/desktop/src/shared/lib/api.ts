@@ -259,6 +259,12 @@ export type CaptainCompass = {
 
 export type CaptainCompassContextDays = 7 | 30 | 90;
 
+export type UserDocument<T> = {
+  key: string;
+  data: T | null;
+  updated_at?: string | null;
+};
+
 export type AiFeatureCost = {
   feature: string;
   label: string;
@@ -313,6 +319,7 @@ export type AiCostSummary = {
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+const documentSaveQueues = new Map<string, Promise<unknown>>();
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAuthToken();
@@ -358,6 +365,39 @@ export function signup(username: string, password: string) {
 
 export function getCurrentUser() {
   return request<AuthUser>("/auth/me");
+}
+
+export function getUserDocument<T>(key: string) {
+  return request<UserDocument<T>>(`/storage/${encodeURIComponent(key)}`);
+}
+
+export function saveUserDocument<T>(key: string, data: T) {
+  const previous = documentSaveQueues.get(key) ?? Promise.resolve();
+  const next = previous
+    .catch(() => undefined)
+    .then(() => request<UserDocument<T>>(`/storage/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      body: JSON.stringify({ data }),
+    }));
+  documentSaveQueues.set(key, next);
+  return next;
+}
+
+export function getWealthData<T>() {
+  return request<T>("/money");
+}
+
+export function saveWealthData<T>(data: T) {
+  const key = "wealth-data";
+  const previous = documentSaveQueues.get(key) ?? Promise.resolve();
+  const next = previous
+    .catch(() => undefined)
+    .then(() => request<T>("/money", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }));
+  documentSaveQueues.set(key, next);
+  return next;
 }
 
 export function getProjects() {

@@ -14,7 +14,6 @@ import {
   type Project,
   type Task,
 } from "@/lib/api";
-import { getScopedStorageKey } from "@/lib/auth";
 import {
   announcePomodoroCompletion,
   announcePomodoroSessionUpdate,
@@ -31,7 +30,8 @@ import {
   getFocusMarathonMetrics,
   getFocusMinutesToday,
   getFocusMomentum,
-  pomodoroLogsStorageKey,
+  loadDurablePomodoroLogs,
+  persistDurablePomodoroLogs,
   type FocusMarathon,
 } from "@/lib/focusMetrics";
 import { LineTrendChart } from "@/components/LineTrendChart";
@@ -162,24 +162,26 @@ export default function PomodoroPage() {
   }, []);
 
   useEffect(() => {
-    const savedLogs = window.localStorage.getItem(getScopedStorageKey(pomodoroLogsStorageKey));
-    if (!savedLogs) {
-      setHasLoadedLogs(true);
-      return;
-    }
-
-    try {
-      setLogs(normalizeStoredPomodoroLogs(JSON.parse(savedLogs)));
-    } catch {
-      setLogs([]);
-    } finally {
-      setHasLoadedLogs(true);
-    }
+    let isCancelled = false;
+    loadDurablePomodoroLogs(normalizeStoredPomodoroLogs)
+      .then((savedLogs) => {
+        if (!isCancelled) setLogs(savedLogs);
+      })
+      .catch((err: Error) => {
+        if (!isCancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!isCancelled) setHasLoadedLogs(true);
+      });
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     if (!hasLoadedLogs) return;
-    window.localStorage.setItem(getScopedStorageKey(pomodoroLogsStorageKey), JSON.stringify(normalizeStoredPomodoroLogs(logs)));
+    void persistDurablePomodoroLogs(normalizeStoredPomodoroLogs(logs))
+      .catch((err: Error) => setError(err.message));
   }, [hasLoadedLogs, logs]);
 
   useEffect(() => {
