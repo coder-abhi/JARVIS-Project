@@ -1,6 +1,4 @@
 from datetime import date, datetime
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .models import BookStatus, GoalCategory, ProjectType, TaskPriority, TaskStatus
@@ -9,6 +7,12 @@ from .models import BookStatus, GoalCategory, ProjectType, TaskPriority, TaskSta
 class UserCreate(BaseModel):
     username: str = Field(min_length=3, max_length=80)
     password: str = Field(min_length=6, max_length=128)
+
+    @model_validator(mode="after")
+    def validate_normalized_username(self):
+        if len(self.username.strip()) < 3:
+            raise ValueError("Username must contain at least 3 non-space characters")
+        return self
 
 
 class UserLogin(BaseModel):
@@ -28,16 +32,6 @@ class AuthRead(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserRead
-
-
-class UserDocumentWrite(BaseModel):
-    data: Any
-
-
-class UserDocumentRead(BaseModel):
-    key: str
-    data: Any
-    updated_at: datetime | None = None
 
 
 class ProjectBase(BaseModel):
@@ -82,6 +76,12 @@ class ProjectUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=4000)
     type: ProjectType | None = None
     goal_id: str | None = None
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one project field must be provided")
+        return self
 
 
 class ProjectRead(ProjectBase):
@@ -132,6 +132,12 @@ class TaskUpdate(BaseModel):
     time_spent_hours: float | None = Field(default=None, ge=0)
     start_date: datetime | None = None
     deadline: datetime | None = None
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one task field must be provided")
+        return self
 
 
 class TaskRead(TaskBase):
@@ -199,6 +205,12 @@ class GoalUpdate(BaseModel):
     current_value: float | None = Field(default=None, ge=0)
     unit: str | None = Field(default=None, max_length=40)
     linked_project_ids: list[str] | None = None
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one goal field must be provided")
+        return self
 
 
 class GoalRead(GoalBase):
@@ -317,6 +329,12 @@ class BookUpdate(BaseModel):
     rating: int | None = Field(default=None, ge=1, le=10)
     purchase_date: datetime | None = None
     purchase_price: float | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one book field must be provided")
+        return self
 
 
 class BookRead(BookBase):

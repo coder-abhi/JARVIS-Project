@@ -4,11 +4,13 @@ import { type CSSProperties, FormEvent, Fragment, memo, useCallback, useEffect, 
 import Link from "next/link";
 import { PomodoroSessionModal, toDateTimeLocal, type PomodoroSessionDraft } from "../components/PomodoroSessionModal";
 import {
+  deletePomodoroHistorySession,
   deleteProjectPomodoroSession,
   getProjectPomodoroSessions,
   getProjectTasks,
   getProjects,
   matchPomodoroAssignment,
+  savePomodoroHistorySession,
   saveProjectPomodoroSession,
   type PomodoroProjectSession,
   type Project,
@@ -31,7 +33,6 @@ import {
   getFocusMinutesToday,
   getFocusMomentum,
   loadDurablePomodoroLogs,
-  persistDurablePomodoroLogs,
   type FocusMarathon,
 } from "@/lib/focusMetrics";
 import { LineTrendChart } from "@/components/LineTrendChart";
@@ -177,12 +178,6 @@ export default function PomodoroPage() {
       isCancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    if (!hasLoadedLogs) return;
-    void persistDurablePomodoroLogs(normalizeStoredPomodoroLogs(logs))
-      .catch((err: Error) => setError(err.message));
-  }, [hasLoadedLogs, logs]);
 
   useEffect(() => {
     if (isLoading || hasLoadedPersistedSessions || projects.length === 0) return;
@@ -570,6 +565,7 @@ export default function PomodoroPage() {
 
     try {
       nextLog.savedProjectSessionIds = await saveProjectTimeLogs(previousLog, nextLog);
+      await savePomodoroHistorySession(nextLog);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save project session time");
       return;
@@ -589,6 +585,7 @@ export default function PomodoroPage() {
     const nextLog = draftToLog({ ...draft, done: "", focus: 80 });
     try {
       nextLog.savedProjectSessionIds = await saveProjectTimeLogs(undefined, nextLog);
+      await savePomodoroHistorySession(nextLog);
       setLogs((current) => [nextLog, ...current].slice(0, 80));
       setDraft(null);
       resetTimer();
@@ -605,6 +602,7 @@ export default function PomodoroPage() {
     const previousLog = logs.find((log) => log.id === draft.id);
     try {
       await deleteProjectTimeLogs(previousLog);
+      await deletePomodoroHistorySession(draft.id);
       setLogs((current) => current.filter((log) => log.id !== draft.id));
       setDraft(null);
     } catch (err) {

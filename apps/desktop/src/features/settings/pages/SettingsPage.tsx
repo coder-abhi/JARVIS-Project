@@ -34,18 +34,29 @@ export default function SettingsPage() {
       .catch((err: Error) => setError(err.message));
   }, []);
 
-  function updateBehavior(changes: Partial<ProjectBehaviorSettings>) {
+  async function updateBehavior(changes: Partial<ProjectBehaviorSettings>) {
     const next = { ...behavior, ...changes };
-    saveProjectBehaviorSettings(next);
-    setBehavior(readProjectBehaviorSettings());
-    setMessage("Project behavior saved for this user.");
+    setBehavior(next);
+    setError(null);
+    try {
+      await saveProjectBehaviorSettings(next);
+      setBehavior(readProjectBehaviorSettings());
+      setMessage("Project behavior saved for this user.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save project settings");
+    }
   }
 
-  function updateMissionControl(changes: Partial<MissionControlVisibilitySettings>) {
+  async function updateMissionControl(changes: Partial<MissionControlVisibilitySettings>) {
     const next = { ...missionControl, ...changes };
     setMissionControl(next);
-    saveMissionControlVisibilitySettings(next);
-    setMessage("Mission Control visibility saved for this user.");
+    setError(null);
+    try {
+      await saveMissionControlVisibilitySettings(next);
+      setMessage("Mission Control visibility saved for this user.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save Mission Control settings");
+    }
   }
 
   async function updateFeature(feature: AiFeatureSetting, changes: { enabled?: boolean; model?: string }) {
@@ -94,7 +105,7 @@ export default function SettingsPage() {
             label="Default project type"
             description="Preselect this mission type when opening New Mission."
             value={behavior.defaultProjectType}
-            onChange={(value) => updateBehavior({ defaultProjectType: value as ProjectBehaviorSettings["defaultProjectType"] })}
+            onChange={(value) => void updateBehavior({ defaultProjectType: value as ProjectBehaviorSettings["defaultProjectType"] })}
             options={[
               { value: "fixed", label: "Fixed" },
               { value: "continuous", label: "Continuous" },
@@ -104,7 +115,7 @@ export default function SettingsPage() {
             label="Default task priority"
             description="Applied when a new objective form opens."
             value={behavior.defaultTaskPriority}
-            onChange={(value) => updateBehavior({ defaultTaskPriority: value as ProjectBehaviorSettings["defaultTaskPriority"] })}
+            onChange={(value) => void updateBehavior({ defaultTaskPriority: value as ProjectBehaviorSettings["defaultTaskPriority"] })}
             options={[
               { value: "high", label: "High" },
               { value: "medium", label: "Medium" },
@@ -115,7 +126,7 @@ export default function SettingsPage() {
             label="Default task state"
             description="Choose whether new objectives wait in Todo or begin immediately."
             value={behavior.defaultTaskStatus}
-            onChange={(value) => updateBehavior({ defaultTaskStatus: value as ProjectBehaviorSettings["defaultTaskStatus"] })}
+            onChange={(value) => void updateBehavior({ defaultTaskStatus: value as ProjectBehaviorSettings["defaultTaskStatus"] })}
             options={[
               { value: "todo", label: "Todo" },
               { value: "in_progress", label: "In progress" },
@@ -133,7 +144,7 @@ export default function SettingsPage() {
               onChange={(event) => {
                 setBehavior((current) => ({ ...current, defaultTaskMinutes: Number(event.target.value) }));
               }}
-              onBlur={() => updateBehavior({ defaultTaskMinutes: behavior.defaultTaskMinutes })}
+              onBlur={() => void updateBehavior({ defaultTaskMinutes: behavior.defaultTaskMinutes })}
             />
           </label>
         </div>
@@ -149,19 +160,19 @@ export default function SettingsPage() {
             label="Week Operations Plan"
             description="The interactive weekly project and objective schedule."
             enabled={missionControl.weekOperationsPlan}
-            onChange={(enabled) => updateMissionControl({ weekOperationsPlan: enabled })}
+            onChange={(enabled) => void updateMissionControl({ weekOperationsPlan: enabled })}
           />
           <VisibilityToggle
             label="Efficiency Report"
             description="Planned versus actual hours and completion rate."
             enabled={missionControl.efficiencyReport}
-            onChange={(enabled) => updateMissionControl({ efficiencyReport: enabled })}
+            onChange={(enabled) => void updateMissionControl({ efficiencyReport: enabled })}
           />
           <VisibilityToggle
             label="Time Allocation"
             description="Minutes and percentages allocated across missions."
             enabled={missionControl.timeAllocation}
-            onChange={(enabled) => updateMissionControl({ timeAllocation: enabled })}
+            onChange={(enabled) => void updateMissionControl({ timeAllocation: enabled })}
           />
         </div>
       </section>

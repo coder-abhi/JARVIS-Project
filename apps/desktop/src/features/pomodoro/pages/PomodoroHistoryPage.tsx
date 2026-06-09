@@ -3,8 +3,15 @@
 import Link from "next/link";
 import { type CSSProperties, type FormEvent, useEffect, useMemo, useState } from "react";
 import { PomodoroSessionModal, toDateTimeLocal, type PomodoroSessionDraft } from "../components/PomodoroSessionModal";
-import { deleteProjectPomodoroSession, getProjects, saveProjectPomodoroSession, type Project } from "@/lib/api";
-import { loadDurablePomodoroLogs, persistDurablePomodoroLogs } from "@/lib/focusMetrics";
+import {
+  deletePomodoroHistorySession,
+  deleteProjectPomodoroSession,
+  getProjects,
+  savePomodoroHistorySession,
+  saveProjectPomodoroSession,
+  type Project,
+} from "@/lib/api";
+import { loadDurablePomodoroLogs } from "@/lib/focusMetrics";
 import "./PomodoroPage.css";
 
 type TimerMode = "focus" | "short" | "long";
@@ -157,7 +164,7 @@ export default function PomodoroHistoryPage() {
       nextLog.savedProjectSessionIds = await saveProjectTimeLogs(previousLog, nextLog);
       const nextLogs = logs.map((log) => (log.id === nextLog.id ? nextLog : log));
       setLogs(nextLogs);
-      await persistDurablePomodoroLogs(normalizeStoredPomodoroLogs(nextLogs));
+      await savePomodoroHistorySession(nextLog);
       setDraft(null);
       setError(null);
     } catch (err) {
@@ -173,9 +180,9 @@ export default function PomodoroHistoryPage() {
     const previousLog = logs.find((log) => log.id === draft.id);
     try {
       await deleteProjectTimeLogs(previousLog);
+      await deletePomodoroHistorySession(draft.id);
       const nextLogs = logs.filter((log) => log.id !== draft.id);
       setLogs(nextLogs);
-      await persistDurablePomodoroLogs(normalizeStoredPomodoroLogs(nextLogs));
       setDraft(null);
       setError(null);
     } catch (err) {

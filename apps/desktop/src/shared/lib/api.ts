@@ -259,9 +259,14 @@ export type CaptainCompass = {
 
 export type CaptainCompassContextDays = 7 | 30 | 90;
 
-export type UserDocument<T> = {
-  key: string;
-  data: T | null;
+export type UserPreferences = {
+  default_project_type: ProjectType;
+  default_task_priority: TaskPriority;
+  default_task_status: Exclude<TaskStatus, "done">;
+  default_task_minutes: number;
+  show_week_operations_plan: boolean;
+  show_efficiency_report: boolean;
+  show_time_allocation: boolean;
   updated_at?: string | null;
 };
 
@@ -319,7 +324,7 @@ export type AiCostSummary = {
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
-const documentSaveQueues = new Map<string, Promise<unknown>>();
+const saveQueues = new Map<string, Promise<unknown>>();
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAuthToken();
@@ -340,7 +345,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         window.location.href = "/login";
       }
     }
-    const message = await response.text();
+    const body = await response.text();
+    let message = body;
+    try {
+      const error = JSON.parse(body) as { detail?: unknown };
+      if (typeof error.detail === "string") message = error.detail;
+    } catch {
+      // Keep non-JSON response bodies as the error message.
+    }
     throw new Error(message || `Request failed with ${response.status}`);
   }
 
@@ -367,20 +379,38 @@ export function getCurrentUser() {
   return request<AuthUser>("/auth/me");
 }
 
-export function getUserDocument<T>(key: string) {
-  return request<UserDocument<T>>(`/storage/${encodeURIComponent(key)}`);
+export function getUserPreferences() {
+  return request<UserPreferences>("/settings");
 }
 
-export function saveUserDocument<T>(key: string, data: T) {
-  const previous = documentSaveQueues.get(key) ?? Promise.resolve();
+export function saveUserPreferences(data: Omit<UserPreferences, "updated_at">) {
+  return request<UserPreferences>("/settings", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function getPomodoroHistory<T>() {
+  return request<T[]>("/pomodoro/sessions");
+}
+
+export function savePomodoroHistorySession<T extends { id: string }>(data: T) {
+  const key = `pomodoro-session:${data.id}`;
+  const previous = saveQueues.get(key) ?? Promise.resolve();
   const next = previous
     .catch(() => undefined)
-    .then(() => request<UserDocument<T>>(`/storage/${encodeURIComponent(key)}`, {
+    .then(() => request<T>(`/pomodoro/sessions/${encodeURIComponent(data.id)}`, {
       method: "PUT",
-      body: JSON.stringify({ data }),
+      body: JSON.stringify(data),
     }));
-  documentSaveQueues.set(key, next);
+  saveQueues.set(key, next);
   return next;
+}
+
+export function deletePomodoroHistorySession(sessionId: string) {
+  return request<void>(`/pomodoro/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+  });
 }
 
 export function getWealthData<T>() {
@@ -389,14 +419,14 @@ export function getWealthData<T>() {
 
 export function saveWealthData<T>(data: T) {
   const key = "wealth-data";
-  const previous = documentSaveQueues.get(key) ?? Promise.resolve();
+  const previous = saveQueues.get(key) ?? Promise.resolve();
   const next = previous
     .catch(() => undefined)
     .then(() => request<T>("/money", {
       method: "PUT",
       body: JSON.stringify(data),
     }));
-  documentSaveQueues.set(key, next);
+  saveQueues.set(key, next);
   return next;
 }
 

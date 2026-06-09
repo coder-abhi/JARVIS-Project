@@ -35,6 +35,18 @@ class WealthAccount(Base):
     balance: Mapped[float] = mapped_column(Float, default=0, nullable=False)
 
 
+class WealthCategory(Base):
+    __tablename__ = "wealth_categories"
+    __table_args__ = (
+        UniqueConstraint("user_id", "transaction_type", "name", name="uq_wealth_category_user_type_name"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    transaction_type: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+
+
 class WealthCreditCard(Base):
     __tablename__ = "wealth_credit_cards"
 
@@ -58,6 +70,7 @@ class WealthTransaction(Base):
     amount: Mapped[float] = mapped_column(Float, nullable=False)
     description: Mapped[str] = mapped_column(String(500), nullable=False)
     category: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    category_id: Mapped[str | None] = mapped_column(ForeignKey("wealth_categories.id"), nullable=True, index=True)
     date_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     source_kind: Mapped[str] = mapped_column(String(10), nullable=False)
     account_id: Mapped[str | None] = mapped_column(ForeignKey("wealth_accounts.id"), nullable=True, index=True)

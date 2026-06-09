@@ -7,6 +7,7 @@ from sqlalchemy import inspect, text
 
 from .database import Base, engine
 from .feature_registry import feature_manifest, include_enabled_feature_routers
+from .migrations import backup_sqlite_before_structured_migration, migrate_structured_storage
 from . import models  # noqa: F401 - importing registers SQLAlchemy models
 
 
@@ -29,6 +30,7 @@ def ensure_sqlite_compatibility() -> None:
     chapter_columns = {column["name"] for column in inspector.get_columns("book_chapters")} if "book_chapters" in table_names else set()
     reading_log_columns = {column["name"] for column in inspector.get_columns("reading_logs")} if "reading_logs" in table_names else set()
     ai_feature_setting_columns = {column["name"] for column in inspector.get_columns("ai_feature_settings")} if "ai_feature_settings" in table_names else set()
+    wealth_transaction_columns = {column["name"] for column in inspector.get_columns("wealth_transactions")} if "wealth_transactions" in table_names else set()
 
     with engine.begin() as connection:
         if project_columns and "user_id" not in project_columns:
@@ -171,6 +173,9 @@ def ensure_sqlite_compatibility() -> None:
 
         if ai_feature_setting_columns and "model" not in ai_feature_setting_columns:
             connection.execute(text("ALTER TABLE ai_feature_settings ADD COLUMN model VARCHAR(120)"))
+        if wealth_transaction_columns and "category_id" not in wealth_transaction_columns:
+            connection.execute(text("ALTER TABLE wealth_transactions ADD COLUMN category_id VARCHAR(36)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_wealth_transactions_category_id ON wealth_transactions (category_id)"))
 
         if project_columns and task_columns:
             migrate_legacy_goal_inbox_projects(connection, table_names)
@@ -340,6 +345,8 @@ def drop_legacy_task_goal_id() -> None:
 
 
 ensure_sqlite_compatibility()
+backup_sqlite_before_structured_migration(engine)
+migrate_structured_storage(engine)
 
 app = FastAPI(title="Jarvis Local API")
 

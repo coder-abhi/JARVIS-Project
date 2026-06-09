@@ -10,6 +10,7 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [user, setUser] = useState<AuthUser | null>(() => getStoredUser());
+  const [settingsReady, setSettingsReady] = useState(() => !getStoredUser());
   const isAuthScreen = location.pathname === "/login" || location.pathname === "/signup";
 
   useEffect(() => {
@@ -26,8 +27,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
-    void hydrateAppSettings().catch(() => undefined);
+    if (!user) {
+      setSettingsReady(true);
+      return;
+    }
+    let isCancelled = false;
+    setSettingsReady(false);
+    void hydrateAppSettings()
+      .catch(() => undefined)
+      .finally(() => {
+        if (!isCancelled) setSettingsReady(true);
+      });
+    return () => {
+      isCancelled = true;
+    };
   }, [user]);
 
   function logout() {
@@ -80,7 +93,7 @@ export default function App() {
       ) : null}
 
       <section className={isAuthScreen ? "auth-content" : "desktop-content"}>
-        <Outlet />
+        {isAuthScreen || settingsReady ? <Outlet /> : <p className="p-6 text-sm text-stone-500">Loading settings...</p>}
       </section>
       <PomodoroCompletionToast />
     </div>

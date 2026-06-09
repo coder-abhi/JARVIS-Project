@@ -1,4 +1,4 @@
-import { getUserDocument, saveUserDocument } from "@/lib/api";
+import { getPomodoroHistory, savePomodoroHistorySession } from "@/lib/api";
 import { getScopedStorageKey } from "@/lib/auth";
 import { addCalendarDays, getSessionWorkDayDate, getWorkDayDate, isCurrentWorkDay } from "@/lib/workDay";
 
@@ -25,40 +25,17 @@ export type FocusMarathonMetrics = {
 };
 
 export const pomodoroLogsStorageKey = "personal-project-manager:pomodoro-logs";
-const pomodoroLogsDocumentKey = "pomodoro-history";
 const marathonBreakLimitMinutes = 10;
-
-export function readStoredPomodoroLogs(): FocusMetricLog[] {
-  if (typeof window === "undefined") return [];
-
-  const savedLogs = window.localStorage.getItem(getScopedStorageKey(pomodoroLogsStorageKey));
-  if (!savedLogs) return [];
-
-  try {
-    return normalizeStoredPomodoroLogs(JSON.parse(savedLogs));
-  } catch {
-    return [];
-  }
-}
 
 export async function loadDurablePomodoroLogs<T extends { id: string }>(normalize: (value: unknown) => T[]) {
   const localLogs = readLocalPomodoroLogs(normalize);
-  const document = await getUserDocument<unknown>(pomodoroLogsDocumentKey);
-  if (document.data == null) {
-    if (localLogs.length) await persistDurablePomodoroLogs(localLogs);
-    return localLogs;
-  }
-
-  const remoteLogs = normalize(document.data);
+  const remoteLogs = normalize(await getPomodoroHistory<unknown>());
   const merged = mergeLogs(remoteLogs, localLogs);
-  if (merged.length !== remoteLogs.length) await persistDurablePomodoroLogs(merged);
+  if (localLogs.length) {
+    await Promise.all(localLogs.map((log) => savePomodoroHistorySession(log)));
+  }
+  window.localStorage.removeItem(getScopedStorageKey(pomodoroLogsStorageKey));
   return merged;
-}
-
-export async function persistDurablePomodoroLogs<T>(logs: T[]) {
-  const normalized = JSON.parse(JSON.stringify(logs)) as T[];
-  window.localStorage.setItem(getScopedStorageKey(pomodoroLogsStorageKey), JSON.stringify(normalized));
-  await saveUserDocument(pomodoroLogsDocumentKey, normalized);
 }
 
 export function getFocusMinutesToday(logs: FocusMetricLog[]) {
@@ -121,19 +98,6 @@ export function getFocusMarathonMetrics(logs: FocusMetricLog[]): FocusMarathonMe
       .sort((a, b) => b.minutes - a.minutes || new Date(b.endedAt).getTime() - new Date(a.endedAt).getTime())
       .slice(0, 5),
   };
-}
-
-function normalizeStoredPomodoroLogs(value: unknown): FocusMetricLog[] {
-  if (!Array.isArray(value)) return [];
-
-  return value.filter((log): log is FocusMetricLog => (
-    Boolean(log)
-    && typeof log === "object"
-    && "id" in log
-    && "completedAt" in log
-    && "minutes" in log
-    && "mode" in log
-  ));
 }
 
 function readLocalPomodoroLogs<T>(normalize: (value: unknown) => T[]) {

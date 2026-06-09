@@ -12,7 +12,7 @@ from .features.library.router import router as library_router
 from .features.money.router import router as money_router
 from .features.pomodoro.router import router as pomodoro_router
 from .features.projects.router import router as projects_router
-from .features.storage.router import router as storage_router
+from .features.settings.router import router as settings_router
 from .features.tasks.router import router as tasks_router
 
 
@@ -33,7 +33,7 @@ FEATURES: tuple[FeatureDefinition, ...] = (
     FeatureDefinition("goals", "Goals cockpit", goals_router, depends_on=("auth", "projects", "tasks")),
     FeatureDefinition("library", "Reading library", library_router, depends_on=("auth",)),
     FeatureDefinition("money", "Wealth Command", money_router, depends_on=("auth",)),
-    FeatureDefinition("storage", "Durable user document storage", storage_router, depends_on=("auth",)),
+    FeatureDefinition("settings", "User preferences", settings_router, depends_on=("auth",)),
     FeatureDefinition("ai", "AI cost surveillance", ai_router),
 )
 

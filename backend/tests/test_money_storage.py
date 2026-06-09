@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app import models as root_models
 from app.database import Base
-from app.features.money import models, schemas, service
+from app.features.money import models, repository, schemas, service
 
 
 class MoneyStorageTests(unittest.TestCase):
@@ -38,6 +38,7 @@ class MoneyStorageTests(unittest.TestCase):
             {
                 "wealth_profiles",
                 "wealth_accounts",
+                "wealth_categories",
                 "wealth_credit_cards",
                 "wealth_transactions",
                 "wealth_transaction_tags",
@@ -56,6 +57,7 @@ class MoneyStorageTests(unittest.TestCase):
         self.assertEqual(saved.currency, "USD")
         self.assertEqual(saved.accounts[0].bankName, "Main Bank")
         self.assertEqual(saved.transactions[0].sourceId, "account-1")
+        self.assertTrue(saved.transactions[0].categoryId)
         self.assertEqual(saved.transactions[0].tags, ["#food", "#work"])
         self.assertEqual(saved.cards[0].generatedBill, 120)
         self.assertEqual(saved.goals[0].note, "Keep this private")
@@ -67,6 +69,59 @@ class MoneyStorageTests(unittest.TestCase):
             ).transaction_id,
             "transaction-1",
         )
+
+    def test_granular_transaction_write_validates_owned_references(self) -> None:
+        repository.upsert_resource(
+            self.session,
+            user_id="user-1",
+            resource="accounts",
+            data=schemas.WealthAccountData(
+                id="account-1",
+                bankName="Main Bank",
+                name="Checking",
+                accountType="Current",
+                balance=100,
+            ),
+            create_only=True,
+        )
+        saved = repository.upsert_resource(
+            self.session,
+            user_id="user-1",
+            resource="transactions",
+            data=schemas.WealthTransactionData(
+                id="transaction-1",
+                type="expense",
+                amount=25,
+                description="Lunch",
+                category="Food",
+                dateTime=datetime(2026, 6, 9, 12, 30),
+                sourceKind="account",
+                sourceId="account-1",
+                tags=["#food"],
+            ),
+            create_only=True,
+        )
+
+        self.assertEqual(saved.transactions[0].category, "Food")
+        food_category = next(category for category in saved.categories if category.name == "Food")
+        self.assertEqual(saved.transactions[0].categoryId, food_category.id)
+
+        with self.assertRaises(ValueError):
+            repository.upsert_resource(
+                self.session,
+                user_id="user-2",
+                resource="transactions",
+                data=schemas.WealthTransactionData(
+                    type="expense",
+                    amount=10,
+                    description="Invalid",
+                    category="Food",
+                    dateTime=datetime(2026, 6, 9, 13, 0),
+                    sourceKind="account",
+                    sourceId="account-1",
+                ),
+                create_only=True,
+            )
 
     def test_legacy_document_migrates_once_to_relational_tables(self) -> None:
         legacy = root_models.UserDocument(
@@ -112,6 +167,52 @@ class MoneyStorageTests(unittest.TestCase):
                 )
             )
         )
+
+    def test_invalid_bulk_replace_is_rejected_before_existing_rows_change(self) -> None:
+        service.save_wealth_data(self.session, user_id="user-1", data=self.sample_data())
+        invalid = schemas.WealthData(
+            currency="USD",
+            transactions=[
+                schemas.WealthTransactionData(
+                    type="expense",
+                    amount=10,
+                    description="Invalid source",
+                    category="Food",
+                    dateTime=datetime(2026, 6, 10, 12, 0),
+                    sourceKind="account",
+                    sourceId="missing-account",
+                )
+            ],
+        )
+
+        with self.assertRaises(ValueError):
+            service.save_wealth_data(self.session, user_id="user-1", data=invalid)
+
+        saved = service.get_wealth_data(self.session, user_id="user-1")
+        self.assertEqual([account.id for account in saved.accounts], ["account-1"])
+        self.assertEqual([transaction.id for transaction in saved.transactions], ["transaction-1"])
+
+    def test_dangling_legacy_transaction_source_reads_as_cash(self) -> None:
+        self.session.add(
+            models.WealthTransaction(
+                id="legacy-transaction",
+                user_id="user-1",
+                type="expense",
+                amount=12,
+                description="Legacy expense",
+                category="Other",
+                date_time=datetime(2026, 6, 10, 12, 0),
+                source_kind="account",
+                account_id=None,
+                card_id=None,
+            )
+        )
+        self.session.commit()
+
+        data = repository.read_wealth_data(self.session, user_id="user-1")
+
+        self.assertEqual(data.transactions[0].sourceKind, "cash")
+        self.assertEqual(data.transactions[0].sourceId, "")
 
     @staticmethod
     def sample_data() -> schemas.WealthData:

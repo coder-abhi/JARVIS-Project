@@ -2,7 +2,6 @@
 
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { getWealthData, saveWealthData } from "@/lib/api";
-import { getScopedStorageKey } from "@/lib/auth";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import "./MoneyPage.css";
 
@@ -18,10 +17,17 @@ type Transaction = {
   amount: number;
   description: string;
   category: string;
+  categoryId: string;
   dateTime: string;
   sourceKind: SourceKind;
   sourceId: string;
   tags: string[];
+};
+
+type MoneyCategory = {
+  id: string;
+  transactionType: TransactionType;
+  name: string;
 };
 
 type BankAccount = {
@@ -93,6 +99,7 @@ type ExpectedBill = {
 type MoneyData = {
   version: 1;
   currency: Currency;
+  categories: MoneyCategory[];
   transactions: Transaction[];
   accounts: BankAccount[];
   cards: CreditCard[];
@@ -106,11 +113,10 @@ type MoneyData = {
 type Entry = Transaction | BankAccount | CreditCard | Loan | Investment | SavingGoal | ExpectedIncome | ExpectedBill;
 type Draft = Record<string, string>;
 
-const storageKey = "jarvis-money-command-v1";
-const storageBackupKey = `${storageKey}-backup`;
 const emptyData: MoneyData = {
   version: 1,
   currency: "INR",
+  categories: [],
   transactions: [],
   accounts: [],
   cards: [],
@@ -147,27 +153,15 @@ export default function MoneyPage() {
     let isCancelled = false;
 
     async function loadMoneyData() {
-      const localCandidates = readLocalMoneyCandidates();
       try {
         const databaseData = normalizeMoneyData(await getWealthData<unknown>());
         if (isCancelled) return;
-        const localData = localCandidates[0] ?? null;
-        const shouldRecoverLocalData = localData !== null && moneyDataSize(databaseData) === 0;
-        const nextData = shouldRecoverLocalData ? localData : databaseData;
-        setData(nextData);
+        setData(databaseData);
         setCanPersist(true);
-        if (shouldRecoverLocalData) {
-          await saveWealthData(nextData);
-        }
-      } catch {
+      } catch (error) {
         if (isCancelled) return;
-        if (localCandidates.length) {
-          setData(localCandidates[0]);
-          setCanPersist(true);
-          setLoadWarning("Using the local finance cache because the database is unavailable.");
-        } else {
-          setLoadWarning("Wealth Command could not reach the local database.");
-        }
+        const message = error instanceof Error ? error.message : "Unknown error";
+        setLoadWarning(`Wealth Command failed to load: ${message}`);
       } finally {
         if (!isCancelled) setIsLoaded(true);
       }
@@ -181,21 +175,12 @@ export default function MoneyPage() {
 
   useEffect(() => {
     if (!isLoaded || !canPersist) return;
-    const scopedStorageKey = getScopedStorageKey(storageKey);
-    const scopedBackupKey = getScopedStorageKey(storageBackupKey);
-    const currentStoredValue = window.localStorage.getItem(scopedStorageKey);
-    if (currentStoredValue) {
-      try {
-        JSON.parse(currentStoredValue);
-        window.localStorage.setItem(scopedBackupKey, currentStoredValue);
-      } catch {
-        // Never replace a valid backup with unreadable data.
-      }
-    }
-    window.localStorage.setItem(scopedStorageKey, JSON.stringify(data));
     void saveWealthData(data)
       .then(() => setLoadWarning(""))
-      .catch(() => setLoadWarning("Changes are cached locally, but the finance database could not be updated."));
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        setLoadWarning(`The finance database could not be updated: ${message}. Reload before making more changes.`);
+      });
   }, [canPersist, data, isLoaded]);
 
   const summary = useMemo(() => calculateSummary(data), [data]);
@@ -272,6 +257,26 @@ export default function MoneyPage() {
       } else {
         const key = collectionKey(kind);
         (next[key] as Entry[]) = (next[key] as Entry[]).filter((item) => item.id !== id);
+        if (kind === "account") {
+          next.transactions = next.transactions.map((transaction) =>
+            transaction.sourceKind === "account" && transaction.sourceId === id
+              ? { ...transaction, sourceKind: "cash", sourceId: "" }
+              : transaction,
+          );
+          next.incomes = next.incomes.map((income) =>
+            income.accountId === id ? { ...income, accountId: "" } : income,
+          );
+          next.bills = next.bills.map((bill) =>
+            bill.accountId === id ? { ...bill, accountId: "" } : bill,
+          );
+        }
+        if (kind === "card") {
+          next.transactions = next.transactions.map((transaction) =>
+            transaction.sourceKind === "card" && transaction.sourceId === id
+              ? { ...transaction, sourceKind: "cash", sourceId: "" }
+              : transaction,
+          );
+        }
       }
       return next;
     });
@@ -294,6 +299,7 @@ export default function MoneyPage() {
         amount: expectation.amount,
         description: kind === "income" ? (expectation as ExpectedIncome).source : (expectation as ExpectedBill).payee,
         category: kind === "income" ? "Other" : "Bills",
+        categoryId: "",
         dateTime: toDateTimeValue(new Date()),
         sourceKind: accountId ? "account" : "cash",
         sourceId: accountId,
@@ -1029,6 +1035,7 @@ function draftToEntry(kind: EntryKind, draft: Draft, id: string): Entry | null {
       amount: number("amount"),
       description: draft.description.trim(),
       category: draft.category,
+      categoryId: "",
       dateTime: draft.dateTime,
       sourceKind,
       sourceId: sourceKind === "cash" ? "" : draft.sourceId,
@@ -1055,6 +1062,7 @@ function upsert<T extends { id: string }>(items: T[], entry: T) {
 function cloneData(data: MoneyData): MoneyData {
   return {
     ...data,
+    categories: [...data.categories],
     transactions: [...data.transactions],
     accounts: [...data.accounts],
     cards: [...data.cards],
@@ -1090,29 +1098,6 @@ function normalizeTags(value: string | string[]) {
   )];
 }
 
-function readLocalMoneyCandidates() {
-  const scopedStorageKey = getScopedStorageKey(storageKey);
-  const scopedBackupKey = getScopedStorageKey(storageBackupKey);
-  const discovered = Object.keys(window.localStorage)
-    .filter((key) => key === storageKey || key.startsWith(`${storageKey}:`) || key === storageBackupKey || key.startsWith(`${storageBackupKey}:`))
-    .map((key) => window.localStorage.getItem(key));
-  const candidates = [
-    window.localStorage.getItem(scopedStorageKey),
-    window.localStorage.getItem(scopedBackupKey),
-    scopedStorageKey === storageKey ? null : window.localStorage.getItem(storageKey),
-    ...discovered,
-  ];
-  const readableData = [...new Set(candidates.filter((value): value is string => Boolean(value)))]
-    .flatMap((candidate) => {
-      try {
-        return [normalizeMoneyData(JSON.parse(candidate))];
-      } catch {
-        return [];
-      }
-    });
-  return readableData.sort((left, right) => moneyDataSize(right) - moneyDataSize(left));
-}
-
 function normalizeMoneyData(value: unknown): MoneyData {
   const parsed = asRecord(value);
   const today = toDateValue(new Date());
@@ -1121,12 +1106,18 @@ function normalizeMoneyData(value: unknown): MoneyData {
   return {
     version: 1,
     currency: currency === "USD" || currency === "EUR" || currency === "GBP" ? currency : "INR",
+    categories: recordList(parsed.categories).map((item) => ({
+      id: stringValue(item.id) || createId(),
+      transactionType: item.transactionType === "income" ? "income" : "expense",
+      name: stringValue(item.name) || "Other",
+    })),
     transactions: recordList(parsed.transactions).map((item) => ({
       id: stringValue(item.id) || createId(),
       type: item.type === "income" ? "income" : "expense",
       amount: numberValue(item.amount),
       description: stringValue(item.description),
       category: stringValue(item.category) || "Other",
+      categoryId: stringValue(item.categoryId),
       dateTime: stringValue(item.dateTime) || now,
       sourceKind: item.sourceKind === "account" || item.sourceKind === "card" ? item.sourceKind : "cash",
       sourceId: stringValue(item.sourceId),
@@ -1183,17 +1174,6 @@ function normalizeMoneyData(value: unknown): MoneyData {
       accountId: stringValue(item.accountId),
     })),
   };
-}
-
-function moneyDataSize(data: MoneyData) {
-  return data.transactions.length
-    + data.accounts.length
-    + data.cards.length
-    + data.loans.length
-    + data.investments.length
-    + data.goals.length
-    + data.incomes.length
-    + data.bills.length;
 }
 
 function normalizeCard(value: Record<string, unknown>): CreditCard {

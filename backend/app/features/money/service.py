@@ -18,6 +18,8 @@ def get_wealth_data(db: Session, *, user_id: str) -> schemas.WealthData:
             repository.replace_wealth_data(db, user_id=user_id, data=data)
             db.delete(legacy)
             db.commit()
+        else:
+            repository.replace_wealth_data(db, user_id=user_id, data=schemas.WealthData())
     return repository.read_wealth_data(db, user_id=user_id)
 
 
@@ -28,6 +30,23 @@ def save_wealth_data(db: Session, *, user_id: str, data: schemas.WealthData) -> 
         db.delete(legacy)
         db.commit()
     return saved
+
+
+def save_resource(
+    db: Session,
+    *,
+    user_id: str,
+    resource: str,
+    data,
+    create_only: bool,
+) -> schemas.WealthData:
+    return repository.upsert_resource(
+        db,
+        user_id=user_id,
+        resource=resource,
+        data=data,
+        create_only=create_only,
+    )
 
 
 def _get_legacy_document(db: Session, *, user_id: str) -> UserDocument | None:
@@ -46,7 +65,7 @@ def _normalize_legacy_data(value: Any) -> dict[str, Any]:
         **data,
         "cards": [
             {
-                **card,
+                **{key: item for key, item in card.items() if key != "currentBalance"},
                 "generatedBill": card.get("generatedBill", 0),
                 "currentBill": card.get("currentBill", card.get("currentBalance", 0)),
             }

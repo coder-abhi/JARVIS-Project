@@ -16,7 +16,7 @@ import {
 import {
   getFocusMinutesToday,
   getFocusMomentum,
-  readStoredPomodoroLogs,
+  loadDurablePomodoroLogs,
   type FocusMetricLog,
 } from "@/lib/focusMetrics";
 import { pomodoroSessionCompletedEvent, pomodoroSessionUpdatedEvent } from "@/lib/pomodoroSession";
@@ -78,7 +78,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     function refreshFocusLogs() {
-      setFocusLogs(readStoredPomodoroLogs());
+      void loadDurablePomodoroLogs(normalizeFocusLogs)
+        .then(setFocusLogs)
+        .catch(() => undefined);
     }
 
     refreshFocusLogs();
@@ -326,6 +328,18 @@ export default function DashboardPage() {
       </form>
     </main>
   );
+}
+
+function normalizeFocusLogs(value: unknown): FocusMetricLog[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((log): log is FocusMetricLog => (
+    Boolean(log)
+    && typeof log === "object"
+    && "id" in log
+    && "completedAt" in log
+    && "minutes" in log
+    && "mode" in log
+  ));
 }
 
 function PanelHeader({ label, detail }: { label: string; detail: string }) {
