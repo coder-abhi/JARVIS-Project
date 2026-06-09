@@ -97,7 +97,7 @@ const modeLabels: Record<TimerMode, string> = {
   short: "Short Break",
   long: "Long Break",
 };
-const customFocusMinutePresets = [1, 10, 15, 30, 45, 50];
+const customFocusMinutePresets = [1, 10, 15, 20, 45, 50];
 const customBreakMinutePresets = [5, 10, 15];
 const recentEntriesLabels: Record<RecentEntriesFilter, string> = {
   today: "Today",
