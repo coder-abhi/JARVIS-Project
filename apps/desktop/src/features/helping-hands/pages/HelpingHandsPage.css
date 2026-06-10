@@ -1,0 +1,613 @@
+.helping-screen {
+  padding-bottom: 4rem;
+}
+
+.helping-header-actions,
+.helping-panel-head > div,
+.helping-actions {
+  display: flex;
+  align-items: center;
+}
+
+.helping-header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.helping-period-picker {
+  display: grid;
+  gap: 0.2rem;
+  color: var(--ops-dim);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.helping-period-picker input {
+  min-height: 2.1rem;
+  border: 1px solid var(--ops-border);
+  padding: 0.35rem 0.5rem;
+  font-size: 0.68rem;
+}
+
+.helping-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.helping-summary-card {
+  min-width: 0;
+  border: 1px solid var(--ops-border);
+  background: rgba(3, 3, 3, 0.96);
+  padding: 0.85rem;
+}
+
+.helping-summary-card.featured {
+  grid-column: span 2;
+  border-color: rgba(34, 197, 94, 0.55);
+}
+
+.helping-summary-card > span,
+.helping-summary-card > small,
+.helping-rule-grid span,
+.helping-rule-grid small,
+.helping-member-row small,
+.helping-allocation-rules small,
+.helping-recent-row small,
+.helping-all-transaction-row small {
+  color: var(--ops-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+}
+
+.helping-summary-card > strong {
+  display: block;
+  margin-top: 0.42rem;
+  overflow-wrap: anywhere;
+  color: var(--ops-text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 1.2rem;
+}
+
+.helping-summary-card > small {
+  display: block;
+  margin-top: 0.32rem;
+  color: var(--ops-dim);
+  line-height: 1.45;
+}
+
+.helping-summary-card.signal > strong,
+.helping-positive {
+  color: var(--ops-signal) !important;
+}
+
+.helping-summary-card.danger > strong,
+.helping-negative {
+  color: #f87171 !important;
+}
+
+.helping-warning {
+  color: #facc15 !important;
+}
+
+.helping-panel-head > div {
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.helping-inline-button,
+.helping-actions button {
+  border: 0;
+  background: transparent;
+  color: var(--ops-signal);
+  cursor: pointer;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.59rem;
+  font-weight: 700;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.helping-inline-button {
+  border: 1px solid rgba(34, 197, 94, 0.55);
+  padding: 0.3rem 0.45rem;
+}
+
+.helping-table-wrap {
+  overflow-x: auto;
+}
+
+.helping-member-table,
+.helping-loan-table,
+.helping-interest-table,
+.helping-all-transactions-table {
+  margin-top: 0.7rem;
+}
+
+.helping-member-row,
+.helping-loan-row,
+.helping-interest-row,
+.helping-all-transaction-row {
+  display: grid;
+  align-items: center;
+  gap: 0.65rem;
+  border-bottom: 1px solid var(--ops-border);
+  padding: 0.58rem 0.45rem;
+  color: var(--ops-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.63rem;
+}
+
+.helping-member-row {
+  grid-template-columns: minmax(9rem, 1.2fr) minmax(11rem, 1.35fr) 8rem 7rem 8rem 8.5rem;
+  min-width: 66rem;
+}
+
+.helping-loan-row {
+  grid-template-columns: 7.5rem minmax(9rem, 1.2fr) 7rem 7rem minmax(9rem, 1fr);
+  min-width: 49rem;
+}
+
+.helping-interest-row {
+  grid-template-columns: 8rem minmax(9rem, 1.2fr) 8rem 7rem 7rem;
+  min-width: 44rem;
+}
+
+.helping-all-transaction-row {
+  grid-template-columns: 7.5rem 9rem 6.5rem 8rem minmax(18rem, 2fr) minmax(10rem, 1fr) 6.5rem;
+  min-width: 79rem;
+}
+
+.helping-member-row.head,
+.helping-loan-row.head,
+.helping-interest-row.head,
+.helping-all-transaction-row.head {
+  min-height: 1.9rem;
+  background: #050505;
+  color: var(--ops-dim);
+  font-size: 0.56rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.helping-member-row > strong,
+.helping-loan-row > strong,
+.helping-interest-row > strong,
+.helping-all-transaction-row > strong {
+  color: var(--ops-text);
+  font-size: 0.68rem;
+}
+
+.helping-status,
+.helping-source,
+.helping-direction {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ops-border);
+  color: var(--ops-muted);
+  padding: 0.28rem 0.4rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.55rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.helping-status.signal,
+.helping-direction.received {
+  border-color: rgba(34, 197, 94, 0.55);
+  color: var(--ops-signal);
+}
+
+.helping-status.danger,
+.helping-direction.sent {
+  border-color: rgba(248, 113, 113, 0.62);
+  color: #f87171;
+}
+
+.helping-status.warning,
+.helping-source.missed_contribution {
+  border-color: rgba(250, 204, 21, 0.55);
+  color: #facc15;
+}
+
+.helping-source.cash {
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #f87171;
+}
+
+.helping-allocation-rules {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin-top: 0.7rem;
+}
+
+.helping-allocation-rules article {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.55rem;
+  border: 1px solid var(--ops-border);
+  background: #000;
+  padding: 0.65rem;
+}
+
+.helping-allocation-rules article > span {
+  color: var(--ops-signal);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+.helping-allocation-rules strong,
+.helping-allocation-rules small {
+  display: block;
+}
+
+.helping-allocation-rules strong {
+  color: var(--ops-text);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.helping-allocation-rules small {
+  margin-top: 0.15rem;
+  color: var(--ops-dim);
+  line-height: 1.4;
+}
+
+.helping-rules-divider {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.8rem;
+  border-top: 1px solid var(--ops-border);
+  padding-top: 0.75rem;
+}
+
+.helping-rules-divider span,
+.helping-rules-divider small {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.helping-rules-divider span {
+  color: var(--ops-text);
+  font-size: 0.68rem;
+}
+
+.helping-rules-divider small {
+  color: var(--ops-dim);
+  font-size: 0.58rem;
+}
+
+.helping-recent-table {
+  display: grid;
+  margin-top: 0.7rem;
+}
+
+.helping-recent-row {
+  display: grid;
+  grid-template-columns: 7.5rem 9rem 6.5rem 8rem minmax(14rem, 1fr) 6.5rem;
+  align-items: center;
+  gap: 0.65rem;
+  border-bottom: 1px solid var(--ops-border);
+  background: transparent;
+  color: var(--ops-muted);
+  padding: 0.58rem 0.45rem;
+  text-align: left;
+}
+
+.helping-recent-row:hover {
+  background: rgba(34, 197, 94, 0.05);
+}
+
+.helping-recent-row > strong {
+  color: var(--ops-text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.66rem;
+}
+
+.helping-recent-row > span,
+.helping-recent-row > small {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.61rem;
+}
+
+.helping-recent-row > small,
+.helping-all-transaction-row > small {
+  color: var(--ops-dim);
+  line-height: 1.45;
+  text-transform: none;
+}
+
+.helping-rule-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.7rem;
+}
+
+.helping-rule-grid article {
+  border: 1px solid var(--ops-border);
+  background: #000;
+  padding: 0.65rem;
+}
+
+.helping-rule-grid strong,
+.helping-rule-grid small {
+  display: block;
+}
+
+.helping-rule-grid strong {
+  margin-top: 0.25rem;
+  color: var(--ops-text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.helping-rule-grid small {
+  margin-top: 0.2rem;
+  color: var(--ops-dim);
+  line-height: 1.45;
+}
+
+.helping-empty {
+  margin: 0.7rem 0 0;
+  border: 1px dashed var(--ops-border);
+  color: var(--ops-dim);
+  padding: 1rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.62rem;
+  line-height: 1.5;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.helping-transactions-panel {
+  margin-top: 0.75rem;
+}
+
+.helping-transaction-toolbar {
+  display: grid;
+  grid-template-columns: minmax(9rem, 1fr) repeat(3, minmax(9rem, auto)) auto;
+  align-items: end;
+  gap: 0.65rem;
+  border-bottom: 1px solid var(--ops-border);
+  padding-bottom: 0.75rem;
+}
+
+.helping-transaction-toolbar > div strong,
+.helping-transaction-toolbar > div span {
+  display: block;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.helping-transaction-toolbar > div strong {
+  color: var(--ops-signal);
+  font-size: 1rem;
+}
+
+.helping-transaction-toolbar > div span,
+.helping-transaction-toolbar label {
+  color: var(--ops-dim);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.helping-transaction-toolbar label {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.helping-transaction-toolbar input,
+.helping-transaction-toolbar select {
+  min-height: 2.05rem;
+  border: 1px solid var(--ops-border);
+  padding: 0.35rem 0.45rem;
+  font-size: 0.65rem;
+}
+
+.helping-actions {
+  justify-content: flex-end;
+  gap: 0.55rem;
+  white-space: nowrap;
+}
+
+.helping-actions button.danger {
+  color: #f87171;
+}
+
+.helping-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.86);
+  padding: 1rem;
+}
+
+.helping-modal {
+  width: min(42rem, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  border: 1px solid var(--ops-border-strong);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.024) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.024) 1px, transparent 1px),
+    #000;
+  background-size: 24px 24px;
+  padding: 1rem;
+}
+
+.helping-modal-head,
+.helping-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.helping-modal h2 {
+  margin: 0.25rem 0 0;
+  color: var(--ops-text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 1rem;
+  text-transform: uppercase;
+}
+
+.helping-modal-head > button {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--ops-border);
+  background: #000;
+  color: var(--ops-muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+}
+
+.helping-direction-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.helping-direction-switch button {
+  min-height: 3rem;
+  border: 1px solid var(--ops-border);
+  background: #000;
+  color: var(--ops-muted);
+  cursor: pointer;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.helping-direction-switch button.active.received {
+  border-color: rgba(34, 197, 94, 0.75);
+  color: var(--ops-signal);
+}
+
+.helping-direction-switch button.active.sent {
+  border-color: rgba(248, 113, 113, 0.75);
+  color: #f87171;
+}
+
+.helping-allocation-preview {
+  margin: 0.6rem 0 0;
+  border-left: 2px solid var(--ops-signal);
+  color: var(--ops-muted);
+  padding: 0.4rem 0.55rem;
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.helping-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.helping-field {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.helping-field.wide {
+  grid-column: span 2;
+}
+
+.helping-field > span {
+  color: var(--ops-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.61rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.helping-field input,
+.helping-field select,
+.helping-field textarea {
+  width: 100%;
+  min-height: 2.35rem;
+  border: 1px solid var(--ops-border);
+  border-radius: 0;
+  padding: 0.5rem 0.6rem;
+  outline: none;
+}
+
+.helping-field textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+.helping-modal-actions {
+  justify-content: flex-end;
+  margin-top: 1rem;
+  border-top: 1px solid var(--ops-border);
+  padding-top: 0.75rem;
+}
+
+@media (max-width: 1120px) {
+  .helping-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .helping-allocation-rules {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .helping-transaction-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .helping-header,
+  .helping-header-actions,
+  .helping-panel-head,
+  .helping-panel-head > div {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .helping-summary-grid,
+  .helping-form-grid,
+  .helping-rule-grid,
+  .helping-allocation-rules,
+  .helping-transaction-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .helping-summary-card.featured {
+    grid-column: auto;
+  }
+
+  .helping-field.wide {
+    grid-column: auto;
+  }
+
+  .helping-recent-row {
+    grid-template-columns: 1fr;
+  }
+
+  .helping-actions {
+    justify-content: flex-start;
+  }
+}

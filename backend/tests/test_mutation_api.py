@@ -162,6 +162,37 @@ class MutationApiTests(unittest.TestCase):
         self.assertEqual(updated.json()["current_page"], 50)
         self.assertEqual(updated.json()["pages_remaining"], 200)
 
+    def test_helping_hands_uses_one_transaction_upsert_for_create_and_update(self) -> None:
+        payload = {
+            "id": "helping-transaction-1",
+            "member": "Asha",
+            "direction": "sent",
+            "amount": 5000,
+            "date": "2026-06-10",
+            "note": "",
+            "createdAt": "",
+        }
+        created = self.client.put(
+            "/helping-hands/transactions/helping-transaction-1",
+            headers=self.headers,
+            json=payload,
+        )
+        self.assertEqual(created.status_code, 200)
+        self.assertEqual(len(created.json()["transactions"]), 1)
+        self.assertTrue(created.json()["transactions"][0]["createdAt"])
+
+        payload["amount"] = 4500
+        payload["note"] = "Corrected amount"
+        updated = self.client.put(
+            "/helping-hands/transactions/helping-transaction-1",
+            headers=self.headers,
+            json=payload,
+        )
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(len(updated.json()["transactions"]), 1)
+        self.assertEqual(updated.json()["transactions"][0]["amount"], 4500)
+        self.assertEqual(updated.json()["transactions"][0]["note"], "Corrected amount")
+
 
 if __name__ == "__main__":
     unittest.main()

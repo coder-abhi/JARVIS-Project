@@ -7,6 +7,8 @@ import SignupPage from "@/features/auth/pages/SignupPage";
 import DashboardPage from "@/features/dashboard/pages/DashboardPage";
 import GoalDetailPage from "@/features/goals/pages/GoalDetailPage";
 import GoalsPage from "@/features/goals/pages/GoalsPage";
+import HelpingHandsPage from "@/features/helping-hands/pages/HelpingHandsPage";
+import HelpingHandsTransactionsPage from "@/features/helping-hands/pages/HelpingHandsTransactionsPage";
 import LibraryPage from "@/features/library/pages/LibraryPage";
 import MoneyPage from "@/features/money/pages/MoneyPage";
 import ShelfPage from "@/features/library/pages/ShelfPage";
@@ -30,6 +32,8 @@ export const router = createBrowserRouter([
       { path: "library", element: <LibraryPage /> },
       { path: "library/shelf", element: <ShelfPage /> },
       { path: "money", element: <MoneyPage /> },
+      { path: "helping-hands", element: <HelpingHandsPage /> },
+      { path: "helping-hands/transactions", element: <HelpingHandsTransactionsPage /> },
       { path: "ai-cost", element: <AiCostPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "login", element: <LoginPage /> },

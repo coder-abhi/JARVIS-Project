@@ -456,6 +456,29 @@ export function saveWealthData<T>(data: T) {
   return next;
 }
 
+export function getHelpingHandsData<T>() {
+  return request<T>("/helping-hands");
+}
+
+export function saveHelpingHandsTransaction<T>(data: { id: string }) {
+  const key = `helping-hands-transaction:${data.id}`;
+  const previous = saveQueues.get(key) ?? Promise.resolve();
+  const next = previous
+    .catch(() => undefined)
+    .then(() => request<T>(`/helping-hands/transactions/${encodeURIComponent(data.id)}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }));
+  saveQueues.set(key, next);
+  return next;
+}
+
+export function deleteHelpingHandsTransaction<T>(transactionId: string) {
+  return request<T>(`/helping-hands/transactions/${encodeURIComponent(transactionId)}`, {
+    method: "DELETE",
+  });
+}
+
 export function getProjects() {
   return request<Project[]>("/projects");
 }

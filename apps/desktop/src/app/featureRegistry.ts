@@ -2,6 +2,7 @@ import authFeature from "@/features/auth/feature.config";
 import aiCostFeature from "@/features/ai-cost/feature.config";
 import dashboardFeature from "@/features/dashboard/feature.config";
 import goalsFeature from "@/features/goals/feature.config";
+import helpingHandsFeature from "@/features/helping-hands/feature.config";
 import libraryFeature from "@/features/library/feature.config";
 import moneyFeature from "@/features/money/feature.config";
 import pomodoroFeature from "@/features/pomodoro/feature.config";
@@ -30,6 +31,7 @@ export const features: DesktopFeature[] = [
   pomodoroFeature,
   libraryFeature,
   moneyFeature,
+  helpingHandsFeature,
   aiCostFeature,
 ];
 
