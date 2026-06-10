@@ -142,6 +142,7 @@ export default function PomodoroPage() {
   const [continuousProjectId, setContinuousProjectId] = useState("");
   const [sessionNote, setSessionNote] = useState("");
   const [draft, setDraft] = useState<SessionDraft | null>(null);
+  const handledPendingCompletionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     async function loadProjectsAndTasks() {
@@ -337,9 +338,9 @@ export default function PomodoroPage() {
     function handlePendingCompletion() {
       const pendingCompletion = readPendingPomodoroCompletion();
       if (!pendingCompletion) return;
+      if (handledPendingCompletionIdRef.current === pendingCompletion.id) return;
 
-      window.localStorage.removeItem(getPendingPomodoroCompletionKey());
-      announcePomodoroSessionUpdate();
+      handledPendingCompletionIdRef.current = pendingCompletion.id;
       completePendingSession(pendingCompletion);
     }
 
@@ -416,8 +417,7 @@ export default function PomodoroPage() {
     setSessionEndsAt(null);
     setSessionDurationSeconds(null);
     window.localStorage.removeItem(getActivePomodoroSessionKey());
-    window.localStorage.removeItem(getPendingPomodoroCompletionKey());
-    announcePomodoroCompletion({
+    const pendingCompletion: PendingPomodoroCompletion = {
       id: sessionStartedAt ?? endAt.toISOString(),
       mode,
       durationSeconds,
@@ -426,7 +426,10 @@ export default function PomodoroPage() {
       note: sessionNote,
       fixedProjectId,
       continuousProjectId,
-    });
+    };
+    handledPendingCompletionIdRef.current = pendingCompletion.id;
+    window.localStorage.setItem(getPendingPomodoroCompletionKey(), JSON.stringify(pendingCompletion));
+    announcePomodoroCompletion(pendingCompletion);
     announcePomodoroSessionUpdate();
     const nextDraft = createDraft("timer", {
       startAt: toDateTimeLocal(startAt),
@@ -575,6 +578,7 @@ export default function PomodoroPage() {
       if (draft.id) return current.map((log) => (log.id === draft.id ? nextLog : log));
       return [nextLog, ...current].slice(0, 80);
     });
+    if (draft.source === "timer") clearPendingCompletion();
     setDraft(null);
     if (draft.source === "timer") resetTimer();
   }
@@ -587,6 +591,7 @@ export default function PomodoroPage() {
       nextLog.savedProjectSessionIds = await saveProjectTimeLogs(undefined, nextLog);
       await savePomodoroHistorySession(nextLog);
       setLogs((current) => [nextLog, ...current].slice(0, 80));
+      clearPendingCompletion();
       setDraft(null);
       resetTimer();
     } catch (err) {
@@ -608,6 +613,17 @@ export default function PomodoroPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not delete project session time");
     }
+  }
+
+  function clearPendingCompletion() {
+    window.localStorage.removeItem(getPendingPomodoroCompletionKey());
+    handledPendingCompletionIdRef.current = null;
+    announcePomodoroSessionUpdate();
+  }
+
+  function closeDraft() {
+    if (draft?.source === "timer") clearPendingCompletion();
+    setDraft(null);
   }
 
   function applyAssignedProject(nextDraft: SessionDraft, projectId: string) {
@@ -900,7 +916,7 @@ export default function PomodoroPage() {
           isLoading={isLoading}
           modeOptions={modeLabels}
           onChange={setDraft}
-          onClose={() => setDraft(null)}
+          onClose={closeDraft}
           onSave={saveDraft}
           onDelete={draft.source === "edit" ? deleteDraft : undefined}
           onSaveWithoutDetails={draft.source === "timer" ? saveDraftWithoutDetails : undefined}
@@ -940,10 +956,13 @@ function MarathonMetrics({ metrics }: { metrics: ReturnType<typeof getFocusMarat
             <span>Minutes / Achieved</span>
           </div>
           {metrics.longest.length > 0 ? metrics.longest.map((marathon, index) => (
-            <div className="marathon-ranking-row" key={`${marathon.startedAt}-${marathon.endedAt}`}>
+            <div
+              className={isSameMarathon(marathon, metrics.mostRecent) ? "marathon-ranking-row recent" : "marathon-ranking-row"}
+              key={`${marathon.startedAt}-${marathon.endedAt}`}
+            >
               <span className="marathon-rank">#{index + 1}</span>
               <strong>{marathon.minutes}m</strong>
-              <span>{formatMarathonDate(marathon)}</span>
+              <span>{formatMarathonDate(marathon)}{isSameMarathon(marathon, metrics.mostRecent) ? " / Recent" : ""}</span>
             </div>
           )) : (
             <p className="marathon-empty">No marathon milestones yet.</p>
@@ -952,6 +971,10 @@ function MarathonMetrics({ metrics }: { metrics: ReturnType<typeof getFocusMarat
       </div>
     </section>
   );
+}
+
+function isSameMarathon(marathon: FocusMarathon, candidate: FocusMarathon | null) {
+  return candidate?.startedAt === marathon.startedAt && candidate.endedAt === marathon.endedAt;
 }
 
 function formatMarathonDate(marathon: FocusMarathon) {

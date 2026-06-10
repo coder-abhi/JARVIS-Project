@@ -3,23 +3,25 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { TaskEditor } from "@/components/TaskEditor";
 import {
   completeGoalTask,
   createProject,
   createGoal,
   getGoalNextActions,
   getGoalsOverview,
-  getProjectSummaries,
   refreshPersonalityInsight,
   restoreCompletedGoal,
+  updateTask,
   type Goal,
   type GoalCategory,
   type GoalNextAction,
   type GoalTask,
   type GoalsOverview,
   type PersonalityInsight,
-  type ProjectSummary,
   type ProjectType,
+  type Task,
+  type TaskUpdate,
 } from "@/lib/api";
 import TimelinePage from "@/features/timeline/pages/TimelinePage";
 import { readProjectBehaviorSettings } from "@/lib/appSettings";
@@ -42,7 +44,6 @@ type SortMode = "importance" | "time" | "goal";
 export default function GoalsPage() {
   const router = useRouter();
   const [overview, setOverview] = useState<GoalsOverview | null>(null);
-  const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [nextActions, setNextActions] = useState<GoalNextAction[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("importance");
   const [isLoading, setIsLoading] = useState(true);
@@ -51,6 +52,7 @@ export default function GoalsPage() {
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [creatingGoalCategory, setCreatingGoalCategory] = useState<GoalCategory | null>(null);
   const [restoringCompletionId, setRestoringCompletionId] = useState<string | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
   const [projectType, setProjectType] = useState<ProjectType>(
@@ -73,13 +75,8 @@ export default function GoalsPage() {
     setNextActions(actions);
   }
 
-  async function loadProjects() {
-    const summaries = await getProjectSummaries();
-    setProjects(summaries);
-  }
-
   useEffect(() => {
-    Promise.all([loadGoals(), loadNextActions(), loadProjects()])
+    Promise.all([loadGoals(), loadNextActions()])
       .catch((err: Error) => setError(err.message))
       .finally(() => setIsLoading(false));
   }, []);
@@ -107,6 +104,10 @@ export default function GoalsPage() {
     }
     return grouped;
   }, [overview?.goals]);
+  const requiredMinutes = useMemo(
+    () => sortedTasks.reduce((sum, task) => sum + getRemainingTaskMinutes(task), 0),
+    [sortedTasks],
+  );
 
   async function handleCreateGoal(category: GoalCategory) {
     setCreatingGoalCategory(category);
@@ -158,6 +159,12 @@ export default function GoalsPage() {
     }
   }
 
+  async function handleTaskSave(taskId: string, changes: TaskUpdate) {
+    await updateTask(taskId, changes);
+    await Promise.all([loadGoals(), loadNextActions()]);
+    setMessage("Objective updated.");
+  }
+
   async function handleRefreshPersonality() {
     setIsRefreshingPersonality(true);
     setError(null);
@@ -198,7 +205,6 @@ export default function GoalsPage() {
         type: projectType,
         goal_id: projectGoalId || null,
       });
-      await loadProjects();
       await loadGoals();
       setProjectName("");
       setProjectDescription("");
@@ -229,9 +235,7 @@ export default function GoalsPage() {
         <div className="grid gap-3">
           <div className="ops-mini-metrics">
             <Metric label="Open Tasks" value={overview?.active_tasks.length ?? 0} />
-            <Metric label="Projects" value={projects.length} />
-            <Metric label="Goals" value={overview?.goals.length ?? 0} />
-            <Metric label="Completed" value={overview?.recent_completed_tasks.length ?? 0} />
+            <Metric label="Req Time To Complete All" value={formatRequiredTime(requiredMinutes)} />
           </div>
           <button type="button" onClick={openCreateProject} className="ops-button primary justify-self-end">
             New Mission
@@ -265,30 +269,42 @@ export default function GoalsPage() {
               [0, 1, 2].map((item) => <div key={item} className="h-10 animate-pulse border-b border-stone-100 bg-stone-50 last:border-b-0" />)
             ) : sortedTasks.length ? (
               <>
-                <div className="hidden grid-cols-[32px_minmax(0,1fr)_72px_92px_minmax(120px,0.75fr)_minmax(100px,0.7fr)] gap-3 border-b border-stone-200 bg-stone-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500 md:grid">
+                <div className="hidden grid-cols-[32px_minmax(0,1fr)_72px_72px_92px_minmax(110px,0.7fr)_minmax(120px,0.75fr)] gap-3 border-b border-stone-200 bg-stone-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500 md:grid">
                   <span />
                   <span>Task</span>
-                  <span>Time</span>
+                  <span>Progress</span>
+                  <span>Time Left</span>
                   <span>Importance</span>
-                  <span>Parent Goal</span>
                   <span>Project</span>
+                  <span>Project Goal</span>
                 </div>
                 {sortedTasks.map((task) => (
-                  <div key={task.id} className="grid gap-1 border-b border-stone-100 px-3 py-2 text-xs transition last:border-b-0 hover:bg-teal-50/35 md:grid-cols-[32px_minmax(0,1fr)_72px_92px_minmax(120px,0.75fr)_minmax(100px,0.7fr)] md:items-center md:gap-3">
+                  <div
+                    key={task.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setEditingTask(task)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") setEditingTask(task);
+                    }}
+                    className="grid cursor-pointer gap-1 border-b border-stone-100 px-3 py-2 text-xs transition last:border-b-0 hover:bg-teal-50/35 md:grid-cols-[32px_minmax(0,1fr)_72px_72px_92px_minmax(110px,0.7fr)_minmax(120px,0.75fr)] md:items-center md:gap-3"
+                  >
                     <input
                       type="checkbox"
                       disabled={completingTaskId === task.id}
-                      onChange={() => handleCompleteTask(task)}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={() => void handleCompleteTask(task)}
                       className="h-3.5 w-3.5 rounded border-stone-300 accent-teal-600"
                       aria-label={`Mark ${task.title} complete`}
                     />
                     <p className="min-w-0 truncate font-semibold text-stone-950">{task.title}</p>
-                    <span className="text-stone-600">{task.time_required_minutes || 0} min</span>
+                    <span className="font-semibold text-teal-800">{task.completion_percentage}%</span>
+                    <span className="text-stone-600">{getRemainingTaskMinutes(task)} min</span>
                     <span className="font-semibold text-teal-800">{task.importance_rating}/5</span>
-                    <span className="min-w-0 truncate text-amber-800">
-                      {task.linked_goals.map((goal) => goal.title).join(", ") || "General Mission"}
-                    </span>
                     <span className="min-w-0 truncate text-stone-500">{task.project_name}</span>
+                    <span className="min-w-0 truncate text-amber-800">
+                      {task.linked_goals.map((goal) => goal.title).join(", ") || "No goal assigned"}
+                    </span>
                   </div>
                 ))}
               </>
@@ -351,13 +367,25 @@ export default function GoalsPage() {
                   <span>Completed</span>
                 </div>
                 {overview?.recent_completed_tasks.map((item) => (
-                  <div key={item.id} className="grid gap-1 border-b border-stone-100 px-3 py-2 text-xs transition last:border-b-0 hover:bg-teal-50/35 md:grid-cols-[32px_minmax(0,1fr)_minmax(120px,0.65fr)_128px] md:items-center md:gap-3">
+                  <div
+                    key={item.id}
+                    role={item.task ? "button" : undefined}
+                    tabIndex={item.task ? 0 : undefined}
+                    onClick={() => {
+                      if (item.task) setEditingTask(item.task);
+                    }}
+                    onKeyDown={(event) => {
+                      if (item.task && (event.key === "Enter" || event.key === " ")) setEditingTask(item.task);
+                    }}
+                    className={`grid gap-1 border-b border-stone-100 px-3 py-2 text-xs transition last:border-b-0 hover:bg-teal-50/35 md:grid-cols-[32px_minmax(0,1fr)_minmax(120px,0.65fr)_128px] md:items-center md:gap-3 ${item.task ? "cursor-pointer" : ""}`}
+                  >
                     <input
                       type="checkbox"
                       checked={restoringCompletionId !== item.id}
                       disabled={restoringCompletionId === item.id}
+                      onClick={(event) => event.stopPropagation()}
                       onChange={(event) => {
-                        if (!event.target.checked) handleRestoreCompletion(item.id);
+                        if (!event.target.checked) void handleRestoreCompletion(item.id);
                       }}
                       className="h-3.5 w-3.5 rounded border-stone-300 accent-teal-600"
                       aria-label={`Move ${item.title} back to task list`}
@@ -453,6 +481,7 @@ export default function GoalsPage() {
         </div>
       ) : null}
 
+      <TaskEditor task={editingTask} onClose={() => setEditingTask(null)} onSave={handleTaskSave} />
     </main>
   );
 }
@@ -576,7 +605,7 @@ function SortButton({ active, onClick, label }: { active: boolean; onClick: () =
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="system-metric">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">{label}</p>
@@ -611,6 +640,17 @@ function MissionAnalysis({ actions, openTasks, overdueTasks }: { actions: GoalNe
 
 function goalSortLabel(task: GoalTask) {
   return task.linked_goals[0] ? categoryLabels[task.linked_goals[0].category] : "General";
+}
+
+function getRemainingTaskMinutes(task: GoalTask) {
+  return Math.max(0, Math.round(task.time_required_minutes * (1 - task.completion_percentage / 100)));
+}
+
+function formatRequiredTime(minutes: number) {
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 }
 
 function formatDate(value: string) {

@@ -126,7 +126,5 @@ export function TaskItem({ task, onEdit, onStatusChange, onToggleComplete }: Tas
 }
 
 function getTaskProgress(task: Task) {
-  if (task.status === "done") return 100;
-  if (task.eta_hours <= 0) return task.time_spent_hours > 0 ? 100 : 0;
-  return Math.min(Math.round((task.time_spent_hours / task.eta_hours) * 100), 100);
+  return task.status === "done" ? 100 : task.completion_percentage;
 }

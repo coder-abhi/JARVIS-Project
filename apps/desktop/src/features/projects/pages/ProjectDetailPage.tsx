@@ -47,6 +47,7 @@ export default function ProjectDetailPage() {
   const [deadline, setDeadline] = useState("");
   const [status, setStatus] = useState<TaskStatus>(() => readProjectBehaviorSettings().defaultTaskStatus);
   const [priority, setPriority] = useState<TaskPriority>(() => readProjectBehaviorSettings().defaultTaskPriority);
+  const [completionPercentage, setCompletionPercentage] = useState("0");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
@@ -106,6 +107,7 @@ export default function ProjectDetailPage() {
       description: description.trim() || null,
       status,
       priority,
+      completion_percentage: status === "done" ? 100 : clampPercentage(completionPercentage),
       eta_hours: minutesInputToHours(eta),
       time_spent_hours: minutesInputToHours(spent),
       start_date: status === "todo" ? null : startDate ? new Date(startDate).toISOString() : null,
@@ -122,6 +124,7 @@ export default function ProjectDetailPage() {
     setDeadline("");
     setStatus(defaults.defaultTaskStatus);
     setPriority(defaults.defaultTaskPriority);
+    setCompletionPercentage("0");
     setIsCreateTaskOpen(false);
   }
 
@@ -484,6 +487,19 @@ export default function ProjectDetailPage() {
             </label>
             <div className="grid grid-cols-2 gap-3">
               <label className="grid gap-2">
+                <span className="text-sm font-semibold text-gray-700">Complete %</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={completionPercentage}
+                  disabled={status === "done"}
+                  onChange={(event) => setCompletionPercentage(event.target.value)}
+                  className="rounded-md border border-gray-200 px-3 py-3 outline-none ring-gray-900/10 focus:ring-4 disabled:bg-gray-50"
+                />
+              </label>
+              <label className="grid gap-2">
                 <span className="text-sm font-semibold text-gray-700">ETA</span>
                 <input
                   type="number"
@@ -525,6 +541,10 @@ function minutesInputToHours(value: string) {
   return Math.round(((Number(value) || 0) / 60) * 100) / 100;
 }
 
+function clampPercentage(value: string) {
+  return Math.min(Math.max(Math.round(Number(value) || 0), 0), 100);
+}
+
 function ProjectObjectiveRow({
   task,
   onEdit,
@@ -536,7 +556,9 @@ function ProjectObjectiveRow({
 }) {
   const etaMinutes = Math.round(task.eta_hours * 60);
   const spentMinutes = Math.round(task.time_spent_hours * 60);
-  const remainingMinutes = task.status === "done" ? 0 : Math.max(etaMinutes - spentMinutes, 0);
+  const remainingMinutes = task.status === "done"
+    ? 0
+    : Math.max(0, Math.round(etaMinutes * (1 - task.completion_percentage / 100)));
 
   return (
     <div
@@ -552,6 +574,7 @@ function ProjectObjectiveRow({
       <span className="project-objective-meta">
         <span className={`project-priority ${task.priority}`}>{task.priority}</span>
         <span>{formatTaskDate(task.deadline, "open")}</span>
+        <span>{task.completion_percentage}% complete</span>
         <span>{remainingMinutes}m left</span>
         <span>{spentMinutes > 0 ? `${spentMinutes}/${etaMinutes}m` : `${etaMinutes}m eta`}</span>
       </span>

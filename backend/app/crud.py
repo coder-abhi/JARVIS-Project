@@ -171,6 +171,7 @@ def create_task(db: Session, task: schemas.TaskCreate) -> models.Task:
         task_data["start_date"] = datetime.now(timezone.utc)
     if task_data["status"] == models.TaskStatus.done:
         task_data["completed_at"] = datetime.now(timezone.utc)
+        task_data["completion_percentage"] = 100
 
     db_task = models.Task(**task_data)
     db.add(db_task)
@@ -348,6 +349,7 @@ def update_task(db: Session, task_id: str, task: schemas.TaskUpdate, user: model
         return None
 
     changes = task.model_dump(exclude_unset=True)
+    previous_status = db_task.status
     next_status = changes.get("status", db_task.status)
 
     if next_status == models.TaskStatus.todo:
@@ -356,11 +358,27 @@ def update_task(db: Session, task_id: str, task: schemas.TaskUpdate, user: model
         changes["start_date"] = datetime.now(timezone.utc)
     if next_status == models.TaskStatus.done and db_task.status != models.TaskStatus.done:
         changes["completed_at"] = datetime.now(timezone.utc)
+        changes["completion_percentage"] = 100
     elif next_status != models.TaskStatus.done:
         changes["completed_at"] = None
+        if previous_status == models.TaskStatus.done and "completion_percentage" not in changes:
+            changes["completion_percentage"] = 0
 
     for key, value in changes.items():
         setattr(db_task, key, value)
+
+    if previous_status != models.TaskStatus.done and next_status == models.TaskStatus.done:
+        _create_task_completion_log(db, db_task, user)
+    elif previous_status == models.TaskStatus.done and next_status != models.TaskStatus.done:
+        _remove_task_completion_logs(db, db_task, user)
+    elif next_status == models.TaskStatus.done and "title" in changes:
+        for completion in db.scalars(
+            select(models.CompletedGoalLog).where(
+                models.CompletedGoalLog.user_id == user.id,
+                models.CompletedGoalLog.task_id == db_task.id,
+            )
+        ):
+            completion.title = db_task.title
 
     db.commit()
     db.refresh(db_task)
@@ -511,6 +529,7 @@ def list_recent_goal_completions(db: Session, user: models.User, limit: int = 12
         db.scalars(
             select(models.CompletedGoalLog)
             .where(models.CompletedGoalLog.user_id == user.id)
+            .options(selectinload(models.CompletedGoalLog.task))
             .order_by(models.CompletedGoalLog.created_at.desc())
             .limit(limit)
         )
@@ -529,6 +548,7 @@ def list_goal_completions_by_project(
                 models.CompletedGoalLog.user_id == user.id,
                 models.CompletedGoalLog.project_id == project_id,
             )
+            .options(selectinload(models.CompletedGoalLog.task))
             .order_by(models.CompletedGoalLog.created_at.desc())
         )
     )
@@ -625,23 +645,19 @@ def complete_goal_task(db: Session, task_id: str, user: models.User) -> schemas.
     if db_task is None:
         return None
 
+    existing_log = db.scalar(
+        select(models.CompletedGoalLog).where(
+            models.CompletedGoalLog.user_id == user.id,
+            models.CompletedGoalLog.task_id == db_task.id,
+        )
+    )
+    if existing_log is not None:
+        return existing_log
+
     db_task.status = models.TaskStatus.done
     db_task.completed_at = datetime.now(timezone.utc)
-    linked_goals = _task_linked_goals(db_task)
-    for goal in linked_goals:
-        if goal.measurable:
-            goal.current_value = min(goal.current_value + _task_progress_delta(db_task, goal), goal.target_value or 0)
-    logged_goal = linked_goals[0] if len(linked_goals) == 1 else None
-    goal_label = ", ".join(goal.title for goal in linked_goals)[:80] or "General"
-    db_log = models.CompletedGoalLog(
-        user_id=user.id,
-        goal_id=logged_goal.id if logged_goal else None,
-        project_id=db_task.project_id,
-        task_id=db_task.id,
-        title=db_task.title,
-        goal_label=goal_label[:80],
-    )
-    db.add(db_log)
+    db_task.completion_percentage = 100
+    db_log = _create_task_completion_log(db, db_task, user)
     db.commit()
     db.refresh(db_log)
     return db_log
@@ -684,6 +700,7 @@ def restore_goal_completion(db: Session, completion_id: str, user: models.User) 
         db_task.status = models.TaskStatus.todo
         db_task.start_date = None
         db_task.completed_at = None
+        db_task.completion_percentage = 0
 
     linked_goals = _task_linked_goals(db_task)
     for goal in linked_goals:
@@ -1080,13 +1097,67 @@ def _goal_task_read(task: models.Task) -> schemas.GoalTaskRead:
         project_name=task.project.name if task.project else "Unknown",
         linked_goals=_task_linked_goals(task),
         title=task.title,
+        description=task.description,
         status=task.status,
         priority=task.priority,
         importance_rating=task.importance_rating,
+        completion_percentage=task.completion_percentage,
         eta_hours=task.eta_hours,
+        time_spent_hours=task.time_spent_hours,
         time_required_minutes=round(task.eta_hours * 60),
+        start_date=task.start_date,
+        deadline=task.deadline,
+        completed_at=task.completed_at,
         created_at=task.created_at,
     )
+
+
+def _create_task_completion_log(
+    db: Session,
+    task: models.Task,
+    user: models.User,
+) -> models.CompletedGoalLog:
+    linked_goals = _task_linked_goals(task)
+    for goal in linked_goals:
+        if goal.measurable:
+            goal.current_value = min(goal.current_value + _task_progress_delta(task, goal), goal.target_value or 0)
+    logged_goal = linked_goals[0] if len(linked_goals) == 1 else None
+    goal_label = ", ".join(goal.title for goal in linked_goals)[:80] or task.project.name[:80]
+    completion = models.CompletedGoalLog(
+        user_id=user.id,
+        goal_id=logged_goal.id if logged_goal else None,
+        project_id=task.project_id,
+        task_id=task.id,
+        title=task.title,
+        goal_label=goal_label[:80],
+    )
+    completion.task = task
+    db.add(completion)
+    return completion
+
+
+def _remove_task_completion_logs(
+    db: Session,
+    task: models.Task,
+    user: models.User,
+) -> None:
+    completions = list(
+        db.scalars(
+            select(models.CompletedGoalLog)
+            .where(
+                models.CompletedGoalLog.user_id == user.id,
+                models.CompletedGoalLog.task_id == task.id,
+            )
+            .options(selectinload(models.CompletedGoalLog.goal))
+        )
+    )
+    for completion in completions:
+        if completion.goal and completion.goal.measurable:
+            completion.goal.current_value = max(
+                completion.goal.current_value - _task_progress_delta(task, completion.goal),
+                0,
+            )
+        db.delete(completion)
 
 
 def _get_or_create_general_work_project(db: Session, user: models.User) -> models.Project:

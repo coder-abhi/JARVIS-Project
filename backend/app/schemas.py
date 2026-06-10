@@ -112,6 +112,7 @@ class TaskBase(BaseModel):
     status: TaskStatus = TaskStatus.todo
     priority: TaskPriority = TaskPriority.medium
     importance_rating: int = Field(default=3, ge=1, le=5)
+    completion_percentage: int = Field(default=0, ge=0, le=100)
     eta_hours: float = Field(default=0, ge=0)
     time_spent_hours: float = Field(default=0, ge=0)
     start_date: datetime | None = None
@@ -128,6 +129,7 @@ class TaskUpdate(BaseModel):
     status: TaskStatus | None = None
     priority: TaskPriority | None = None
     importance_rating: int | None = Field(default=None, ge=1, le=5)
+    completion_percentage: int | None = Field(default=None, ge=0, le=100)
     eta_hours: float | None = Field(default=None, ge=0)
     time_spent_hours: float | None = Field(default=None, ge=0)
     start_date: datetime | None = None
@@ -229,11 +231,17 @@ class GoalTaskRead(BaseModel):
     project_name: str
     linked_goals: list[LinkedGoalRead] = Field(default_factory=list)
     title: str
+    description: str | None = None
     status: TaskStatus
     priority: TaskPriority
     importance_rating: int
+    completion_percentage: int
     eta_hours: float
+    time_spent_hours: float
     time_required_minutes: int
+    start_date: datetime | None = None
+    deadline: datetime | None = None
+    completed_at: datetime | None = None
     created_at: datetime
 
 
@@ -247,6 +255,7 @@ class CompletedGoalLogRead(BaseModel):
     title: str
     goal_label: str
     created_at: datetime
+    task: TaskRead | None = None
 
 
 class PersonalityInsightRead(BaseModel):

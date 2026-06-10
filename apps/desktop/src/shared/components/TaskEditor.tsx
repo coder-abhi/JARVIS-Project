@@ -15,6 +15,7 @@ export function TaskEditor({ task, onClose, onSave }: TaskEditorProps) {
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("todo");
   const [priority, setPriority] = useState<TaskPriority>("medium");
+  const [completionPercentage, setCompletionPercentage] = useState("0");
   const [eta, setEta] = useState("0");
   const [spent, setSpent] = useState("0");
   const [startDate, setStartDate] = useState("");
@@ -29,6 +30,7 @@ export function TaskEditor({ task, onClose, onSave }: TaskEditorProps) {
     setDescription(task.description ?? "");
     setStatus(task.status);
     setPriority(task.priority);
+    setCompletionPercentage(String(task.completion_percentage));
     setEta(String(Math.round(task.eta_hours * 60)));
     setSpent(String(Math.round(task.time_spent_hours * 60)));
     setStartDate(toDateInputValue(task.start_date));
@@ -52,6 +54,7 @@ export function TaskEditor({ task, onClose, onSave }: TaskEditorProps) {
         description: description.trim() || null,
         status,
         priority,
+        completion_percentage: status === "done" ? 100 : clampPercentage(completionPercentage),
         eta_hours: minutesInputToHours(eta),
         time_spent_hours: minutesInputToHours(spent),
         start_date: status === "todo" ? null : startDate ? new Date(startDate).toISOString() : null,
@@ -109,7 +112,11 @@ export function TaskEditor({ task, onClose, onSave }: TaskEditorProps) {
               <span className="text-sm font-semibold text-gray-700">Status</span>
               <select
                 value={status}
-                onChange={(event) => setStatus(event.target.value as TaskStatus)}
+                onChange={(event) => {
+                  const nextStatus = event.target.value as TaskStatus;
+                  setStatus(nextStatus);
+                  if (nextStatus === "done") setCompletionPercentage("100");
+                }}
                 className="rounded-md border border-gray-200 px-3 py-3 outline-none ring-gray-900/10 focus:ring-4"
               >
                 <option value="todo">Todo</option>
@@ -143,6 +150,19 @@ export function TaskEditor({ task, onClose, onSave }: TaskEditorProps) {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid gap-2">
+              <span className="text-sm font-semibold text-gray-700">Completion (%)</span>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                value={completionPercentage}
+                disabled={status === "done"}
+                onChange={(event) => setCompletionPercentage(event.target.value)}
+                className="rounded-md border border-gray-200 px-3 py-3 outline-none ring-gray-900/10 focus:ring-4 disabled:bg-gray-50"
+              />
+            </label>
             <label className="grid gap-2">
               <span className="text-sm font-semibold text-gray-700">ETA (min)</span>
               <input
@@ -197,4 +217,8 @@ function toDateInputValue(value?: string | null) {
 
 function minutesInputToHours(value: string) {
   return Math.round(((Number(value) || 0) / 60) * 100) / 100;
+}
+
+function clampPercentage(value: string) {
+  return Math.min(Math.max(Math.round(Number(value) || 0), 0), 100);
 }

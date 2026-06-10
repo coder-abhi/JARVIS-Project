@@ -51,6 +51,9 @@ def ensure_sqlite_compatibility() -> None:
             connection.execute(text("ALTER TABLE tasks ADD COLUMN priority VARCHAR(6) NOT NULL DEFAULT 'medium'"))
         if task_columns and "importance_rating" not in task_columns:
             connection.execute(text("ALTER TABLE tasks ADD COLUMN importance_rating INTEGER NOT NULL DEFAULT 3"))
+        if task_columns and "completion_percentage" not in task_columns:
+            connection.execute(text("ALTER TABLE tasks ADD COLUMN completion_percentage INTEGER NOT NULL DEFAULT 0"))
+            connection.execute(text("UPDATE tasks SET completion_percentage = 100 WHERE status = 'done'"))
         if task_columns and "start_date" not in task_columns:
             connection.execute(text("ALTER TABLE tasks ADD COLUMN start_date DATETIME"))
         if task_columns and "completed_at" not in task_columns:
@@ -287,6 +290,7 @@ def drop_legacy_task_goal_id() -> None:
                             status VARCHAR(11) NOT NULL,
                             priority VARCHAR(6) NOT NULL,
                             importance_rating INTEGER NOT NULL,
+                            completion_percentage INTEGER NOT NULL,
                             eta_hours FLOAT NOT NULL,
                             time_spent_hours FLOAT NOT NULL,
                             start_date DATETIME,
@@ -310,6 +314,7 @@ def drop_legacy_task_goal_id() -> None:
                             status,
                             priority,
                             importance_rating,
+                            completion_percentage,
                             eta_hours,
                             time_spent_hours,
                             start_date,
@@ -325,6 +330,7 @@ def drop_legacy_task_goal_id() -> None:
                             status,
                             priority,
                             importance_rating,
+                            completion_percentage,
                             eta_hours,
                             time_spent_hours,
                             start_date,

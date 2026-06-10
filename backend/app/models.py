@@ -129,6 +129,7 @@ class Task(Base):
     status: Mapped[TaskStatus] = mapped_column(Enum(TaskStatus), default=TaskStatus.todo, nullable=False)
     priority: Mapped[TaskPriority] = mapped_column(Enum(TaskPriority), default=TaskPriority.medium, nullable=False)
     importance_rating: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    completion_percentage: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     eta_hours: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     time_spent_hours: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -186,6 +187,7 @@ class CompletedGoalLog(Base):
 
     user: Mapped[User] = relationship(back_populates="completed_goal_logs")
     goal: Mapped[Goal | None] = relationship(back_populates="completed_logs")
+    task: Mapped[Task | None] = relationship()
 
 
 class PomodoroSessionLog(Base):

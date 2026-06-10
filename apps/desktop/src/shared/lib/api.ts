@@ -48,6 +48,7 @@ export type Task = {
   status: TaskStatus;
   priority: TaskPriority;
   importance_rating: number;
+  completion_percentage: number;
   eta_hours: number;
   time_spent_hours: number;
   start_date?: string | null;
@@ -87,18 +88,10 @@ export type GoalUpdate = Partial<Pick<Goal, "title" | "description" | "target_va
   linked_project_ids?: string[];
 };
 
-export type GoalTask = {
-  id: string;
-  project_id: string;
+export type GoalTask = Task & {
   project_name: string;
   linked_goals: LinkedGoal[];
-  title: string;
-  status: TaskStatus;
-  priority: TaskPriority;
-  importance_rating: number;
-  eta_hours: number;
   time_required_minutes: number;
-  created_at: string;
 };
 
 export type CompletedGoalLog = {
@@ -109,6 +102,7 @@ export type CompletedGoalLog = {
   title: string;
   goal_label: string;
   created_at: string;
+  task?: Task | null;
 };
 
 export type PersonalityInsight = {

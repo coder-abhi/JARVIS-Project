@@ -32,6 +32,7 @@ class ProjectGoalStructureTests(unittest.TestCase):
         self.assertNotIn("goal_id", columns)
         self.assertFalse(columns["project_id"]["nullable"])
         self.assertIn("completed_at", columns)
+        self.assertIn("completion_percentage", columns)
 
     def test_project_links_goals_and_tasks_inherit_that_context(self) -> None:
         goal = models.Goal(
@@ -70,6 +71,61 @@ class ProjectGoalStructureTests(unittest.TestCase):
         self.assertIsNotNone(completion)
         self.session.refresh(goal)
         self.assertEqual(goal.current_value, 1)
+
+    def test_task_completion_percentage_and_status_keep_completion_log_consistent(self) -> None:
+        goal = models.Goal(
+            id="goal-1",
+            user_id=self.user.id,
+            category=models.GoalCategory.monthly,
+            title="Ship two releases",
+            target_value=2,
+            current_value=0,
+            unit="tasks",
+        )
+        self.session.add(goal)
+        self.session.commit()
+        project = crud.create_project(
+            self.session,
+            schemas.ProjectCreate(
+                name="Release",
+                type=models.ProjectType.fixed,
+                goal_id=goal.id,
+            ),
+            self.user,
+        )
+        task = crud.create_task(
+            self.session,
+            schemas.TaskCreate(
+                project_id=project.id,
+                title="Publish build",
+                completion_percentage=45,
+            ),
+        )
+
+        self.assertEqual(task.completion_percentage, 45)
+        completed = crud.update_task(
+            self.session,
+            task.id,
+            schemas.TaskUpdate(status=models.TaskStatus.done),
+            self.user,
+        )
+        self.assertEqual(completed.completion_percentage, 100)
+        overview = crud.get_goals_overview(self.session, self.user)
+        self.assertEqual(len(overview.recent_completed_tasks), 1)
+        self.assertEqual(overview.recent_completed_tasks[0].task.completion_percentage, 100)
+        self.session.refresh(goal)
+        self.assertEqual(goal.current_value, 1)
+
+        reopened = crud.update_task(
+            self.session,
+            task.id,
+            schemas.TaskUpdate(status=models.TaskStatus.in_progress, completion_percentage=60),
+            self.user,
+        )
+        self.assertEqual(reopened.completion_percentage, 60)
+        self.assertEqual(crud.list_recent_goal_completions(self.session, self.user), [])
+        self.session.refresh(goal)
+        self.assertEqual(goal.current_value, 0)
 
     def test_project_has_one_optional_goal_parent_and_editable_metadata(self) -> None:
         first_goal = models.Goal(
