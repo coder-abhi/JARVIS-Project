@@ -8,6 +8,7 @@ type EditDraft = {
   title: string;
   author: string;
   category: string;
+  totalPages: string;
   status: BookStatus;
   purchasePrice: string;
 };
@@ -55,7 +56,8 @@ export default function ShelfPage() {
     setBooks((current) => current.map((item) => (item.id === book.id ? { ...item, ...changes } : item)));
 
     try {
-      await updateBook(book.id, changes);
+      const updated = await updateBook(book.id, changes);
+      setBooks((current) => current.map((item) => (item.id === book.id ? updated : item)));
     } catch (err) {
       setBooks(previous);
       setError(err instanceof Error ? err.message : "Could not update book");
@@ -70,6 +72,7 @@ export default function ShelfPage() {
         title: book.title,
         author: book.author || "",
         category: book.category || "",
+        totalPages: book.total_pages ? String(book.total_pages) : "",
         status: book.status,
         purchasePrice: typeof book.purchase_price === "number" ? String(book.purchase_price) : "",
       },
@@ -79,11 +82,19 @@ export default function ShelfPage() {
   async function saveEdit(book: Book) {
     const draft = editDrafts[book.id];
     if (!draft?.title.trim()) return;
+    const totalPages = Number(draft.totalPages);
+    const currentPage = getBookCurrentPage(book);
+    if (!Number.isInteger(totalPages) || totalPages < currentPage || totalPages < 1) {
+      setError(`Total pages must be a whole number of at least ${Math.max(currentPage, 1)}.`);
+      return;
+    }
+    setError(null);
 
     await patchBook(book, {
       title: draft.title.trim(),
       author: draft.author.trim() || null,
       category: draft.category.trim() || "Uncategorized",
+      total_pages: totalPages,
       status: draft.status,
       purchase_price: draft.purchasePrice ? Number(draft.purchasePrice) : null,
     });
@@ -156,12 +167,14 @@ export default function ShelfPage() {
               <tbody>
                 {books.map((book) => {
                   const resonated = book.chapters.filter((chapter) => chapter.resonated).length;
+                  const completionPercentage = getBookCompletionPercentage(book);
                   const isExpanded = expandedBookId === book.id;
                   const isEditing = editingBookId === book.id;
                   const editDraft = editDrafts[book.id] ?? {
                     title: book.title,
                     author: book.author || "",
                     category: book.category || "",
+                    totalPages: book.total_pages ? String(book.total_pages) : "",
                     status: book.status,
                     purchasePrice: typeof book.purchase_price === "number" ? String(book.purchase_price) : "",
                   };
@@ -180,7 +193,9 @@ export default function ShelfPage() {
                             {statusLabels[book.status]}
                           </span>
                         </td>
-                        <td className="px-4 py-4 text-stone-600">{book.total_pages || "-"}</td>
+                        <td className="px-4 py-4 text-stone-600">
+                          {book.total_pages ? `${getBookCurrentPage(book)}/${book.total_pages} (${completionPercentage}%)` : "-"}
+                        </td>
                         <td className="px-4 py-4 text-stone-600">{book.chapters.length}</td>
                         <td className="px-4 py-4 text-stone-600">{resonated}</td>
                         <td className="px-4 py-4 text-stone-600">{book.purchase_date ? formatDate(book.purchase_date) : "-"}</td>
@@ -254,6 +269,22 @@ export default function ShelfPage() {
                                       />
                                     </label>
                                     <label className="text-sm font-semibold text-stone-700">
+                                      Total pages
+                                      <input
+                                        min={Math.max(getBookCurrentPage(book), 1)}
+                                        step="1"
+                                        type="number"
+                                        value={editDraft.totalPages}
+                                        onChange={(event) =>
+                                          setEditDrafts((current) => ({
+                                            ...current,
+                                            [book.id]: { ...editDraft, totalPages: event.target.value },
+                                          }))
+                                        }
+                                        className="mt-2 w-full rounded-md border border-stone-300 px-3 py-2 text-sm outline-none ring-teal-600/15 transition focus:border-teal-600 focus:ring-4"
+                                      />
+                                    </label>
+                                    <label className="text-sm font-semibold text-stone-700">
                                       Status
                                       <select
                                         value={editDraft.status}
@@ -303,10 +334,19 @@ export default function ShelfPage() {
                                   <DetailMetric label="Pages read" value={book.pages_read.toString()} />
                                   <DetailMetric label="Remaining" value={book.pages_remaining.toString()} />
                                   <DetailMetric label="Total pages" value={(book.total_pages || 0).toString()} />
+                                  <DetailMetric label="Completed" value={book.total_pages ? `${completionPercentage}%` : "-"} />
                                   <DetailMetric label="Chapters" value={book.chapters.length.toString()} />
                                   <DetailMetric label="Liked chapters" value={resonated.toString()} />
                                   <DetailMetric label="Price" value={typeof book.purchase_price === "number" ? formatCurrency(book.purchase_price) : "-"} />
                                 </div>
+
+                                {book.total_pages ? (
+                                  <div className="mt-4">
+                                    <div className="h-2 overflow-hidden rounded-full bg-stone-200">
+                                      <div className="h-full rounded-full bg-teal-600 transition-all" style={{ width: `${completionPercentage}%` }} />
+                                    </div>
+                                  </div>
+                                ) : null}
 
                                 <div className="mt-5">
                                   <p className="text-sm font-semibold text-stone-700">Rating</p>
@@ -419,6 +459,15 @@ function DetailMetric({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-lg font-semibold text-stone-950">{value}</p>
     </div>
   );
+}
+
+function getBookCurrentPage(book: Book) {
+  return book.current_page || book.pages_read || 0;
+}
+
+function getBookCompletionPercentage(book: Book) {
+  if (!book.total_pages) return 0;
+  return Math.min(Math.round((getBookCurrentPage(book) / book.total_pages) * 100), 100);
 }
 
 function formatDate(value: string) {

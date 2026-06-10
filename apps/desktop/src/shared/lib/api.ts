@@ -159,6 +159,22 @@ export type PomodoroProjectSession = {
 
 export type PomodoroProjectSessionInput = Omit<PomodoroProjectSession, "created_at">;
 
+export type PomodoroHistorySessionInput = {
+  id: string;
+  completedAt: string;
+  startAt?: string;
+  endAt?: string;
+  minutes: number;
+  mode: "focus" | "short" | "long";
+  projectId?: string;
+  projectName: string;
+  taskId?: string;
+  taskTitle: string;
+  done?: string;
+  focus?: number | null;
+  isManual?: boolean;
+};
+
 export type BookChapter = {
   id: string;
   book_id: string;
@@ -396,12 +412,28 @@ export function getPomodoroHistory<T>() {
 
 export function savePomodoroHistorySession<T extends { id: string }>(data: T) {
   const key = `pomodoro-session:${data.id}`;
+  const session = data as T & PomodoroHistorySessionInput;
+  const payload: PomodoroHistorySessionInput = {
+    id: session.id,
+    completedAt: session.completedAt,
+    startAt: session.startAt,
+    endAt: session.endAt,
+    minutes: session.minutes,
+    mode: session.mode,
+    projectId: session.projectId,
+    projectName: session.projectName,
+    taskId: session.taskId,
+    taskTitle: session.taskTitle,
+    done: session.done,
+    focus: session.focus,
+    isManual: session.isManual,
+  };
   const previous = saveQueues.get(key) ?? Promise.resolve();
   const next = previous
     .catch(() => undefined)
-    .then(() => request<T>(`/pomodoro/sessions/${encodeURIComponent(data.id)}`, {
+    .then(() => request<PomodoroHistorySessionInput>(`/pomodoro/sessions/${encodeURIComponent(data.id)}`, {
       method: "PUT",
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     }));
   saveQueues.set(key, next);
   return next;

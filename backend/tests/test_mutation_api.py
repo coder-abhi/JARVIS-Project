@@ -123,6 +123,45 @@ class MutationApiTests(unittest.TestCase):
         self.assertEqual(pomodoro.status_code, 201)
         self.assertEqual(pomodoro.json()["done"], "Storage refactor")
 
+    def test_library_page_count_update_and_historical_reading_log(self) -> None:
+        book = self.client.post(
+            "/library/books",
+            headers=self.headers,
+            json={
+                "title": "Test Book",
+                "author": "Test Author",
+                "category": "Technical",
+                "total_pages": 200,
+                "status": "reading",
+                "liked": False,
+            },
+        )
+        self.assertEqual(book.status_code, 201)
+        book_id = book.json()["id"]
+
+        reading_log = self.client.post(
+            "/library/reading-logs",
+            headers=self.headers,
+            json={
+                "book_id": book_id,
+                "start_page": 1,
+                "end_page": 50,
+                "read_at": "2026-06-09T12:00:00Z",
+            },
+        )
+        self.assertEqual(reading_log.status_code, 201)
+        self.assertEqual(datetime.fromisoformat(reading_log.json()["read_at"]).date().isoformat(), "2026-06-09")
+
+        updated = self.client.put(
+            f"/library/books/{book_id}",
+            headers=self.headers,
+            json={"total_pages": 250},
+        )
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.json()["total_pages"], 250)
+        self.assertEqual(updated.json()["current_page"], 50)
+        self.assertEqual(updated.json()["pages_remaining"], 200)
+
 
 if __name__ == "__main__":
     unittest.main()

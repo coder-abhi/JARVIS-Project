@@ -49,6 +49,8 @@ export function DateTimePicker({
     const nextValue = new Date(pendingDate);
     nextValue.setFullYear(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate());
     setPendingDate(nextValue);
+    onChange(mode === "date" ? toDateInputValue(nextValue) : toDateTimeLocal(nextValue));
+    if (mode === "date") setIsOpen(false);
   }
 
   function updateTime(part: "hour" | "minute", nextNumber: number) {

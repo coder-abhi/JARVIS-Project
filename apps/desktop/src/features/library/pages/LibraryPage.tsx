@@ -418,7 +418,10 @@ export default function LibraryPage() {
             {readingBooks.length ? readingBooks.slice(0, 5).map((book) => (
               <div key={book.id} className="ops-row library-row">
                 <span className="truncate">{book.title}</span>
-                <span>{book.current_page || book.pages_read || 0}/{book.total_pages || "?"}</span>
+                <span>
+                  {getBookCurrentPage(book)}/{book.total_pages || "?"}
+                  {book.total_pages ? ` (${getBookCompletionPercentage(book)}%)` : ""}
+                </span>
                 <span className="truncate">{book.chapters.find((chapter) => !chapter.resonated)?.title ?? "Review insights"}</span>
               </div>
             )) : <p className="ops-empty">No active reading operation.</p>}
@@ -651,10 +654,11 @@ export default function LibraryPage() {
                       <div className="mt-5 grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
                         <div className="flex flex-wrap items-center gap-2 text-sm text-stone-600">
                           <span className="rounded-md bg-stone-50 px-3 py-2 font-semibold text-stone-800">
-                            Page {book.current_page || book.pages_read || 0}
+                            Page {getBookCurrentPage(book)}
                           </span>
                           <span>{book.pages_read} pages logged</span>
                           <span>{book.pages_remaining} remaining</span>
+                          {book.total_pages ? <span>{getBookCompletionPercentage(book)}% complete</span> : null}
                           <button
                             type="button"
                             onClick={() =>
@@ -674,6 +678,15 @@ export default function LibraryPage() {
                           Chapters {resonantCount}/{book.chapters.length}
                         </p>
                       </div>
+
+                      {book.total_pages ? (
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-stone-200">
+                          <div
+                            className="h-full rounded-full bg-teal-600 transition-all"
+                            style={{ width: `${getBookCompletionPercentage(book)}%` }}
+                          />
+                        </div>
+                      ) : null}
 
                       <div className="mt-4 grid gap-3 rounded-md border border-stone-200 bg-stone-50/70 p-3 md:grid-cols-[1fr_auto_auto] md:items-center">
                         <input
@@ -924,6 +937,15 @@ function getCurrentMonthPages(summary: LibrarySummary | null) {
   const currentMonth = new Date();
   const key = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}`;
   return summary?.monthly_pages.find((month) => month.month === key)?.pages ?? 0;
+}
+
+function getBookCurrentPage(book: Book) {
+  return book.current_page || book.pages_read || 0;
+}
+
+function getBookCompletionPercentage(book: Book) {
+  if (!book.total_pages) return 0;
+  return Math.min(Math.round((getBookCurrentPage(book) / book.total_pages) * 100), 100);
 }
 
 function getReadingStreak(summary: LibrarySummary | null) {
