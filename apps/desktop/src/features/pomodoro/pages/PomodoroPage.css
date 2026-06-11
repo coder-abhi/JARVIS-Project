@@ -13,6 +13,31 @@
   margin-top: 0;
 }
 
+.marathon-head-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.marathon-period-select {
+  appearance: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ops-signal);
+  cursor: pointer;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.65rem;
+  text-align: right;
+  text-transform: uppercase;
+  outline: none;
+}
+
+.marathon-period-select:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 0.2rem;
+}
+
 .marathon-grid {
   display: grid;
   grid-template-columns: minmax(10rem, 1fr) repeat(2, minmax(15rem, 1.5fr));

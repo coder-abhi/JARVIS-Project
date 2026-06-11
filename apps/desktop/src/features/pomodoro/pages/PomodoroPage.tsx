@@ -46,6 +46,7 @@ type TimingMode = "standard" | "custom" | "auto";
 type RecentEntriesFilter = "today" | "last5" | "last10";
 type FocusTrendRange = 7 | 30 | 90;
 type FocusTrendMode = "regular" | "cumulative";
+type MarathonHighlightPeriod = "today" | "week" | "month";
 
 type DurationSet = Record<TimerMode, number>;
 
@@ -114,6 +115,11 @@ const focusTrendLabels: Record<FocusTrendRange, string> = {
 const focusTrendModeLabels: Record<FocusTrendMode, string> = {
   regular: "Regular",
   cumulative: "Cumulative",
+};
+const marathonHighlightLabels: Record<MarathonHighlightPeriod, string> = {
+  today: "Today",
+  week: "This Week",
+  month: "This Month",
 };
 
 export default function PomodoroPage() {
@@ -950,12 +956,27 @@ export default function PomodoroPage() {
 
 function MarathonMetrics({ metrics }: { metrics: ReturnType<typeof getFocusMarathonMetrics> }) {
   const today = getWorkDayDate(new Date());
+  const [highlightPeriod, setHighlightPeriod] = useState<MarathonHighlightPeriod>("week");
+  const highlightLabel = marathonHighlightLabels[highlightPeriod];
 
   return (
     <section className="ops-panel marathon-panel">
       <div className="ops-panel-head">
         <h2>Longest Marathon</h2>
-        <span>maximum 10 minute gap</span>
+        <div className="marathon-head-meta">
+          <label className="sr-only" htmlFor="marathon-highlight-period">Highlight Period</label>
+          <select
+            className="marathon-period-select"
+            id="marathon-highlight-period"
+            value={highlightPeriod}
+            onChange={(event) => setHighlightPeriod(event.target.value as MarathonHighlightPeriod)}
+          >
+            {(Object.keys(marathonHighlightLabels) as MarathonHighlightPeriod[]).map((period) => (
+              <option key={period} value={period}>{marathonHighlightLabels[period]}</option>
+            ))}
+          </select>
+          <span>maximum 10 minute gap</span>
+        </div>
       </div>
       <div className="marathon-grid">
         <div className="marathon-latest">
@@ -979,14 +1000,14 @@ function MarathonMetrics({ metrics }: { metrics: ReturnType<typeof getFocusMarat
           </div>
           {metrics.longest.length > 0 ? metrics.longest.map((marathon, index) => (
             <div
-              className={`marathon-ranking-row ${isMarathonInCurrentWeek(marathon, today) ? "current-period" : ""}`}
+              className={`marathon-ranking-row ${isMarathonInHighlightPeriod(marathon, today, highlightPeriod) ? "current-period" : ""}`}
               key={`${marathon.startedAt}-${marathon.endedAt}`}
             >
               <span className="marathon-rank">#{index + 1}</span>
               <strong>{marathon.minutes}m</strong>
               <span>
                 {formatMarathonDate(marathon)}
-                {isMarathonInCurrentWeek(marathon, today) ? " / This Week" : ""}
+                {isMarathonInHighlightPeriod(marathon, today, highlightPeriod) ? ` / ${highlightLabel}` : ""}
                 {isSameMarathon(marathon, metrics.mostRecent) ? " / Recent" : ""}
               </span>
             </div>
@@ -1001,12 +1022,12 @@ function MarathonMetrics({ metrics }: { metrics: ReturnType<typeof getFocusMarat
           </div>
           {metrics.topDays.length > 0 ? metrics.topDays.map((day, index) => (
             <div
-              className={`marathon-ranking-row ${isCurrentFocusDay(day, today) ? "current-period" : ""}`}
+              className={`marathon-ranking-row ${isFocusDayInHighlightPeriod(day, today, highlightPeriod) ? "current-period" : ""}`}
               key={day.date}
             >
               <span className="marathon-rank">#{index + 1}</span>
               <strong>{day.minutes}m</strong>
-              <span>{formatFocusDay(day)}{isCurrentFocusDay(day, today) ? " / Today" : ""}</span>
+              <span>{formatFocusDay(day)}{isFocusDayInHighlightPeriod(day, today, highlightPeriod) ? ` / ${highlightLabel}` : ""}</span>
             </div>
           )) : (
             <p className="marathon-empty">No daily milestones yet.</p>
@@ -1029,23 +1050,36 @@ function formatMarathonDate(marathon: FocusMarathon) {
   });
 }
 
-function isMarathonInCurrentWeek(marathon: FocusMarathon, today: Date) {
-  const weekStart = addCalendarDays(today, -today.getDay());
+function isMarathonInHighlightPeriod(marathon: FocusMarathon, today: Date, period: MarathonHighlightPeriod) {
   const marathonDay = getWorkDayDate(new Date(marathon.endedAt));
-  return marathonDay >= weekStart && marathonDay <= addCalendarDays(weekStart, 6);
+  return isDateInHighlightPeriod(marathonDay, today, period);
 }
 
-function isCurrentFocusDay(day: FocusDay, today: Date) {
-  return day.date === dateKey(today);
+function isFocusDayInHighlightPeriod(day: FocusDay, today: Date, period: MarathonHighlightPeriod) {
+  return isDateInHighlightPeriod(parseFocusDay(day), today, period);
+}
+
+function isDateInHighlightPeriod(date: Date, today: Date, period: MarathonHighlightPeriod) {
+  if (period === "today") return dateKey(date) === dateKey(today);
+  if (period === "month") {
+    return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth();
+  }
+
+  const weekStart = addCalendarDays(today, -today.getDay());
+  return date >= weekStart && date <= addCalendarDays(weekStart, 6);
 }
 
 function formatFocusDay(day: FocusDay) {
-  const [year, month, date] = day.date.split("-").map(Number);
-  return new Date(year, month - 1, date).toLocaleDateString(undefined, {
+  return parseFocusDay(day).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
+}
+
+function parseFocusDay(day: FocusDay) {
+  const [year, month, date] = day.date.split("-").map(Number);
+  return new Date(year, month - 1, date);
 }
 
 function createDraft(source: SessionDraft["source"], seed: Pick<SessionDraft, "mode" | "startAt" | "endAt" | "projectId" | "taskId">, done = ""): SessionDraft {
