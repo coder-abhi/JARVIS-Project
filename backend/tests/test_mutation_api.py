@@ -170,6 +170,14 @@ class MutationApiTests(unittest.TestCase):
         self.assertEqual(updated.json()["pages_remaining"], 200)
 
     def test_helping_hands_uses_one_transaction_upsert_for_create_and_update(self) -> None:
+        start_month = self.client.put(
+            "/helping-hands/start-month",
+            headers=self.headers,
+            json={"startMonth": "2025-12"},
+        )
+        self.assertEqual(start_month.status_code, 200)
+        self.assertEqual(start_month.json()["startMonth"], "2025-12")
+
         payload = {
             "id": "helping-transaction-1",
             "member": "Asha",
@@ -199,6 +207,7 @@ class MutationApiTests(unittest.TestCase):
         self.assertEqual(len(updated.json()["transactions"]), 1)
         self.assertEqual(updated.json()["transactions"][0]["amount"], 4500)
         self.assertEqual(updated.json()["transactions"][0]["note"], "Corrected amount")
+        self.assertEqual(updated.json()["startMonth"], "2025-12")
 
 
 if __name__ == "__main__":

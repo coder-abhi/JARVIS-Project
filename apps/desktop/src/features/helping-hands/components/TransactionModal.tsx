@@ -4,16 +4,19 @@ import type { HelpingHandsDirection, HelpingHandsTransaction } from "../types";
 
 export default function TransactionModal({
   transaction,
+  presetMember,
   memberNames,
   onClose,
   onSave,
 }: {
   transaction?: HelpingHandsTransaction;
+  presetMember?: string;
   memberNames: string[];
   onClose: () => void;
   onSave: (transaction: HelpingHandsTransaction) => Promise<void>;
 }) {
-  const [member, setMember] = useState(transaction?.member ?? "");
+  const isQuickReceipt = Boolean(presetMember && !transaction);
+  const [member, setMember] = useState(transaction?.member ?? presetMember ?? "");
   const [direction, setDirection] = useState<HelpingHandsDirection>(transaction?.direction ?? "received");
   const [amount, setAmount] = useState(transaction ? String(transaction.amount) : "");
   const [date, setDate] = useState(transaction?.date ?? toDateValue(new Date()));
@@ -22,12 +25,12 @@ export default function TransactionModal({
   const [error, setError] = useState("");
 
   useEffect(() => {
-    setMember(transaction?.member ?? "");
+    setMember(transaction?.member ?? presetMember ?? "");
     setDirection(transaction?.direction ?? "received");
     setAmount(transaction ? String(transaction.amount) : "");
     setDate(transaction?.date ?? toDateValue(new Date()));
     setNote(transaction?.note ?? "");
-  }, [transaction]);
+  }, [presetMember, transaction]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,10 +70,10 @@ export default function TransactionModal({
         {error ? <p className="ops-alert danger">{error}</p> : null}
 
         <div className="helping-direction-switch" role="group" aria-label="Transaction direction">
-          <button type="button" className={direction === "received" ? "active received" : ""} onClick={() => setDirection("received")}>
+          <button type="button" disabled={isQuickReceipt} className={direction === "received" ? "active received" : ""} onClick={() => setDirection("received")}>
             Money Received
           </button>
-          <button type="button" className={direction === "sent" ? "active sent" : ""} onClick={() => setDirection("sent")}>
+          <button type="button" disabled={isQuickReceipt} className={direction === "sent" ? "active sent" : ""} onClick={() => setDirection("sent")}>
             Money Sent
           </button>
         </div>
@@ -84,26 +87,28 @@ export default function TransactionModal({
         <div className="helping-form-grid">
           <label className="helping-field wide">
             <span>Member Name</span>
-            <input required list="helping-member-names" value={member} onChange={(event) => setMember(event.target.value)} placeholder="Select or type a new member" />
+            <input required readOnly={isQuickReceipt} list="helping-member-names" value={member} onChange={(event) => setMember(event.target.value)} placeholder="Select or type a new member" />
             <datalist id="helping-member-names">{memberNames.map((name) => <option value={name} key={name} />)}</datalist>
           </label>
           <label className="helping-field">
             <span>Amount</span>
-            <input required min="0.01" step="0.01" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} />
+            <input autoFocus={isQuickReceipt} required min="0.01" step="0.01" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} />
           </label>
           <label className="helping-field">
             <span>Date</span>
-            <input required type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+            <input required readOnly={isQuickReceipt} type="date" value={date} onChange={(event) => setDate(event.target.value)} />
           </label>
-          <label className="helping-field wide">
-            <span>Note / Reference (optional)</span>
-            <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Receipt number or short context" />
-          </label>
+          {!isQuickReceipt ? (
+            <label className="helping-field wide">
+              <span>Note / Reference (optional)</span>
+              <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Receipt number or short context" />
+            </label>
+          ) : null}
         </div>
 
         <div className="helping-modal-actions">
           <button type="button" className="ops-button" onClick={onClose}>Cancel</button>
-          <button type="submit" className="ops-button primary" disabled={isSaving}>{isSaving ? "Saving..." : "Register Transaction"}</button>
+          <button type="submit" className="ops-button primary" disabled={isSaving}>{isSaving ? "Saving..." : isQuickReceipt ? "Record Receipt" : "Register Transaction"}</button>
         </div>
       </form>
     </div>

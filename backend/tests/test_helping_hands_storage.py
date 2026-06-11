@@ -80,6 +80,31 @@ class HelpingHandsStorageTests(unittest.TestCase):
                 transaction_id="transaction-1",
             )
 
+    def test_start_month_persists_with_transactions(self) -> None:
+        saved = service.update_start_month(
+            self.session,
+            user_id="user-1",
+            start_month="2025-12",
+        )
+        updated = service.upsert_transaction(
+            self.session,
+            user_id="user-1",
+            transaction=schemas.HelpingHandsTransaction(
+                id="transaction-1",
+                member="Ravi",
+                direction="received",
+                amount=3000,
+                date="2025-12-08",
+            ),
+        )
+
+        self.assertEqual(saved.startMonth, "2025-12")
+        self.assertEqual(updated.startMonth, "2025-12")
+        self.assertEqual(
+            service.get_helping_hands_data(self.session, user_id="user-2").startMonth,
+            "",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

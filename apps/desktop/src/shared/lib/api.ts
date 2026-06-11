@@ -462,6 +462,13 @@ export function getHelpingHandsData<T>() {
   return request<T>("/helping-hands");
 }
 
+export function saveHelpingHandsStartMonth<T>(startMonth: string) {
+  return request<T>("/helping-hands/start-month", {
+    method: "PUT",
+    body: JSON.stringify({ startMonth }),
+  });
+}
+
 export function saveHelpingHandsTransaction<T>(data: { id: string }) {
   const key = `helping-hands-transaction:${data.id}`;
   const previous = saveQueues.get(key) ?? Promise.resolve();

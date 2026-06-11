@@ -17,6 +17,19 @@ async def get_helping_hands_data(
     return service.get_helping_hands_data(db, user_id=current_user.id)
 
 
+@router.put("/start-month", response_model=schemas.HelpingHandsData)
+async def update_helping_hands_start_month(
+    payload: schemas.HelpingHandsStartMonth,
+    db: Session = Depends(get_db),
+    current_user: root_models.User = Depends(auth.get_current_user),
+):
+    return service.update_start_month(
+        db,
+        user_id=current_user.id,
+        start_month=payload.startMonth,
+    )
+
+
 @router.put("/transactions/{transaction_id}", response_model=schemas.HelpingHandsData)
 async def upsert_helping_hands_transaction(
     transaction_id: str,

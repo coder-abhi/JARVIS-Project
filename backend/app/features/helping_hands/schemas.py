@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class HelpingHandsTransaction(BaseModel):
@@ -23,4 +23,27 @@ class HelpingHandsTransaction(BaseModel):
 
 class HelpingHandsData(BaseModel):
     version: Literal[2] = 2
+    startMonth: str = Field(default="", max_length=7)
     transactions: list[HelpingHandsTransaction] = Field(default_factory=list)
+
+    @field_validator("startMonth")
+    @classmethod
+    def validate_start_month(cls, value: str) -> str:
+        if value and (
+            len(value) != 7
+            or value[4] != "-"
+            or not value[:4].isdigit()
+            or not value[5:].isdigit()
+            or not 1 <= int(value[5:]) <= 12
+        ):
+            raise ValueError("startMonth must use YYYY-MM format")
+        return value
+
+
+class HelpingHandsStartMonth(BaseModel):
+    startMonth: str = Field(min_length=7, max_length=7)
+
+    @field_validator("startMonth")
+    @classmethod
+    def validate_start_month(cls, value: str) -> str:
+        return HelpingHandsData(startMonth=value).startMonth

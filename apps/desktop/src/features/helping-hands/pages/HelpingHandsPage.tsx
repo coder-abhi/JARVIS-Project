@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import TransactionModal from "../components/TransactionModal";
 import {
@@ -9,8 +9,10 @@ import {
   formatDate,
   formatMoney,
   formatPeriod,
+  helpingHandsStartMonth,
   helpingHandsRules,
   ordinal,
+  summarizeUnpaidInterest,
   toPeriod,
   uniqueMemberNames,
 } from "../ledger";
@@ -19,23 +21,41 @@ import { useHelpingHandsData } from "../useHelpingHandsData";
 import "./HelpingHandsPage.css";
 
 export default function HelpingHandsPage() {
-  const { data, isLoading, warning, setWarning, saveTransaction, removeTransaction } = useHelpingHandsData();
+  const {
+    data,
+    isLoading,
+    warning,
+    setWarning,
+    saveStartMonth,
+    saveTransaction,
+    removeTransaction,
+  } = useHelpingHandsData();
   const [selectedPeriod, setSelectedPeriod] = useState(() => toPeriod(new Date()));
   const [isTransactionOpen, setIsTransactionOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<HelpingHandsTransaction | undefined>();
+  const [receiptMember, setReceiptMember] = useState("");
   const [notice, setNotice] = useState("");
+  const currentPeriod = toPeriod(new Date());
+  const startPeriod = helpingHandsStartMonth(data, currentPeriod);
+
+  useEffect(() => {
+    if (selectedPeriod < startPeriod) setSelectedPeriod(startPeriod);
+  }, [selectedPeriod, startPeriod]);
+
   const ledger = useMemo(
-    () => calculateHelpingHandsLedger(data, selectedPeriod),
-    [data, selectedPeriod],
+    () => calculateHelpingHandsLedger(data, selectedPeriod, new Date(), startPeriod),
+    [data, selectedPeriod, startPeriod],
   );
   const recentTransactions = useMemo(
-    () => calculateHelpingHandsLedger(data).transactions.slice(0, 10),
-    [data],
+    () => calculateHelpingHandsLedger(data, currentPeriod, new Date(), startPeriod).transactions.slice(0, 10),
+    [currentPeriod, data, startPeriod],
   );
   const memberNames = useMemo(() => uniqueMemberNames(data), [data]);
   const openLoans = ledger.loans.filter((loan) => loan.outstanding > 0);
-  const unpaidInterest = ledger.interestCharges.filter((charge) => charge.due > 0);
-  const currentPeriod = toPeriod(new Date());
+  const unpaidInterest = useMemo(
+    () => summarizeUnpaidInterest(ledger.interestCharges),
+    [ledger.interestCharges],
+  );
   const totalInvestment = 0;
   const investmentInterestEarned = 0;
   const totalBalanceIncludingLoanAndInterest = ledger.fundBalance
@@ -44,8 +64,26 @@ export default function HelpingHandsPage() {
     + totalInvestment;
 
   function openTransaction(transaction?: HelpingHandsTransaction) {
+    setReceiptMember("");
     setEditingTransaction(transaction);
     setIsTransactionOpen(true);
+  }
+
+  function openMemberReceipt(member: string) {
+    setEditingTransaction(undefined);
+    setReceiptMember(member);
+    setIsTransactionOpen(true);
+  }
+
+  async function handleStartMonthChange(startMonth: string) {
+    if (!startMonth) return;
+    try {
+      await saveStartMonth(startMonth);
+      if (selectedPeriod < startMonth) setSelectedPeriod(startMonth);
+      setNotice(`Helping Hands rules now start from ${formatPeriod(startMonth)}.`);
+    } catch (error) {
+      setWarning(error instanceof Error ? error.message : "Could not save start month");
+    }
   }
 
   async function handleSave(transaction: HelpingHandsTransaction) {
@@ -78,8 +116,12 @@ export default function HelpingHandsPage() {
         </div>
         <div className="helping-header-actions">
           <label className="helping-period-picker">
+            Start month
+            <input type="month" max={currentPeriod} value={startPeriod} onChange={(event) => void handleStartMonthChange(event.target.value)} />
+          </label>
+          <label className="helping-period-picker">
             Working month
-            <input type="month" max={currentPeriod} value={selectedPeriod} onChange={(event) => setSelectedPeriod(event.target.value)} />
+            <input type="month" min={startPeriod} max={currentPeriod} value={selectedPeriod} onChange={(event) => setSelectedPeriod(event.target.value)} />
           </label>
           <button type="button" className="ops-button primary" onClick={() => openTransaction()}>+ Register Transaction</button>
         </div>
@@ -114,7 +156,14 @@ export default function HelpingHandsPage() {
                   <strong>{formatMoney(member.principalOutstanding)}</strong>
                   <strong className={member.interestDue > 0 ? "helping-negative" : "helping-positive"}>{formatMoney(member.interestDue)}</strong>
                   <strong className="helping-positive">{formatMoney(member.totalInterestPaid)}</strong>
-                  <span className={`helping-status ${statusTone(member.status)}`}>{statusLabel(member.status)}</span>
+                  <button
+                    type="button"
+                    className={`helping-status ${statusTone(member.status)}`}
+                    title={`Record money received from ${member.name}`}
+                    onClick={() => openMemberReceipt(member.name)}
+                  >
+                    {statusLabel(member.status)}
+                  </button>
                 </div>
               ))}
             </div>
@@ -123,17 +172,17 @@ export default function HelpingHandsPage() {
         </section>
 
         <section className="ops-panel span-12">
-          <PanelHeader label="Interest Due Register" detail={`${unpaidInterest.length} unpaid charges`} />
+          <PanelHeader label="Interest Due Register" detail={`${unpaidInterest.length} members with unpaid interest`} />
           <div className="helping-table-wrap">
             <div className="helping-interest-table">
-              <div className="helping-interest-row head"><span>Due Date</span><span>Member</span><span>Monthly Charge</span><span>Paid</span><span>Still Due</span></div>
-              {unpaidInterest.map((charge) => (
-                <div className="helping-interest-row" key={charge.id}>
-                  <span>{formatDate(charge.dueDate)}</span>
-                  <strong>{charge.member}</strong>
-                  <strong>{formatMoney(charge.charge)}</strong>
-                  <strong className="helping-positive">{formatMoney(charge.paid)}</strong>
-                  <strong className="helping-negative">{formatMoney(charge.due)}</strong>
+              <div className="helping-interest-row head"><span>Oldest Due</span><span>Member</span><span>Total Charge</span><span>Paid</span><span>Still Due</span></div>
+              {unpaidInterest.map((summary) => (
+                <div className="helping-interest-row" key={summary.memberKey}>
+                  <span>{formatDate(summary.firstDueDate)}</span>
+                  <strong>{summary.member}</strong>
+                  <strong>{formatMoney(summary.charge)}</strong>
+                  <strong className="helping-positive">{formatMoney(summary.paid)}</strong>
+                  <strong className="helping-negative">{formatMoney(summary.due)}</strong>
                 </div>
               ))}
             </div>
@@ -193,10 +242,12 @@ export default function HelpingHandsPage() {
       {isTransactionOpen ? (
         <TransactionModal
           transaction={editingTransaction}
+          presetMember={receiptMember}
           memberNames={memberNames}
           onClose={() => {
             setIsTransactionOpen(false);
             setEditingTransaction(undefined);
+            setReceiptMember("");
           }}
           onSave={handleSave}
         />

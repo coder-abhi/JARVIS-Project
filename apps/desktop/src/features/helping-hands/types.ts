@@ -12,6 +12,7 @@ export type HelpingHandsTransaction = {
 
 export type HelpingHandsData = {
   version: 2;
+  startMonth: string;
   transactions: HelpingHandsTransaction[];
 };
 
@@ -46,6 +47,15 @@ export type InterestCharge = {
   member: string;
   period: string;
   dueDate: string;
+  charge: number;
+  paid: number;
+  due: number;
+};
+
+export type InterestDueSummary = {
+  memberKey: string;
+  member: string;
+  firstDueDate: string;
   charge: number;
   paid: number;
   due: number;

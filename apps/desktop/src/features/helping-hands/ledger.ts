@@ -4,6 +4,7 @@ import type {
   HelpingHandsLedger,
   HelpingHandsTransaction,
   InterestCharge,
+  InterestDueSummary,
   MemberPosition,
   ProcessedTransaction,
   TransactionAllocation,
@@ -35,10 +36,12 @@ export function calculateHelpingHandsLedger(
   data: HelpingHandsData,
   selectedPeriod = toPeriod(new Date()),
   now = new Date(),
+  startPeriod = helpingHandsStartMonth(data),
 ): HelpingHandsLedger {
   const asOf = periodAsOfDate(selectedPeriod, now);
+  const startDate = `${startPeriod}-01`;
   const rawTransactions = [...data.transactions]
-    .filter((transaction) => transaction.date <= asOf)
+    .filter((transaction) => transaction.date >= startDate && transaction.date <= asOf)
     .sort(compareTransactions);
   const memberStates = buildMemberStates(rawTransactions);
   const loans: MutableLoan[] = [];
@@ -48,16 +51,13 @@ export function calculateHelpingHandsLedger(
   );
 
   if (memberStates.size) {
-    const firstPeriod = [...memberStates.values()]
-      .map((member) => member.firstTransactionDate.slice(0, 7))
-      .sort()[0];
     const events: LedgerEvent[] = [
       ...rawTransactions.map((transaction) => ({
         date: transaction.date,
         order: 1 as const,
         transaction,
       })),
-      ...periodRange(firstPeriod, asOf.slice(0, 7)).map((period) => ({
+      ...periodRange(startPeriod, asOf.slice(0, 7)).map((period) => ({
         date: `${period}-${String(helpingHandsRules.dueDay).padStart(2, "0")}`,
         order: 0 as const,
         period,
@@ -181,7 +181,6 @@ function applyMonthlyDueEvent(
   }
 
   for (const member of members.values()) {
-    if (member.firstTransactionDate.slice(0, 7) > period) continue;
     const paid = member.contributionPaid.get(period) ?? 0;
     const shortfall = roundMoney(Math.max(helpingHandsRules.monthlyContribution - paid, 0));
     if (shortfall <= 0) continue;
@@ -344,26 +343,69 @@ export function allocationSummary(allocations: TransactionAllocation[]) {
 }
 
 export function normalizeHelpingHandsData(value: unknown): HelpingHandsData {
-  if (!value || typeof value !== "object") return { version: 2, transactions: [] };
+  if (!value || typeof value !== "object") {
+    return { version: 2, startMonth: "", transactions: [] };
+  }
   const raw = value as Partial<HelpingHandsData>;
+  const transactions = Array.isArray(raw.transactions)
+    ? raw.transactions
+      .filter((transaction): transaction is HelpingHandsTransaction => Boolean(
+        transaction
+        && typeof transaction.id === "string"
+        && typeof transaction.member === "string"
+        && (transaction.direction === "sent" || transaction.direction === "received"),
+      ))
+      .map((transaction) => ({
+        ...transaction,
+        amount: Number(transaction.amount) || 0,
+        note: transaction.note ?? "",
+        createdAt: transaction.createdAt ?? "",
+      }))
+    : [];
   return {
     version: 2,
-    transactions: Array.isArray(raw.transactions)
-      ? raw.transactions
-        .filter((transaction): transaction is HelpingHandsTransaction => Boolean(
-          transaction
-          && typeof transaction.id === "string"
-          && typeof transaction.member === "string"
-          && (transaction.direction === "sent" || transaction.direction === "received"),
-        ))
-        .map((transaction) => ({
-          ...transaction,
-          amount: Number(transaction.amount) || 0,
-          note: transaction.note ?? "",
-          createdAt: transaction.createdAt ?? "",
-        }))
-      : [],
+    startMonth: validPeriod(raw.startMonth) ? raw.startMonth : "",
+    transactions,
   };
+}
+
+export function helpingHandsStartMonth(
+  data: HelpingHandsData,
+  fallback = toPeriod(new Date()),
+) {
+  if (validPeriod(data.startMonth)) return data.startMonth;
+  return data.transactions
+    .map((transaction) => transaction.date.slice(0, 7))
+    .filter(validPeriod)
+    .sort()[0] ?? fallback;
+}
+
+export function summarizeUnpaidInterest(charges: InterestCharge[]): InterestDueSummary[] {
+  const summaries = new Map<string, InterestDueSummary>();
+  for (const charge of charges) {
+    if (charge.due <= 0) continue;
+    const existing = summaries.get(charge.memberKey);
+    if (existing) {
+      existing.firstDueDate = existing.firstDueDate < charge.dueDate
+        ? existing.firstDueDate
+        : charge.dueDate;
+      existing.charge = roundMoney(existing.charge + charge.charge);
+      existing.paid = roundMoney(existing.paid + charge.paid);
+      existing.due = roundMoney(existing.due + charge.due);
+      continue;
+    }
+    summaries.set(charge.memberKey, {
+      memberKey: charge.memberKey,
+      member: charge.member,
+      firstDueDate: charge.dueDate,
+      charge: charge.charge,
+      paid: charge.paid,
+      due: charge.due,
+    });
+  }
+  return [...summaries.values()].sort(
+    (a, b) => a.firstDueDate.localeCompare(b.firstDueDate) || a.member.localeCompare(b.member),
+  );
 }
 
 export function uniqueMemberNames(data: HelpingHandsData) {
@@ -440,6 +482,12 @@ function compareTransactions(a: HelpingHandsTransaction, b: HelpingHandsTransact
 
 function memberKey(name: string) {
   return name.trim().toLocaleLowerCase();
+}
+
+function validPeriod(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}$/.test(value)) return false;
+  const month = Number(value.slice(5));
+  return month >= 1 && month <= 12;
 }
 
 function statusWeight(status: MemberPosition["status"]) {

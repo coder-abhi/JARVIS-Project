@@ -63,6 +63,12 @@ def delete_transaction(db: Session, *, user_id: str, transaction_id: str) -> Hel
     return _save_data(db, user_id=user_id, data=data)
 
 
+def update_start_month(db: Session, *, user_id: str, start_month: str) -> HelpingHandsData:
+    data = get_helping_hands_data(db, user_id=user_id)
+    data.startMonth = start_month
+    return _save_data(db, user_id=user_id, data=data)
+
+
 def _save_data(db: Session, *, user_id: str, data: HelpingHandsData) -> HelpingHandsData:
     document = _get_document(db, user_id=user_id)
     value_json = data.model_dump_json()

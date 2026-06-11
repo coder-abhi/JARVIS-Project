@@ -199,6 +199,17 @@
   text-transform: uppercase;
 }
 
+.helping-status {
+  background: transparent;
+  cursor: pointer;
+}
+
+.helping-status:hover,
+.helping-status:focus-visible {
+  background: rgba(255, 255, 255, 0.05);
+  outline: none;
+}
+
 .helping-status.signal,
 .helping-direction.received {
   border-color: rgba(34, 197, 94, 0.55);
@@ -506,6 +517,12 @@
 .helping-direction-switch button.active.sent {
   border-color: rgba(248, 113, 113, 0.75);
   color: #f87171;
+}
+
+.helping-direction-switch button:disabled,
+.helping-field input[readonly] {
+  cursor: default;
+  opacity: 0.72;
 }
 
 .helping-allocation-preview {
