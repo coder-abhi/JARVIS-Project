@@ -33,6 +33,7 @@ import {
   getFocusMinutesToday,
   getFocusMomentum,
   loadDurablePomodoroLogs,
+  type FocusDay,
   type FocusMarathon,
 } from "@/lib/focusMetrics";
 import { LineTrendChart } from "@/components/LineTrendChart";
@@ -948,6 +949,8 @@ export default function PomodoroPage() {
 }
 
 function MarathonMetrics({ metrics }: { metrics: ReturnType<typeof getFocusMarathonMetrics> }) {
+  const today = getWorkDayDate(new Date());
+
   return (
     <section className="ops-panel marathon-panel">
       <div className="ops-panel-head">
@@ -971,20 +974,42 @@ function MarathonMetrics({ metrics }: { metrics: ReturnType<typeof getFocusMarat
         </div>
         <div className="marathon-ranking">
           <div className="marathon-ranking-head">
-            <span>Top 5 Milestones</span>
+            <span>Top 5 Marathons</span>
             <span>Minutes / Achieved</span>
           </div>
           {metrics.longest.length > 0 ? metrics.longest.map((marathon, index) => (
             <div
-              className={isSameMarathon(marathon, metrics.mostRecent) ? "marathon-ranking-row recent" : "marathon-ranking-row"}
+              className={`marathon-ranking-row ${isMarathonInCurrentWeek(marathon, today) ? "current-period" : ""}`}
               key={`${marathon.startedAt}-${marathon.endedAt}`}
             >
               <span className="marathon-rank">#{index + 1}</span>
               <strong>{marathon.minutes}m</strong>
-              <span>{formatMarathonDate(marathon)}{isSameMarathon(marathon, metrics.mostRecent) ? " / Recent" : ""}</span>
+              <span>
+                {formatMarathonDate(marathon)}
+                {isMarathonInCurrentWeek(marathon, today) ? " / This Week" : ""}
+                {isSameMarathon(marathon, metrics.mostRecent) ? " / Recent" : ""}
+              </span>
             </div>
           )) : (
             <p className="marathon-empty">No marathon milestones yet.</p>
+          )}
+        </div>
+        <div className="marathon-ranking">
+          <div className="marathon-ranking-head">
+            <span>Top 5 Days</span>
+            <span>Minutes / Day</span>
+          </div>
+          {metrics.topDays.length > 0 ? metrics.topDays.map((day, index) => (
+            <div
+              className={`marathon-ranking-row ${isCurrentFocusDay(day, today) ? "current-period" : ""}`}
+              key={day.date}
+            >
+              <span className="marathon-rank">#{index + 1}</span>
+              <strong>{day.minutes}m</strong>
+              <span>{formatFocusDay(day)}{isCurrentFocusDay(day, today) ? " / Today" : ""}</span>
+            </div>
+          )) : (
+            <p className="marathon-empty">No daily milestones yet.</p>
           )}
         </div>
       </div>
@@ -998,6 +1023,25 @@ function isSameMarathon(marathon: FocusMarathon, candidate: FocusMarathon | null
 
 function formatMarathonDate(marathon: FocusMarathon) {
   return new Date(marathon.endedAt).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function isMarathonInCurrentWeek(marathon: FocusMarathon, today: Date) {
+  const weekStart = addCalendarDays(today, -today.getDay());
+  const marathonDay = getWorkDayDate(new Date(marathon.endedAt));
+  return marathonDay >= weekStart && marathonDay <= addCalendarDays(weekStart, 6);
+}
+
+function isCurrentFocusDay(day: FocusDay, today: Date) {
+  return day.date === dateKey(today);
+}
+
+function formatFocusDay(day: FocusDay) {
+  const [year, month, date] = day.date.split("-").map(Number);
+  return new Date(year, month - 1, date).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -1313,10 +1357,10 @@ const RecentWorkEntries = memo(function RecentWorkEntries({
 }) {
   return (
     <aside className="pomodoro-recent-panel">
-      <div className="flex items-center justify-between gap-4">
+      <div className="pomodoro-trail-heading flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-teal-700">Recent Work</p>
-          <h2 className="mt-2 text-2xl font-semibold text-stone-950">Pomodoro Trail</h2>
+          <h2 className="mt-1 text-xl font-semibold text-stone-950">Pomodoro Trail</h2>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <label className="sr-only" htmlFor="recent-entry-filter">Recent Entries</label>
@@ -1339,7 +1383,7 @@ const RecentWorkEntries = memo(function RecentWorkEntries({
         </div>
       </div>
 
-      <div className="mt-5 space-y-3">
+      <div className="pomodoro-trail-list mt-3 space-y-2">
         {logs.length === 0 ? (
           <div className="rounded-lg border border-dashed border-stone-300 bg-stone-50 p-6 text-center">
             <p className="text-sm font-semibold text-stone-950">No Sessions Logged Yet</p>
@@ -1367,8 +1411,10 @@ const RecentWorkEntries = memo(function RecentWorkEntries({
             >
               <div className="pomodoro-log-projects">
                 <p className="text-sm font-semibold text-stone-950">{log.taskTitle}</p>
-                <p className="mt-1 text-xs font-medium text-teal-700">{log.projectName}</p>
-                <p className="mt-2 text-xs text-stone-500">{new Date(log.completedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</p>
+                <div className="pomodoro-log-project-meta">
+                  <p className="text-xs font-medium text-teal-700">{log.projectName}</p>
+                  <p className="text-xs text-stone-500">{new Date(log.completedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</p>
+                </div>
               </div>
               <p
                 className={`pomodoro-log-description ${missingDetails ? "font-medium text-amber-200" : "text-stone-700"}`}

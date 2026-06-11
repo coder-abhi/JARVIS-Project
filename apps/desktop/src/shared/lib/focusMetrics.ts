@@ -1,6 +1,6 @@
 import { getPomodoroHistory, savePomodoroHistorySession } from "@/lib/api";
 import { getScopedStorageKey } from "@/lib/auth";
-import { addCalendarDays, getSessionWorkDayDate, getWorkDayDate, isCurrentWorkDay } from "@/lib/workDay";
+import { addCalendarDays, dateKey, getSessionWorkDayDate, getWorkDayDate, isCurrentWorkDay } from "@/lib/workDay";
 
 export type FocusMetricLog = {
   id: string;
@@ -19,9 +19,16 @@ export type FocusMarathon = {
   sessionCount: number;
 };
 
+export type FocusDay = {
+  date: string;
+  minutes: number;
+  sessionCount: number;
+};
+
 export type FocusMarathonMetrics = {
   mostRecent: FocusMarathon | null;
   longest: FocusMarathon[];
+  topDays: FocusDay[];
 };
 
 export const pomodoroLogsStorageKey = "personal-project-manager:pomodoro-logs";
@@ -64,8 +71,8 @@ export function getFocusMomentum(logs: FocusMetricLog[], now = new Date()) {
 }
 
 export function getFocusMarathonMetrics(logs: FocusMetricLog[]): FocusMarathonMetrics {
-  const sessions = logs
-    .filter((log) => log.mode === "focus")
+  const focusLogs = logs.filter((log) => log.mode === "focus");
+  const sessions = focusLogs
     .map(toMarathonSession)
     .filter((session): session is MarathonSession => session !== null)
     .sort((a, b) => a.startedAt - b.startedAt || a.endedAt - b.endedAt);
@@ -90,12 +97,27 @@ export function getFocusMarathonMetrics(logs: FocusMetricLog[]): FocusMarathonMe
       sessionCount: marathon.sessionCount,
     }));
 
+  const dayTotals = new Map<string, FocusDay>();
+  focusLogs.forEach((log) => {
+    if (!Number.isFinite(log.minutes) || log.minutes <= 0) return;
+    const key = dateKey(getSessionWorkDayDate(log));
+    const current = dayTotals.get(key);
+    dayTotals.set(key, {
+      date: key,
+      minutes: (current?.minutes ?? 0) + log.minutes,
+      sessionCount: (current?.sessionCount ?? 0) + 1,
+    });
+  });
+
   return {
     mostRecent: [...completedMarathons].sort(
       (a, b) => new Date(b.endedAt).getTime() - new Date(a.endedAt).getTime(),
     )[0] ?? null,
     longest: [...completedMarathons]
       .sort((a, b) => b.minutes - a.minutes || new Date(b.endedAt).getTime() - new Date(a.endedAt).getTime())
+      .slice(0, 5),
+    topDays: [...dayTotals.values()]
+      .sort((a, b) => b.minutes - a.minutes || b.date.localeCompare(a.date))
       .slice(0, 5),
   };
 }
