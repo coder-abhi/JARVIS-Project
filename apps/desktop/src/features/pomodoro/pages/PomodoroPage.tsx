@@ -143,6 +143,7 @@ export default function PomodoroPage() {
   const [sessionNote, setSessionNote] = useState("");
   const [draft, setDraft] = useState<SessionDraft | null>(null);
   const handledPendingCompletionIdRef = useRef<string | null>(null);
+  const isCompletingSessionRef = useRef(false);
 
   useEffect(() => {
     async function loadProjectsAndTasks() {
@@ -390,6 +391,7 @@ export default function PomodoroPage() {
     }
 
     void requestPomodoroNotificationPermission();
+    isCompletingSessionRef.current = false;
 
     const nextSecondsLeft = secondsLeft === 0 ? currentModeDuration : secondsLeft;
     const now = new Date();
@@ -401,6 +403,7 @@ export default function PomodoroPage() {
   }
 
   function resetTimer() {
+    isCompletingSessionRef.current = false;
     setSecondsLeft(currentModeDuration);
     setSessionState("idle");
     setSessionStartedAt(null);
@@ -408,10 +411,25 @@ export default function PomodoroPage() {
     setSessionDurationSeconds(null);
   }
 
-  async function completeTimerSession(completedAt?: Date) {
-    const endAt = completedAt ?? new Date();
+  function completeActiveSession() {
+    const endAt = new Date();
     const durationSeconds = sessionDurationSeconds ?? currentModeDuration;
-    const startAt = sessionStartedAt ? new Date(sessionStartedAt) : new Date(endAt.getTime() - durationSeconds * 1000);
+    const runningSecondsLeft = sessionEndsAt
+      ? Math.max(0, (new Date(sessionEndsAt).getTime() - endAt.getTime()) / 1000)
+      : secondsLeft;
+    const elapsedSeconds = Math.max(1, Math.min(durationSeconds, Math.round(durationSeconds - runningSecondsLeft)));
+    void completeTimerSession(endAt, elapsedSeconds);
+  }
+
+  async function completeTimerSession(completedAt?: Date, elapsedDurationSeconds?: number) {
+    if (isCompletingSessionRef.current) return;
+    isCompletingSessionRef.current = true;
+
+    const endAt = completedAt ?? new Date();
+    const durationSeconds = elapsedDurationSeconds ?? sessionDurationSeconds ?? currentModeDuration;
+    const startAt = elapsedDurationSeconds === undefined && sessionStartedAt
+      ? new Date(sessionStartedAt)
+      : new Date(endAt.getTime() - durationSeconds * 1000);
     setSessionState("idle");
     setSessionStartedAt(null);
     setSessionEndsAt(null);
@@ -616,6 +634,7 @@ export default function PomodoroPage() {
   }
 
   function clearPendingCompletion() {
+    isCompletingSessionRef.current = false;
     window.localStorage.removeItem(getPendingPomodoroCompletionKey());
     handledPendingCompletionIdRef.current = null;
     announcePomodoroSessionUpdate();
@@ -800,7 +819,7 @@ export default function PomodoroPage() {
 
             <div className="mt-8 grid place-items-center">
               <div
-                className="relative grid aspect-square w-full max-w-[320px] place-items-center rounded-full bg-[conic-gradient(#14b8a6_var(--progress),#e7e5e4_0)] p-3"
+                className="relative grid aspect-square w-full max-w-[288px] place-items-center rounded-full bg-[conic-gradient(#14b8a6_var(--progress),#e7e5e4_0)] p-3"
                 style={{ "--progress": `${completionPercent}%` } as CSSProperties}
               >
                 <div className="grid h-full w-full place-items-center rounded-full bg-white shadow-inner">
@@ -823,10 +842,10 @@ export default function PomodoroPage() {
               </button>
               <button
                 type="button"
-                onClick={resetTimer}
+                onClick={sessionState === "running" ? completeActiveSession : resetTimer}
                 className="rounded-full border border-stone-300 bg-white px-6 py-3 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:bg-stone-50"
               >
-                Reset
+                {sessionState === "running" ? "Complete" : "Reset"}
               </button>
             </div>
           </div>

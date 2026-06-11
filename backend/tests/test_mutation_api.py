@@ -122,6 +122,13 @@ class MutationApiTests(unittest.TestCase):
         )
         self.assertEqual(pomodoro.status_code, 201)
         self.assertEqual(pomodoro.json()["done"], "Storage refactor")
+        self.assertEqual(pomodoro.json()["startAt"], "2026-06-10T10:00:00Z")
+        self.assertEqual(pomodoro.json()["endAt"], "2026-06-10T10:25:00Z")
+
+        pomodoro_history = self.client.get("/pomodoro/sessions", headers=self.headers)
+        self.assertEqual(pomodoro_history.status_code, 200)
+        self.assertEqual(pomodoro_history.json()[0]["startAt"], "2026-06-10T10:00:00Z")
+        self.assertEqual(pomodoro_history.json()[0]["endAt"], "2026-06-10T10:25:00Z")
 
     def test_library_page_count_update_and_historical_reading_log(self) -> None:
         book = self.client.post(

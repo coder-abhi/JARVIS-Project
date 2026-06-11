@@ -165,13 +165,14 @@ const timeOptionHeight = 36;
 function TimeColumn({ label, onChange, options, value }: { label: string; onChange: (value: number) => void; options: number[]; value: number }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef<number | null>(null);
+  const scrollEndTimerRef = useRef<number | null>(null);
   const syncFrameRef = useRef<number | null>(null);
   const isSyncingScrollRef = useRef(false);
-  const hasUserScrolledRef = useRef(false);
+  const isUserScrollingRef = useRef(false);
 
   useLayoutEffect(() => {
     const scroller = scrollerRef.current;
-    if (!scroller) return;
+    if (!scroller || isUserScrollingRef.current) return;
 
     const nextTop = options.indexOf(value) * timeOptionHeight;
     if (Math.abs(scroller.scrollTop - nextTop) < 1) {
@@ -185,23 +186,40 @@ function TimeColumn({ label, onChange, options, value }: { label: string; onChan
     syncFrameRef.current = window.requestAnimationFrame(() => {
       isSyncingScrollRef.current = false;
     });
+  }, [options, value]);
 
+  useEffect(() => {
     return () => {
+      if (frameRef.current) window.cancelAnimationFrame(frameRef.current);
+      if (scrollEndTimerRef.current) window.clearTimeout(scrollEndTimerRef.current);
       if (syncFrameRef.current) window.cancelAnimationFrame(syncFrameRef.current);
       isSyncingScrollRef.current = false;
     };
-  }, [options, value]);
+  }, []);
+
+  function markUserScroll() {
+    if (!isSyncingScrollRef.current) isUserScrollingRef.current = true;
+  }
 
   function handleScroll() {
     const scroller = scrollerRef.current;
-    if (!scroller || isSyncingScrollRef.current || !hasUserScrolledRef.current) return;
+    if (!scroller || isSyncingScrollRef.current || !isUserScrollingRef.current) return;
     if (frameRef.current) window.cancelAnimationFrame(frameRef.current);
+    if (scrollEndTimerRef.current) window.clearTimeout(scrollEndTimerRef.current);
 
     frameRef.current = window.requestAnimationFrame(() => {
       const nextIndex = clamp(Math.round(scroller.scrollTop / timeOptionHeight), 0, options.length - 1);
       const nextValue = options[nextIndex];
       if (nextValue !== value) onChange(nextValue);
     });
+    scrollEndTimerRef.current = window.setTimeout(() => {
+      isUserScrollingRef.current = false;
+    }, 140);
+  }
+
+  function selectOption(option: number) {
+    isUserScrollingRef.current = false;
+    onChange(option);
   }
 
   return (
@@ -213,19 +231,19 @@ function TimeColumn({ label, onChange, options, value }: { label: string; onChan
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-10 bg-gradient-to-t from-stone-950 to-stone-950/0" />
         <div
           ref={scrollerRef}
-          onKeyDown={() => { hasUserScrolledRef.current = true; }}
-          onPointerDown={() => { hasUserScrolledRef.current = true; }}
+          onKeyDown={markUserScroll}
+          onPointerDown={markUserScroll}
           onScroll={handleScroll}
-          onTouchStart={() => { hasUserScrolledRef.current = true; }}
-          onWheel={() => { hasUserScrolledRef.current = true; }}
-          className="h-full overflow-y-auto scroll-smooth py-[62px] pr-1 [scrollbar-color:#14b8a6_#1c1917]"
+          onTouchStart={markUserScroll}
+          onWheel={markUserScroll}
+          className="h-full snap-y snap-mandatory overflow-y-auto overscroll-contain py-[62px] pr-1 [scrollbar-color:#14b8a6_#1c1917]"
         >
           {options.map((option) => (
             <button
               key={option}
               type="button"
-              onClick={() => onChange(option)}
-              className={`relative z-30 grid h-9 w-full place-items-center rounded-md text-base font-semibold tabular-nums outline-none ring-0 transition ${
+              onClick={() => selectOption(option)}
+              className={`relative z-30 grid h-9 w-full snap-center place-items-center rounded-md text-base font-semibold tabular-nums outline-none ring-0 transition ${
                 option === value ? "text-white" : "text-stone-500 hover:text-stone-200"
               }`}
             >
