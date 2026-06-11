@@ -49,6 +49,35 @@
   gap: 0.75rem;
 }
 
+.project-metadata-selects fieldset {
+  border: 0;
+  padding: 0;
+}
+
+.project-metadata-selects legend {
+  margin-bottom: 0.35rem;
+  color: var(--ops-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.project-goal-options {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.project-goal-options label {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.project-metadata-editor .project-goal-options input {
+  width: 1rem;
+  height: 1rem;
+  padding: 0;
+}
+
 .project-metadata-actions {
   display: flex;
   justify-content: end;

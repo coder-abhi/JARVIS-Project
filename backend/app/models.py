@@ -106,17 +106,15 @@ class Project(Base):
         cascade="all, delete-orphan",
         order_by="PomodoroSessionLog.completed_at.desc()",
     )
-    parent_goal: Mapped["Goal | None"] = relationship(back_populates="linked_projects")
+    linked_goals: Mapped[list["Goal"]] = relationship(
+        secondary=goal_projects,
+        back_populates="linked_projects",
+        order_by="Goal.created_at",
+    )
 
     @property
-    def linked_goals(self) -> list["Goal"]:
-        return [self.parent_goal] if self.parent_goal is not None else []
-
-    @linked_goals.setter
-    def linked_goals(self, goals: list["Goal"]) -> None:
-        if len(goals) > 1:
-            raise ValueError("A project can have at most one parent goal")
-        self.parent_goal = goals[0] if goals else None
+    def parent_goal(self) -> "Goal | None":
+        return self.linked_goals[0] if self.linked_goals else None
 
 
 class Task(Base):
@@ -158,7 +156,8 @@ class Goal(Base):
     user: Mapped[User] = relationship(back_populates="goals")
     completed_logs: Mapped[list["CompletedGoalLog"]] = relationship(back_populates="goal")
     linked_projects: Mapped[list[Project]] = relationship(
-        back_populates="parent_goal",
+        secondary=goal_projects,
+        back_populates="linked_goals",
         order_by="Project.created_at",
     )
 

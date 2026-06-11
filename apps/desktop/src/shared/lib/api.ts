@@ -61,7 +61,9 @@ export type ProjectInput = Pick<Project, "name" | "type" | "description"> & {
   goal_id?: string | null;
   linked_goal_ids?: string[];
 };
-export type ProjectUpdate = Partial<Pick<Project, "name" | "description" | "type" | "goal_id">>;
+export type ProjectUpdate = Partial<Pick<Project, "name" | "description" | "type" | "goal_id">> & {
+  linked_goal_ids?: string[];
+};
 export type TaskInput = Omit<Task, "id" | "created_at" | "completed_at" | "importance_rating"> & {
   importance_rating?: number;
 };

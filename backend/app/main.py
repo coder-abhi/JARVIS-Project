@@ -76,6 +76,19 @@ def ensure_sqlite_compatibility() -> None:
                     """
                 )
             )
+        if project_columns and "goal_id" in project_columns and {"goal_id", "project_id"} <= goal_project_columns:
+            connection.execute(
+                text(
+                    """
+                    INSERT OR IGNORE INTO goal_projects (goal_id, project_id)
+                    SELECT projects.goal_id, projects.id
+                    FROM projects
+                    JOIN goals ON goals.id = projects.goal_id
+                    WHERE projects.goal_id IS NOT NULL
+                      AND goals.user_id = projects.user_id
+                    """
+                )
+            )
         if project_columns and "goal_id" not in project_columns and {"goal_id", "project_id"} <= goal_project_columns:
             connection.execute(
                 text(

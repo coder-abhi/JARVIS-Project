@@ -61,13 +61,11 @@ class ProjectCreate(ProjectBase):
     linked_goal_ids: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def normalize_goal_parent(self):
+    def normalize_goal_parents(self):
         linked_goal_ids = list(dict.fromkeys(self.linked_goal_ids))
-        if len(linked_goal_ids) > 1:
-            raise ValueError("A project can have at most one parent goal")
-        if self.goal_id and linked_goal_ids and self.goal_id != linked_goal_ids[0]:
-            raise ValueError("goal_id and linked_goal_ids must identify the same goal")
-        self.goal_id = self.goal_id or (linked_goal_ids[0] if linked_goal_ids else None)
+        if self.goal_id and self.goal_id not in linked_goal_ids:
+            linked_goal_ids.insert(0, self.goal_id)
+        self.linked_goal_ids = linked_goal_ids
         return self
 
 
@@ -76,6 +74,15 @@ class ProjectUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=4000)
     type: ProjectType | None = None
     goal_id: str | None = None
+    linked_goal_ids: list[str] | None = None
+
+    @model_validator(mode="after")
+    def normalize_goal_parents(self):
+        if self.linked_goal_ids is not None:
+            self.linked_goal_ids = list(dict.fromkeys(self.linked_goal_ids))
+        if "goal_id" in self.model_fields_set and self.linked_goal_ids is None:
+            self.linked_goal_ids = [self.goal_id] if self.goal_id else []
+        return self
 
     @model_validator(mode="after")
     def require_change(self):

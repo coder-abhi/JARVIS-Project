@@ -127,7 +127,7 @@ class ProjectGoalStructureTests(unittest.TestCase):
         self.session.refresh(goal)
         self.assertEqual(goal.current_value, 0)
 
-    def test_project_has_one_optional_goal_parent_and_editable_metadata(self) -> None:
+    def test_project_has_multiple_optional_goal_parents_and_editable_metadata(self) -> None:
         first_goal = models.Goal(
             id="goal-1",
             user_id=self.user.id,
@@ -144,23 +144,18 @@ class ProjectGoalStructureTests(unittest.TestCase):
         self.session.add_all([first_goal, second_goal])
         self.session.commit()
 
-        with self.assertRaises(ValueError):
-            schemas.ProjectCreate(
-                name="Content",
-                type=models.ProjectType.continuous,
-                linked_goal_ids=[first_goal.id, second_goal.id],
-            )
-
         project = crud.create_project(
             self.session,
             schemas.ProjectCreate(
                 name="Content",
                 description="LinkedIn posts and long-form writing.",
                 type=models.ProjectType.continuous,
-                goal_id=first_goal.id,
+                linked_goal_ids=[first_goal.id, second_goal.id],
             ),
             self.user,
         )
+        self.assertEqual([goal.id for goal in project.linked_goals], [first_goal.id, second_goal.id])
+
         updated = crud.update_project(
             self.session,
             project.id,
@@ -168,7 +163,7 @@ class ProjectGoalStructureTests(unittest.TestCase):
                 name="Content Engine",
                 description="Posts, essays, and publishing tasks.",
                 type=models.ProjectType.fixed,
-                goal_id=second_goal.id,
+                linked_goal_ids=[second_goal.id],
             ),
             self.user,
         )
@@ -177,7 +172,7 @@ class ProjectGoalStructureTests(unittest.TestCase):
         self.assertEqual(updated.name, "Content Engine")
         self.assertEqual(updated.description, "Posts, essays, and publishing tasks.")
         self.assertEqual(updated.type, models.ProjectType.fixed)
-        self.assertEqual(updated.parent_goal.id, second_goal.id)
+        self.assertEqual([goal.id for goal in updated.linked_goals], [second_goal.id])
         summary = next(item for item in crud.list_project_summaries(self.session, self.user) if item.id == project.id)
         self.assertEqual(summary.description, "Posts, essays, and publishing tasks.")
         self.assertEqual(summary.goal_id, second_goal.id)

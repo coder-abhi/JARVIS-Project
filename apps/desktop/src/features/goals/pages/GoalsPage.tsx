@@ -58,7 +58,7 @@ export default function GoalsPage() {
   const [projectType, setProjectType] = useState<ProjectType>(
     () => readProjectBehaviorSettings().defaultProjectType,
   );
-  const [projectGoalId, setProjectGoalId] = useState("");
+  const [projectGoalIds, setProjectGoalIds] = useState<string[]>([]);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -203,13 +203,13 @@ export default function GoalsPage() {
         name: projectName.trim(),
         description: projectDescription.trim() || null,
         type: projectType,
-        goal_id: projectGoalId || null,
+        linked_goal_ids: projectGoalIds,
       });
       await loadGoals();
       setProjectName("");
       setProjectDescription("");
       setProjectType(readProjectBehaviorSettings().defaultProjectType);
-      setProjectGoalId("");
+      setProjectGoalIds([]);
       setIsCreateProjectOpen(false);
       setMessage("Mission initialized.");
     } catch (err) {
@@ -444,21 +444,27 @@ export default function GoalsPage() {
               />
             </label>
 
-            <label className="mission-modal-field" htmlFor="project-goal">
-              Parent goal (optional)
-              <select
-                id="project-goal"
-                value={projectGoalId}
-                onChange={(event) => setProjectGoalId(event.target.value)}
-              >
-                <option value="">No parent goal</option>
+            <fieldset className="mission-modal-field">
+              <legend>Parent goals (optional)</legend>
+              <div className="mission-goal-options">
                 {(overview?.goals ?? []).map((goal) => (
-                  <option key={goal.id} value={goal.id}>
-                    {goal.title}
-                  </option>
+                  <label key={goal.id}>
+                    <input
+                      type="checkbox"
+                      checked={projectGoalIds.includes(goal.id)}
+                      onChange={() =>
+                        setProjectGoalIds((current) =>
+                          current.includes(goal.id)
+                            ? current.filter((goalId) => goalId !== goal.id)
+                            : [...current, goal.id],
+                        )
+                      }
+                    />
+                    <span>{goal.title}</span>
+                  </label>
                 ))}
-              </select>
-            </label>
+              </div>
+            </fieldset>
 
             <div className="mission-type-grid">
               {projectTypes.map((item) => (

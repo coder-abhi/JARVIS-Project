@@ -55,7 +55,7 @@ export default function ProjectDetailPage() {
   const [projectNameDraft, setProjectNameDraft] = useState("");
   const [projectDescriptionDraft, setProjectDescriptionDraft] = useState("");
   const [projectTypeDraft, setProjectTypeDraft] = useState<ProjectType>("fixed");
-  const [projectGoalIdDraft, setProjectGoalIdDraft] = useState("");
+  const [projectGoalIdsDraft, setProjectGoalIdsDraft] = useState<string[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +83,7 @@ export default function ProjectDetailPage() {
       setProjectNameDraft(currentProject?.name ?? "");
       setProjectDescriptionDraft(currentProject?.description ?? "");
       setProjectTypeDraft(currentProject?.type ?? "fixed");
-      setProjectGoalIdDraft(currentProject?.goal_id ?? "");
+      setProjectGoalIdsDraft(currentProject?.linked_goals.map((goal) => goal.id) ?? []);
       setGoals(goalsOverview.goals);
       setTasks(projectTasks);
       setSessions(projectSessions);
@@ -144,7 +144,7 @@ export default function ProjectDetailPage() {
         name: projectNameDraft.trim(),
         description: projectDescriptionDraft.trim() || null,
         type: projectTypeDraft,
-        goal_id: projectGoalIdDraft || null,
+        linked_goal_ids: projectGoalIdsDraft,
       });
       setProject(updated);
       setIsEditingProject(false);
@@ -294,20 +294,27 @@ export default function ProjectDetailPage() {
                 <option value="fixed">Fixed</option>
               </select>
             </label>
-            <label>
-              <span>Attached goal</span>
-              <select
-                value={projectGoalIdDraft}
-                onChange={(event) => setProjectGoalIdDraft(event.target.value)}
-              >
-                <option value="">No attached goal</option>
+            <fieldset>
+              <legend>Parent goals</legend>
+              <div className="project-goal-options">
                 {goals.map((goal) => (
-                  <option key={goal.id} value={goal.id}>
-                    {goal.title}
-                  </option>
+                  <label key={goal.id}>
+                    <input
+                      type="checkbox"
+                      checked={projectGoalIdsDraft.includes(goal.id)}
+                      onChange={() =>
+                        setProjectGoalIdsDraft((current) =>
+                          current.includes(goal.id)
+                            ? current.filter((goalId) => goalId !== goal.id)
+                            : [...current, goal.id],
+                        )
+                      }
+                    />
+                    <span>{goal.title}</span>
+                  </label>
                 ))}
-              </select>
-            </label>
+              </div>
+            </fieldset>
           </div>
           <div className="project-metadata-actions">
             <button
@@ -316,7 +323,7 @@ export default function ProjectDetailPage() {
                 setProjectNameDraft(project?.name ?? "");
                 setProjectDescriptionDraft(project?.description ?? "");
                 setProjectTypeDraft(project?.type ?? "fixed");
-                setProjectGoalIdDraft(project?.goal_id ?? "");
+                setProjectGoalIdsDraft(project?.linked_goals.map((goal) => goal.id) ?? []);
                 setIsEditingProject(false);
               }}
               className="ops-button"

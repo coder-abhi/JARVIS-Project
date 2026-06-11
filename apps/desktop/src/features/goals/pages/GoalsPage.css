@@ -76,6 +76,24 @@
   resize: vertical;
 }
 
+.mission-goal-options {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.mission-goal-options label {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mission-modal-field .mission-goal-options input {
+  width: 1rem;
+  height: 1rem;
+  padding: 0;
+}
+
 .mission-control-schedule {
   min-width: 0;
   border: 1px solid var(--ops-border-strong);

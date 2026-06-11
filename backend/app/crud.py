@@ -42,11 +42,14 @@ CAPTAIN_COMPASS_CONTEXT_DAYS = (7, 30, 90)
 
 def create_project(db: Session, project: schemas.ProjectCreate, user: models.User) -> models.Project:
     project_data = project.model_dump(exclude={"goal_id", "linked_goal_ids"})
-    parent_goal = get_goal(db, project.goal_id, user) if project.goal_id else None
-    if project.goal_id and parent_goal is None:
-        raise ValueError("Parent goal was not found")
+    linked_goals = _get_user_goals_by_ids(db, project.linked_goal_ids, user)
     project_data["description"] = _clean_text(project_data.get("description"))
-    db_project = models.Project(**project_data, user_id=user.id, parent_goal=parent_goal)
+    db_project = models.Project(
+        **project_data,
+        user_id=user.id,
+        goal_id=linked_goals[0].id if linked_goals else None,
+        linked_goals=linked_goals,
+    )
     db.add(db_project)
     db.commit()
     db.refresh(db_project)
@@ -57,7 +60,7 @@ def list_projects(db: Session, user: models.User) -> list[models.Project]:
     query = (
         select(models.Project)
         .where(models.Project.user_id == user.id)
-        .options(selectinload(models.Project.parent_goal))
+        .options(selectinload(models.Project.linked_goals))
         .order_by(models.Project.created_at.desc())
     )
     return list(db.scalars(query))
@@ -70,7 +73,7 @@ def list_project_summaries(db: Session, user: models.User) -> list[schemas.Proje
         .options(
             selectinload(models.Project.tasks),
             selectinload(models.Project.pomodoro_sessions),
-            selectinload(models.Project.parent_goal),
+            selectinload(models.Project.linked_goals),
         )
         .order_by(models.Project.created_at.desc())
     )
@@ -104,8 +107,8 @@ def list_project_summaries(db: Session, user: models.User) -> list[schemas.Proje
                 name=project.name,
                 description=project.description,
                 type=project.type,
-                goal_id=project.goal_id,
-                linked_goals=[project.parent_goal] if project.parent_goal else [],
+                goal_id=project.linked_goals[0].id if len(project.linked_goals) == 1 else None,
+                linked_goals=project.linked_goals,
                 created_at=project.created_at,
                 total_tasks=len(tasks),
                 completed_tasks=sum(task.status == models.TaskStatus.done for task in tasks),
@@ -132,7 +135,7 @@ def get_project(db: Session, project_id: str, user: models.User) -> models.Proje
     return db.scalar(
         select(models.Project)
         .where(models.Project.id == project_id, models.Project.user_id == user.id)
-        .options(selectinload(models.Project.parent_goal))
+        .options(selectinload(models.Project.linked_goals))
     )
 
 
@@ -146,17 +149,16 @@ def update_project(
     if db_project is None:
         return None
 
-    changes = project.model_dump(exclude_unset=True, exclude={"goal_id"})
+    changes = project.model_dump(exclude_unset=True, exclude={"goal_id", "linked_goal_ids"})
     if "description" in changes:
         changes["description"] = _clean_text(changes["description"])
     for key, value in changes.items():
         setattr(db_project, key, value)
 
-    if "goal_id" in project.model_fields_set:
-        parent_goal = get_goal(db, project.goal_id, user) if project.goal_id else None
-        if project.goal_id and parent_goal is None:
-            raise ValueError("Parent goal was not found")
-        db_project.parent_goal = parent_goal
+    if "linked_goal_ids" in project.model_fields_set or "goal_id" in project.model_fields_set:
+        linked_goals = _get_user_goals_by_ids(db, project.linked_goal_ids or [], user)
+        db_project.linked_goals = linked_goals
+        db_project.goal_id = linked_goals[0].id if linked_goals else None
 
     db.commit()
     db.refresh(db_project)
@@ -276,7 +278,7 @@ def match_pomodoro_assignment(db: Session, request: schemas.PomodoroAssignmentRe
     query = (
         select(models.Project)
         .where(models.Project.user_id == user.id)
-        .options(selectinload(models.Project.tasks), selectinload(models.Project.parent_goal))
+        .options(selectinload(models.Project.tasks), selectinload(models.Project.linked_goals))
         .order_by(models.Project.created_at.desc())
     )
     if request.project_ids:
@@ -467,7 +469,8 @@ def create_goal(db: Session, goal: schemas.GoalCreate, user: models.User) -> mod
     goal_data["description"] = _clean_text(goal_data.get("description"))
     db_goal = models.Goal(**goal_data, user_id=user.id)
     for project in linked_projects:
-        project.parent_goal = db_goal
+        project.linked_goals.append(db_goal)
+        project.goal_id = project.linked_goals[0].id
     db.add(db_goal)
     db.commit()
     db.refresh(db_goal)
@@ -490,9 +493,12 @@ def update_goal(db: Session, goal_id: str, goal: schemas.GoalUpdate, user: model
         linked_project_ids = {project.id for project in linked_projects}
         for project in list(db_goal.linked_projects):
             if project.id not in linked_project_ids:
-                project.parent_goal = None
+                project.linked_goals.remove(db_goal)
+                project.goal_id = project.linked_goals[0].id if project.linked_goals else None
         for project in linked_projects:
-            project.parent_goal = db_goal
+            if db_goal not in project.linked_goals:
+                project.linked_goals.append(db_goal)
+            project.goal_id = project.linked_goals[0].id
 
     db.commit()
     db.refresh(db_goal)
@@ -518,7 +524,7 @@ def list_goal_active_tasks(db: Session, user: models.User) -> list[models.Task]:
         select(models.Task)
         .join(models.Project)
         .where(models.Project.user_id == user.id, models.Task.status != models.TaskStatus.done)
-        .options(selectinload(models.Task.project).selectinload(models.Project.parent_goal))
+        .options(selectinload(models.Task.project).selectinload(models.Project.linked_goals))
         .order_by(models.Task.importance_rating.desc(), models.Task.created_at.desc())
     )
     return list(db.scalars(query))
@@ -583,8 +589,7 @@ def log_goal_entry(db: Session, request: schemas.GoalLogRequest, user: models.Us
     db_project = get_project(db, project_id, user) if project_id else None
     if db_project is None:
         db_project = _get_or_create_general_work_project(db, user)
-    db_goal = db_project.parent_goal
-    related_goal = db_goal.title if db_goal else "General"
+    related_goal = ", ".join(goal.title for goal in db_project.linked_goals) or "General"
 
     if marker == "+":
         task = create_goal_task_from_log(
@@ -640,7 +645,7 @@ def complete_goal_task(db: Session, task_id: str, user: models.User) -> schemas.
         select(models.Task)
         .join(models.Project)
         .where(models.Task.id == task_id, models.Project.user_id == user.id)
-        .options(selectinload(models.Task.project).selectinload(models.Project.parent_goal))
+        .options(selectinload(models.Task.project).selectinload(models.Project.linked_goals))
     )
     if db_task is None:
         return None
@@ -678,7 +683,7 @@ def restore_goal_completion(db: Session, completion_id: str, user: models.User) 
             select(models.Task)
             .join(models.Project)
             .where(models.Task.id == db_log.task_id, models.Project.user_id == user.id)
-            .options(selectinload(models.Task.project).selectinload(models.Project.parent_goal))
+            .options(selectinload(models.Task.project).selectinload(models.Project.linked_goals))
         )
 
     if db_task is None:
@@ -720,14 +725,16 @@ def create_goal_completion_log(
     title: str,
     project: models.Project,
 ) -> models.CompletedGoalLog:
-    goal = project.parent_goal
-    if goal and goal.measurable:
-        delta = _extract_progress_delta(title, goal)
-        if delta > 0:
-            goal.current_value = min(goal.current_value + delta, goal.target_value or 0)
+    linked_goals = project.linked_goals
+    for goal in linked_goals:
+        if goal.measurable:
+            delta = _extract_progress_delta(title, goal)
+            if delta > 0:
+                goal.current_value = min(goal.current_value + delta, goal.target_value or 0)
+    logged_goal = linked_goals[0] if len(linked_goals) == 1 else None
     db_log = models.CompletedGoalLog(
         user_id=user.id,
-        goal_id=goal.id if goal else None,
+        goal_id=logged_goal.id if logged_goal else None,
         project_id=project.id,
         title=title,
         goal_label=project.name[:80],
@@ -795,7 +802,7 @@ def get_captain_compass(
             select(models.Project)
             .where(models.Project.user_id == user.id)
             .options(
-                selectinload(models.Project.parent_goal),
+                selectinload(models.Project.linked_goals),
                 selectinload(models.Project.tasks),
                 selectinload(models.Project.pomodoro_sessions),
             )
@@ -1164,7 +1171,7 @@ def _get_or_create_general_work_project(db: Session, user: models.User) -> model
     project = db.scalar(
         select(models.Project)
         .where(models.Project.user_id == user.id, models.Project.name == "General Work")
-        .options(selectinload(models.Project.parent_goal))
+        .options(selectinload(models.Project.linked_goals))
         .order_by(models.Project.created_at.asc())
     )
     if project is not None:
@@ -1734,9 +1741,9 @@ def _captain_compass_local_date(value: str, timezone_offset_minutes: int) -> str
 
 
 def _task_linked_goals(task: models.Task) -> list[models.Goal]:
-    if task.project is None or task.project.parent_goal is None:
+    if task.project is None:
         return []
-    return [task.project.parent_goal]
+    return task.project.linked_goals
 
 
 def _goal_context(goal: models.Goal) -> dict:

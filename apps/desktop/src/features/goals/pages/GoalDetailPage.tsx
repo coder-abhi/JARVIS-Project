@@ -109,7 +109,12 @@ export default function GoalDetailPage() {
     setIsAttachingProject(true);
     setError(null);
     try {
-      await updateProject(selectedProjectId, { goal_id: goal.id });
+      const selectedProject = allProjects.find((project) => project.id === selectedProjectId);
+      await updateProject(selectedProjectId, {
+        linked_goal_ids: Array.from(
+          new Set([...(selectedProject?.linked_goals.map((linkedGoal) => linkedGoal.id) ?? []), goal.id]),
+        ),
+      });
       setSelectedProjectId("");
       setIsAttachProjectOpen(false);
       setMessage("Project attached to this goal.");
@@ -283,7 +288,7 @@ export default function GoalDetailPage() {
                 </label>
                 <p>
                   {attachableProjects.length
-                    ? "Attaching a project already linked to another goal will move it here."
+                    ? "Existing parent goals will be preserved."
                     : "Every project is already attached to this goal."}
                 </p>
                 <button disabled={isAttachingProject || !selectedProjectId} className="ops-button primary">
@@ -451,6 +456,6 @@ function formatNumber(value: number) {
 }
 
 function formatProjectOption(project: ProjectSummary) {
-  const currentGoal = project.linked_goals[0]?.title;
-  return `${project.name} / ${project.type}${currentGoal ? ` / currently: ${currentGoal}` : ""}`;
+  const currentGoals = project.linked_goals.map((goal) => goal.title).join(", ");
+  return `${project.name} / ${project.type}${currentGoals ? ` / currently: ${currentGoals}` : ""}`;
 }
