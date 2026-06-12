@@ -42,7 +42,6 @@ export type DerivedLoan = {
 
 export type InterestCharge = {
   id: string;
-  loanId: string;
   memberKey: string;
   member: string;
   period: string;
@@ -53,9 +52,11 @@ export type InterestCharge = {
 };
 
 export type InterestDueSummary = {
+  id: string;
   memberKey: string;
   member: string;
-  firstDueDate: string;
+  period: string;
+  dueDate: string;
   charge: number;
   paid: number;
   due: number;
@@ -86,6 +87,8 @@ export type HelpingHandsLedger = {
   interestDue: number;
   interestReceived: number;
   totalContributionReceived: number;
+  totalMonthlyContribution: number;
+  contributionMonths: number;
   contributionExpected: number;
   contributionCollected: number;
   contributionDefaulted: number;

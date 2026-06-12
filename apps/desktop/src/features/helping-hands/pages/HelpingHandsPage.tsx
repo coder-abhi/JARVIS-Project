@@ -47,8 +47,8 @@ export default function HelpingHandsPage() {
     [data, selectedPeriod, startPeriod],
   );
   const recentTransactions = useMemo(
-    () => calculateHelpingHandsLedger(data, currentPeriod, new Date(), startPeriod).transactions.slice(0, 10),
-    [currentPeriod, data, startPeriod],
+    () => ledger.transactions.slice(0, 10),
+    [ledger.transactions],
   );
   const memberNames = useMemo(() => uniqueMemberNames(data), [data]);
   const openLoans = ledger.loans.filter((loan) => loan.outstanding > 0);
@@ -58,10 +58,8 @@ export default function HelpingHandsPage() {
   );
   const totalInvestment = 0;
   const investmentInterestEarned = 0;
-  const totalBalanceIncludingLoanAndInterest = ledger.fundBalance
-    + ledger.principalOutstanding
-    + ledger.interestDue
-    + totalInvestment;
+  const totalBalanceIncludingLoanAndInterest = ledger.totalMonthlyContribution
+    + ledger.interestReceived;
 
   function openTransaction(transaction?: HelpingHandsTransaction) {
     setReceiptMember("");
@@ -120,7 +118,7 @@ export default function HelpingHandsPage() {
             <input type="month" max={currentPeriod} value={startPeriod} onChange={(event) => void handleStartMonthChange(event.target.value)} />
           </label>
           <label className="helping-period-picker">
-            Working month
+            Working cycle
             <input type="month" min={startPeriod} max={currentPeriod} value={selectedPeriod} onChange={(event) => setSelectedPeriod(event.target.value)} />
           </label>
           <button type="button" className="ops-button primary" onClick={() => openTransaction()}>+ Register Transaction</button>
@@ -136,9 +134,9 @@ export default function HelpingHandsPage() {
         <SummaryCard label="Total Loan Repayment Pending" value={formatMoney(ledger.principalOutstanding)} detail={`${openLoans.length} open loans across all members`} tone={ledger.principalOutstanding > 0 ? "danger" : "signal"} />
         <SummaryCard label="Total Interest Received" value={formatMoney(ledger.interestReceived)} detail={`Interest collected through ${formatDate(ledger.asOf)}`} tone="signal" />
         <SummaryCard label="Total Investment" value={formatMoney(totalInvestment)} detail="Future investment tracking placeholder" />
-        <SummaryCard label="Total Monthly Contribution" value={formatMoney(ledger.totalContributionReceived)} detail={`${formatPeriod(selectedPeriod)}: ${formatMoney(ledger.contributionCollected)} received, ${ledger.collectionRate}% on time`} tone="signal" />
+        <SummaryCard label="Total Monthly Contribution" value={formatMoney(ledger.totalMonthlyContribution)} detail={`${ledger.contributionMonths} months x ${formatMoney(helpingHandsRules.monthlyContribution)} x ${ledger.members.length} members`} tone="signal" />
         <SummaryCard label="Investment Interest Earned" value={formatMoney(investmentInterestEarned)} detail="Future investment income placeholder" />
-        <SummaryCard label="Total Balance Including Loan & Interest" value={formatMoney(totalBalanceIncludingLoanAndInterest)} detail={`${formatMoney(ledger.fundBalance)} bank + ${formatMoney(ledger.principalOutstanding)} loan + ${formatMoney(ledger.interestDue)} interest due`} tone={totalBalanceIncludingLoanAndInterest >= 0 ? "signal" : "danger"} featured />
+        <SummaryCard label="Total Balance Including Loan & Interest" value={formatMoney(totalBalanceIncludingLoanAndInterest)} detail={`${formatMoney(ledger.totalMonthlyContribution)} monthly contribution + ${formatMoney(ledger.interestReceived)} interest collected`} tone={totalBalanceIncludingLoanAndInterest >= 0 ? "signal" : "danger"} featured />
       </section>
 
       <section className="ops-grid helping-grid">
@@ -166,34 +164,46 @@ export default function HelpingHandsPage() {
                   </button>
                 </div>
               ))}
+              {ledger.members.length ? (
+                <div className="helping-member-row footer">
+                  <strong>Total</strong>
+                  <span />
+                  <strong>{formatMoney(ledger.principalOutstanding)}</strong>
+                  <strong className={ledger.interestDue > 0 ? "helping-negative" : "helping-positive"}>{formatMoney(ledger.interestDue)}</strong>
+                  <span />
+                  <span />
+                </div>
+              ) : null}
             </div>
             {!ledger.members.length ? <EmptyState text="Register the first cash transaction to create a member ledger automatically." /> : null}
           </div>
         </section>
 
         <section className="ops-panel span-12">
-          <PanelHeader label="Interest Due Register" detail={`${unpaidInterest.length} members with unpaid interest`} />
+          <PanelHeader label="Interest Balance Register" detail={`${unpaidInterest.length} monthly interest payment issues`} />
           <div className="helping-table-wrap">
             <div className="helping-interest-table">
-              <div className="helping-interest-row head"><span>Oldest Due</span><span>Member</span><span>Total Charge</span><span>Paid</span><span>Still Due</span></div>
+              <div className="helping-interest-row head"><span>Cycle</span><span>Member</span><span>Expected</span><span>Paid</span><span>Due / Extra Paid</span></div>
               {unpaidInterest.map((summary) => (
-                <div className="helping-interest-row" key={summary.memberKey}>
-                  <span>{formatDate(summary.firstDueDate)}</span>
+                <div className="helping-interest-row" key={summary.id}>
+                  <span>{formatPeriod(summary.period)}</span>
                   <strong>{summary.member}</strong>
                   <strong>{formatMoney(summary.charge)}</strong>
                   <strong className="helping-positive">{formatMoney(summary.paid)}</strong>
-                  <strong className="helping-negative">{formatMoney(summary.due)}</strong>
+                  <strong className={summary.due > 0 ? "helping-negative" : "helping-positive"}>
+                    {summary.due > 0 ? `${formatMoney(summary.due)} due` : `${formatMoney(Math.abs(summary.due))} extra`}
+                  </strong>
                 </div>
               ))}
             </div>
-            {!unpaidInterest.length ? <EmptyState text="No unpaid interest charges through this month." /> : null}
+            {!unpaidInterest.length ? <EmptyState text="All monthly interest payments match through this cycle." /> : null}
           </div>
         </section>
 
         <section className="ops-panel span-12">
           <PanelHeader
             label="Recent Transactions"
-            detail={`${recentTransactions.length} of ${data.transactions.length} shown`}
+            detail={`${recentTransactions.length} of ${ledger.transactions.length} shown through ${formatDate(ledger.asOf)}`}
             action={<Link className="helping-inline-button" to="/helping-hands/transactions">View all</Link>}
           />
           <div className="helping-recent-table">
@@ -212,7 +222,7 @@ export default function HelpingHandsPage() {
                 </div>
               </div>
             ))}
-            {!recentTransactions.length ? <EmptyState text="No cash transactions registered yet." /> : null}
+            {!recentTransactions.length ? <EmptyState text="No cash transactions in the selected start month and working cycle timeline." /> : null}
           </div>
         </section>
 
@@ -220,21 +230,21 @@ export default function HelpingHandsPage() {
           <PanelHeader label="Rules Engine" detail="Fixed group policy and receipt allocation" />
           <div className="helping-rule-grid">
             <RuleMetric label="Monthly Contribution" value={formatMoney(helpingHandsRules.monthlyContribution)} detail={`Due before the ${ordinal(helpingHandsRules.dueDay)} of every month`} />
-            <RuleMetric label="Loan Interest" value={`${helpingHandsRules.interestRate}% / month`} detail="A full monthly charge; never divided by days" />
+            <RuleMetric label="Loan Interest" value={`${helpingHandsRules.interestRate}% / month`} detail="One monthly charge on each member's total outstanding principal" />
             <RuleMetric label="Loan Taken Day 1-10" value="Interest this month" detail={`First full interest is due on the ${ordinal(helpingHandsRules.dueDay)}`} />
             <RuleMetric label="Loan Taken Day 11+" value="Interest next month" detail={`First interest moves to next month's ${ordinal(helpingHandsRules.dueDay)}`} />
             <RuleMetric label="Missed Contribution" value="Becomes loan" detail={`Unpaid amount converts automatically on the ${ordinal(helpingHandsRules.dueDay)}`} />
-            <RuleMetric label="Unpaid Interest" value="Stays separate" detail="It remains overdue and never compounds into principal" />
+            <RuleMetric label="Unpaid Interest" value="Due, never compounded" detail="It stays in the Interest Due Register and is excluded from future interest calculations" />
           </div>
           <div className="helping-rules-divider">
             <span>Automatic Allocation Order</span>
             <small>Applied to every receipt</small>
           </div>
           <div className="helping-allocation-rules">
-            <RuleStep number="01" label="Interest first" detail="Oldest unpaid monthly interest is cleared before anything else." />
-            <RuleStep number="02" label="Monthly contribution" detail={`Before the ${ordinal(helpingHandsRules.dueDay)}, up to ${formatMoney(helpingHandsRules.monthlyContribution)} is assigned to the current month.`} />
-            <RuleStep number="03" label="Loan repayment" detail="Remaining money clears contribution-default loans first, then the oldest cash-loan principal." />
-            <RuleStep number="04" label="Member credit" detail="Any amount left after all obligations remains visible as unallocated credit." />
+            <RuleStep number="01" label="Current-cycle interest" detail={`The member can pay this month's total interest on any day through the ${ordinal(helpingHandsRules.dueDay)}.`} />
+            <RuleStep number="02" label="Monthly contribution" detail={`Through the ${ordinal(helpingHandsRules.dueDay)}, up to ${formatMoney(helpingHandsRules.monthlyContribution)} is assigned to the current month.`} />
+            <RuleStep number="03" label="Older interest" detail="Any remaining money clears interest still due from earlier cycles." />
+            <RuleStep number="04" label="Loan repayment" detail="Remaining money clears contribution-default principal first, then cash-loan principal." />
           </div>
         </section>
       </section>

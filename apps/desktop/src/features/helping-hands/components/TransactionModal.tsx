@@ -108,7 +108,9 @@ export default function TransactionModal({
 
         <div className="helping-modal-actions">
           <button type="button" className="ops-button" onClick={onClose}>Cancel</button>
-          <button type="submit" className="ops-button primary" disabled={isSaving}>{isSaving ? "Saving..." : isQuickReceipt ? "Record Receipt" : "Register Transaction"}</button>
+          <button type="submit" className="ops-button primary" disabled={isSaving}>
+            {isSaving ? "Saving..." : transaction ? "Save Changes" : isQuickReceipt ? "Record Receipt" : "Register Transaction"}
+          </button>
         </div>
       </form>
     </div>

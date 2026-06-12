@@ -15,7 +15,29 @@ export const helpingHandsRules = {
   interestRate: 2,
   dueDay: 15,
   fullMonthCutoffDay: 10,
+  principalPaymentUnit: 100,
 } as const;
+
+const canonicalMembers = [
+  { name: "Dhananjay Jagtap", aliases: ["dhananjay jagtap", "dhananjay", "dj"] },
+  { name: "Abhishek Kamble", aliases: ["abhishek kamble", "abhishek", "abhi k"] },
+  { name: "Faisal Pathan", aliases: ["faisal pathan", "fais pathan", "faisal", "fais"] },
+  { name: "Sanket Kute", aliases: ["sanket kute", "sanket"] },
+  { name: "Nitin Hegadkar", aliases: ["nitin hegadkar", "nitin"] },
+  { name: "Abhijeet Bande", aliases: ["abhijeet bande", "abhijeet", "bande"] },
+  { name: "Mangesh Gawali", aliases: ["mangesh gawali", "mangesh"] },
+  { name: "D Chape", aliases: ["d chape", "chape d", "chape"] },
+  { name: "Kuldeep N", aliases: ["kuldeep n", "kuldeep"] },
+] as const;
+
+const canonicalMemberByAlias = new Map(
+  canonicalMembers.flatMap((member) =>
+    member.aliases.map((alias) => [normalizeMemberName(alias), member.name] as const),
+  ),
+);
+const canonicalMemberOrder = new Map(
+  canonicalMembers.map((member, index) => [normalizeMemberName(member.name), index]),
+);
 
 type MemberState = {
   key: string;
@@ -29,8 +51,9 @@ type MemberState = {
 type MutableLoan = DerivedLoan;
 type MutableCharge = InterestCharge;
 type LedgerEvent =
-  | { date: string; order: 0; period: string }
-  | { date: string; order: 1; transaction: HelpingHandsTransaction };
+  | { date: string; order: 0; kind: "interest"; period: string }
+  | { date: string; order: 1; transaction: HelpingHandsTransaction }
+  | { date: string; order: 2; kind: "due"; period: string };
 
 export function calculateHelpingHandsLedger(
   data: HelpingHandsData,
@@ -47,11 +70,20 @@ export function calculateHelpingHandsLedger(
   const loans: MutableLoan[] = [];
   const charges: MutableCharge[] = [];
   const processed = new Map<string, ProcessedTransaction>(
-    rawTransactions.map((transaction) => [transaction.id, { ...transaction, allocations: [] }]),
+    rawTransactions.map((transaction) => [
+      transaction.id,
+      { ...transaction, member: canonicalMemberName(transaction.member), allocations: [] },
+    ]),
   );
 
   if (memberStates.size) {
     const events: LedgerEvent[] = [
+      ...periodRange(startPeriod, asOf.slice(0, 7)).map((period) => ({
+        date: `${period}-01`,
+        order: 0 as const,
+        kind: "interest" as const,
+        period,
+      })),
       ...rawTransactions.map((transaction) => ({
         date: transaction.date,
         order: 1 as const,
@@ -59,7 +91,8 @@ export function calculateHelpingHandsLedger(
       })),
       ...periodRange(startPeriod, asOf.slice(0, 7)).map((period) => ({
         date: `${period}-${String(helpingHandsRules.dueDay).padStart(2, "0")}`,
-        order: 0 as const,
+        order: 2 as const,
+        kind: "due" as const,
         period,
       })),
     ]
@@ -71,15 +104,29 @@ export function calculateHelpingHandsLedger(
       });
 
     for (const event of events) {
-      if ("period" in event) {
-        applyMonthlyDueEvent(event.period, memberStates, loans, charges);
-      } else {
+      if ("transaction" in event) {
         applyCashTransaction(event.transaction, memberStates, loans, charges, processed);
+      } else if (event.kind === "interest") {
+        applyMonthlyInterestEvent(event.period, memberStates, loans, charges);
+      } else {
+        applyMonthlyDueEvent(event.period, memberStates, loans);
       }
     }
   }
 
   const selectedMembers = buildMemberPositions(memberStates, loans, charges, selectedPeriod, asOf);
+  const selectedCycleClose = `${selectedPeriod}-${String(helpingHandsRules.dueDay).padStart(2, "0")}`;
+  const completedContributionPeriod = asOf >= selectedCycleClose
+    ? selectedPeriod
+    : addMonths(selectedPeriod, -1);
+  const contributionMonths = completedContributionPeriod >= startPeriod
+    ? periodRange(startPeriod, completedContributionPeriod).length
+    : 0;
+  const totalMonthlyContribution = roundMoney(
+    contributionMonths
+    * helpingHandsRules.monthlyContribution
+    * selectedMembers.length,
+  );
   const contributionExpected = selectedMembers.length * helpingHandsRules.monthlyContribution;
   const contributionCollected = sum(selectedMembers.map((member) => member.contributionPaid));
   const contributionDefaulted = sum(selectedMembers.map((member) => member.contributionDefaulted));
@@ -121,9 +168,11 @@ export function calculateHelpingHandsLedger(
     members: selectedMembers,
     fundBalance: roundMoney(receives - sends),
     principalOutstanding: roundMoney(sum(loans.map((loan) => loan.outstanding))),
-    interestDue: roundMoney(sum(charges.map((charge) => charge.due))),
+    interestDue: roundMoney(sum(charges.map((charge) => Math.max(charge.due, 0)))),
     interestReceived: roundMoney(interestReceived),
     totalContributionReceived: roundMoney(totalContributionReceived),
+    totalMonthlyContribution,
+    contributionMonths,
     contributionExpected,
     contributionCollected,
     contributionDefaulted,
@@ -142,7 +191,7 @@ function buildMemberStates(transactions: HelpingHandsTransaction[]) {
     if (!existing) {
       states.set(key, {
         key,
-        name: transaction.member.trim(),
+        name: canonicalMemberName(transaction.member),
         firstTransactionDate: transaction.date,
         contributionPaid: new Map(),
         contributionDefaulted: new Map(),
@@ -159,26 +208,8 @@ function applyMonthlyDueEvent(
   period: string,
   members: Map<string, MemberState>,
   loans: MutableLoan[],
-  charges: MutableCharge[],
 ) {
   const dueDate = `${period}-${String(helpingHandsRules.dueDay).padStart(2, "0")}`;
-
-  for (const loan of loans) {
-    if (loan.outstanding <= 0 || firstInterestPeriod(loan.issuedOn) > period) continue;
-    const charge = roundMoney(loan.outstanding * (helpingHandsRules.interestRate / 100));
-    if (charge <= 0) continue;
-    charges.push({
-      id: `interest-${loan.id}-${period}`,
-      loanId: loan.id,
-      memberKey: loan.memberKey,
-      member: loan.member,
-      period,
-      dueDate,
-      charge,
-      paid: 0,
-      due: charge,
-    });
-  }
 
   for (const member of members.values()) {
     const paid = member.contributionPaid.get(period) ?? 0;
@@ -196,6 +227,54 @@ function applyMonthlyDueEvent(
       contributionPeriod: period,
     });
   }
+}
+
+function applyMonthlyInterestEvent(
+  period: string,
+  members: Map<string, MemberState>,
+  loans: MutableLoan[],
+  charges: MutableCharge[],
+) {
+  for (const member of members.values()) {
+    const principal = sum(
+      loans
+        .filter((loan) =>
+          loan.memberKey === member.key
+          && loan.outstanding > 0
+          && firstInterestPeriod(loan.issuedOn) <= period,
+        )
+        .map((loan) => loan.outstanding),
+    );
+    addInterestCharge(charges, member, period, principal);
+  }
+}
+
+function addInterestCharge(
+  charges: MutableCharge[],
+  member: MemberState,
+  period: string,
+  principal: number,
+) {
+  const amount = roundMoney(principal * (helpingHandsRules.interestRate / 100));
+  if (amount <= 0) return;
+  const existing = charges.find(
+    (charge) => charge.memberKey === member.key && charge.period === period,
+  );
+  if (existing) {
+    existing.charge = roundMoney(existing.charge + amount);
+    existing.due = roundMoney(existing.due + amount);
+    return;
+  }
+  charges.push({
+    id: `interest-${member.key}-${period}`,
+    memberKey: member.key,
+    member: member.name,
+    period,
+    dueDate: `${period}-${String(helpingHandsRules.dueDay).padStart(2, "0")}`,
+    charge: amount,
+    paid: 0,
+    due: amount,
+  });
 }
 
 function applyCashTransaction(
@@ -221,14 +300,97 @@ function applyCashTransaction(
       source: "cash",
     });
     record.allocations.push({ kind: "loan", amount: transaction.amount, loanId: `cash-${transaction.id}` });
+    if (firstInterestPeriod(transaction.date) === transaction.date.slice(0, 7)) {
+      addInterestCharge(charges, member, transaction.date.slice(0, 7), transaction.amount);
+    }
     return;
   }
 
   let remaining = transaction.amount;
-  const memberCharges = charges
-    .filter((charge) => charge.memberKey === key && charge.due > 0)
+  const period = transaction.date.slice(0, 7);
+  const currentCharges = charges
+    .filter((charge) => charge.memberKey === key && charge.period === period && charge.due > 0);
+  remaining = applyInterestPayments(currentCharges, remaining, record);
+
+  const dueDate = `${period}-${String(helpingHandsRules.dueDay).padStart(2, "0")}`;
+  if (remaining > 0 && transaction.date <= dueDate) {
+    const alreadyPaid = member.contributionPaid.get(period) ?? 0;
+    const contributionDue = Math.max(helpingHandsRules.monthlyContribution - alreadyPaid, 0);
+    if (contributionDue > 0 && remaining >= contributionDue) {
+      member.contributionPaid.set(period, roundMoney(alreadyPaid + contributionDue));
+      remaining = roundMoney(remaining - contributionDue);
+      record.allocations.push({ kind: "contribution", amount: contributionDue, period });
+    }
+  }
+
+  const overdueCharges = charges
+    .filter((charge) => charge.memberKey === key && charge.period < period && charge.due > 0)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.id.localeCompare(b.id));
-  for (const charge of memberCharges) {
+  remaining = applyInterestPayments(overdueCharges, remaining, record);
+
+  const memberLoans = loans
+    .filter((loan) => loan.memberKey === key && loan.outstanding > 0)
+    .sort((a, b) => {
+      const sourceOrder = Number(a.source === "cash") - Number(b.source === "cash");
+      return sourceOrder || a.issuedOn.localeCompare(b.issuedOn) || a.id.localeCompare(b.id);
+    });
+  let principalPayment = roundMoney(
+    Math.floor(remaining / helpingHandsRules.principalPaymentUnit)
+    * helpingHandsRules.principalPaymentUnit,
+  );
+  for (const loan of memberLoans) {
+    if (principalPayment <= 0) break;
+    const amount = roundMoney(Math.min(principalPayment, loan.outstanding));
+    const roundedAmount = roundMoney(
+      Math.floor(amount / helpingHandsRules.principalPaymentUnit)
+      * helpingHandsRules.principalPaymentUnit,
+    );
+    if (roundedAmount <= 0) continue;
+    loan.outstanding = roundMoney(loan.outstanding - roundedAmount);
+    principalPayment = roundMoney(principalPayment - roundedAmount);
+    remaining = roundMoney(remaining - roundedAmount);
+    record.allocations.push({ kind: "principal", amount: roundedAmount, loanId: loan.id });
+  }
+
+  if (remaining > 0) {
+    addInterestCredit(charges, member, period, remaining);
+    record.allocations.push({ kind: "interest", amount: remaining, period });
+  }
+}
+
+function addInterestCredit(
+  charges: MutableCharge[],
+  member: MemberState,
+  period: string,
+  amount: number,
+) {
+  const existing = charges.find(
+    (charge) => charge.memberKey === member.key && charge.period === period,
+  );
+  if (existing) {
+    existing.paid = roundMoney(existing.paid + amount);
+    existing.due = roundMoney(existing.due - amount);
+    return;
+  }
+  charges.push({
+    id: `interest-${member.key}-${period}`,
+    memberKey: member.key,
+    member: member.name,
+    period,
+    dueDate: `${period}-${String(helpingHandsRules.dueDay).padStart(2, "0")}`,
+    charge: 0,
+    paid: amount,
+    due: roundMoney(-amount),
+  });
+}
+
+function applyInterestPayments(
+  charges: MutableCharge[],
+  available: number,
+  record: ProcessedTransaction,
+) {
+  let remaining = available;
+  for (const charge of charges) {
     if (remaining <= 0) break;
     const amount = roundMoney(Math.min(remaining, charge.due));
     charge.paid = roundMoney(charge.paid + amount);
@@ -238,41 +400,9 @@ function applyCashTransaction(
       kind: "interest",
       amount,
       period: charge.period,
-      loanId: charge.loanId,
     });
   }
-
-  const period = transaction.date.slice(0, 7);
-  const dueDate = `${period}-${String(helpingHandsRules.dueDay).padStart(2, "0")}`;
-  if (remaining > 0 && transaction.date < dueDate) {
-    const alreadyPaid = member.contributionPaid.get(period) ?? 0;
-    const contributionDue = Math.max(helpingHandsRules.monthlyContribution - alreadyPaid, 0);
-    const amount = roundMoney(Math.min(remaining, contributionDue));
-    if (amount > 0) {
-      member.contributionPaid.set(period, roundMoney(alreadyPaid + amount));
-      remaining = roundMoney(remaining - amount);
-      record.allocations.push({ kind: "contribution", amount, period });
-    }
-  }
-
-  const memberLoans = loans
-    .filter((loan) => loan.memberKey === key && loan.outstanding > 0)
-    .sort((a, b) => {
-      const sourceOrder = Number(a.source === "cash") - Number(b.source === "cash");
-      return sourceOrder || a.issuedOn.localeCompare(b.issuedOn) || a.id.localeCompare(b.id);
-    });
-  for (const loan of memberLoans) {
-    if (remaining <= 0) break;
-    const amount = roundMoney(Math.min(remaining, loan.outstanding));
-    loan.outstanding = roundMoney(loan.outstanding - amount);
-    remaining = roundMoney(remaining - amount);
-    record.allocations.push({ kind: "principal", amount, loanId: loan.id });
-  }
-
-  if (remaining > 0) {
-    member.credit = roundMoney(member.credit + remaining);
-    record.allocations.push({ kind: "credit", amount: remaining });
-  }
+  return remaining;
 }
 
 function buildMemberPositions(
@@ -295,7 +425,9 @@ function buildMemberPositions(
         loans.filter((loan) => loan.memberKey === member.key).map((loan) => loan.outstanding),
       ));
       const interestDue = roundMoney(sum(
-        charges.filter((charge) => charge.memberKey === member.key).map((charge) => charge.due),
+        charges
+          .filter((charge) => charge.memberKey === member.key)
+          .map((charge) => Math.max(charge.due, 0)),
       ));
       const totalInterestPaid = roundMoney(sum(
         charges.filter((charge) => charge.memberKey === member.key).map((charge) => charge.paid),
@@ -321,7 +453,7 @@ function buildMemberPositions(
         status,
       };
     })
-    .sort((a, b) => statusWeight(b.status) - statusWeight(a.status) || a.name.localeCompare(b.name));
+    .sort((a, b) => memberOrder(a.key) - memberOrder(b.key));
 }
 
 export function allocationSummary(allocations: TransactionAllocation[]) {
@@ -381,47 +513,43 @@ export function helpingHandsStartMonth(
 }
 
 export function summarizeUnpaidInterest(charges: InterestCharge[]): InterestDueSummary[] {
-  const summaries = new Map<string, InterestDueSummary>();
-  for (const charge of charges) {
-    if (charge.due <= 0) continue;
-    const existing = summaries.get(charge.memberKey);
-    if (existing) {
-      existing.firstDueDate = existing.firstDueDate < charge.dueDate
-        ? existing.firstDueDate
-        : charge.dueDate;
-      existing.charge = roundMoney(existing.charge + charge.charge);
-      existing.paid = roundMoney(existing.paid + charge.paid);
-      existing.due = roundMoney(existing.due + charge.due);
-      continue;
-    }
-    summaries.set(charge.memberKey, {
+  return charges
+    .filter((charge) => charge.due !== 0)
+    .map((charge) => ({
+      id: charge.id,
       memberKey: charge.memberKey,
       member: charge.member,
-      firstDueDate: charge.dueDate,
+      period: charge.period,
+      dueDate: charge.dueDate,
       charge: charge.charge,
       paid: charge.paid,
       due: charge.due,
-    });
-  }
-  return [...summaries.values()].sort(
-    (a, b) => a.firstDueDate.localeCompare(b.firstDueDate) || a.member.localeCompare(b.member),
-  );
+    }))
+    .sort((a, b) =>
+      a.period.localeCompare(b.period)
+      || memberOrder(a.memberKey) - memberOrder(b.memberKey)
+      || a.member.localeCompare(b.member),
+    );
 }
 
 export function uniqueMemberNames(data: HelpingHandsData) {
   const names = new Map<string, string>();
   for (const transaction of data.transactions) {
     const key = memberKey(transaction.member);
-    if (!names.has(key)) names.set(key, transaction.member.trim());
+    if (!names.has(key)) names.set(key, canonicalMemberName(transaction.member));
   }
-  return [...names.values()].sort((a, b) => a.localeCompare(b));
+  return [...names.entries()]
+    .sort(([a], [b]) => memberOrder(a) - memberOrder(b))
+    .map(([, name]) => name);
 }
 
 export function periodAsOfDate(period: string, now = new Date()) {
   const currentPeriod = toPeriod(now);
-  if (period >= currentPeriod) return toDateValue(now);
-  const [year, month] = period.split("-").map(Number);
-  return toDateValue(new Date(year, month, 0));
+  const cycleClose = `${period}-${String(helpingHandsRules.dueDay).padStart(2, "0")}`;
+  if (period === currentPeriod) {
+    return toDateValue(now) < cycleClose ? toDateValue(now) : cycleClose;
+  }
+  return cycleClose;
 }
 
 export function formatMoney(value: number) {
@@ -481,20 +609,26 @@ function compareTransactions(a: HelpingHandsTransaction, b: HelpingHandsTransact
 }
 
 function memberKey(name: string) {
-  return name.trim().toLocaleLowerCase();
+  return normalizeMemberName(canonicalMemberName(name));
+}
+
+function canonicalMemberName(name: string) {
+  const normalized = normalizeMemberName(name);
+  return canonicalMemberByAlias.get(normalized) ?? name.trim();
+}
+
+function normalizeMemberName(name: string) {
+  return name.trim().toLocaleLowerCase().replace(/\s+/g, " ");
+}
+
+function memberOrder(key: string) {
+  return canonicalMemberOrder.get(key) ?? canonicalMembers.length;
 }
 
 function validPeriod(value: unknown): value is string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}$/.test(value)) return false;
   const month = Number(value.slice(5));
   return month >= 1 && month <= 12;
-}
-
-function statusWeight(status: MemberPosition["status"]) {
-  if (status === "interest_due") return 3;
-  if (status === "contribution_due") return 2;
-  if (status === "converted") return 1;
-  return 0;
 }
 
 function periodRange(start: string, end: string) {
