@@ -38,6 +38,7 @@ import {
 } from "@/lib/focusMetrics";
 import { LineTrendChart } from "@/components/LineTrendChart";
 import { addCalendarDays, dateKey, getSessionWorkDayDate, getWorkDayDate, isCurrentWorkDay, startOfCalendarDay, workDaysBetween } from "@/lib/workDay";
+import { getAutoFocusMinutes } from "../autoTiming";
 import "./PomodoroPage.css";
 
 type TimerMode = "focus" | "short" | "long";
@@ -803,7 +804,8 @@ export default function PomodoroPage() {
 
                     {timingMode === "auto" ? (
                       <div className="mt-4 grid gap-3 text-sm text-stone-600">
-                        <TimingMetric label="Recommended" value={`${autoPlan.focusMinutes}/${autoPlan.breakMinutes}`} detail="Focus/Break" />
+                        <TimingMetric label="Next Timer" value={`${autoPlan.focusMinutes}/${autoPlan.breakMinutes}`} detail="Focus/Break" />
+                        <p className="text-xs text-stone-500">Daily ramp: 15m, 20m, then momentum-based focus.</p>
                         <div className="grid gap-3 sm:grid-cols-2">
                           <TimingMetric label="Streak" value={`${autoPlan.streak}`} detail="Days" />
                           <TimingMetric label="Momentum" value={`${autoPlan.momentum}%`} detail={`${autoPlan.effectiveMinutes} Effective Min`} />
@@ -1180,7 +1182,8 @@ function maxIsoDate(current: string, next: string) {
 function calculateAutoPlan(logs: PomodoroLog[]) {
   const streak = getCurrentStreak(logs);
   const { effectiveMinutes, momentum } = getFocusMomentum(logs);
-  const focusMinutes = clamp(Math.round((15 + momentum * 0.35) / 5) * 5, 15, 50);
+  const momentumFocusMinutes = clamp(Math.round((15 + momentum * 0.35) / 5) * 5, 15, 50);
+  const focusMinutes = getAutoFocusMinutes(logs, momentumFocusMinutes);
   const breakMinutes = focusMinutes >= 45 ? 10 : focusMinutes >= 30 ? 7 : 5;
 
   if (effectiveMinutes === 0) {
