@@ -7,14 +7,12 @@ import {
   deletePomodoroHistorySession,
   deleteProjectPomodoroSession,
   getProjectPomodoroSessions,
-  getProjectTasks,
   getProjects,
   matchPomodoroAssignment,
   savePomodoroHistorySession,
   saveProjectPomodoroSession,
   type PomodoroProjectSession,
   type Project,
-  type Task,
 } from "@/lib/api";
 import {
   announcePomodoroCompletion,
@@ -125,7 +123,6 @@ const marathonHighlightLabels: Record<MarathonHighlightPeriod, string> = {
 
 export default function PomodoroPage() {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [tasksByProject, setTasksByProject] = useState<Record<string, Task[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timingMode, setTimingMode] = useState<TimingMode>("auto");
@@ -154,20 +151,13 @@ export default function PomodoroPage() {
   const isCompletingSessionRef = useRef(false);
 
   useEffect(() => {
-    async function loadProjectsAndTasks() {
+    async function loadProjects() {
       setError(null);
       const nextProjects = await getProjects();
-      const taskGroups = await Promise.all(nextProjects.map((project) => getProjectTasks(project.id)));
-      const nextTasksByProject = nextProjects.reduce<Record<string, Task[]>>((acc, project, index) => {
-        acc[project.id] = taskGroups[index] ?? [];
-        return acc;
-      }, {});
-
       setProjects(nextProjects);
-      setTasksByProject(nextTasksByProject);
     }
 
-    loadProjectsAndTasks()
+    loadProjects()
       .catch((err: Error) => setError(err.message))
       .finally(() => setIsLoading(false));
   }, []);
@@ -364,7 +354,6 @@ export default function PomodoroPage() {
   }, []);
 
   const completedToday = logs.filter((log) => isCurrentWorkDay(new Date(log.startAt ?? log.completedAt))).length;
-  const totalFocusMinutes = logs.filter((log) => log.mode === "focus").reduce((sum, log) => sum + log.minutes, 0);
   const averageFocus = getAverage(logs.map((log) => log.focus).filter(isNumber));
   const completionPercent = Math.round(((activeSessionDuration - secondsLeft) / activeSessionDuration) * 100);
   const minutesLabel = formatSeconds(secondsLeft);
@@ -1349,7 +1338,7 @@ const FocusCalendar = memo(function FocusCalendar({ error, heatmap, streak }: { 
             {heatmap.weekdays.map((weekday, dayIndex) => (
               <Fragment key={weekday}>
                 <div className="flex items-center text-xs font-medium text-stone-400">{weekday}</div>
-                {heatmap.weeks.map((week, weekIndex) => {
+                {heatmap.weeks.map((week) => {
                   const day = week.days[dayIndex];
 
                   return (

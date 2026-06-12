@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -78,6 +79,16 @@ class HelpingHandsStorageTests(unittest.TestCase):
                 self.session,
                 user_id="user-2",
                 transaction_id="transaction-1",
+            )
+
+    def test_transaction_date_must_be_a_real_calendar_date(self) -> None:
+        with self.assertRaises(ValidationError):
+            schemas.HelpingHandsTransaction(
+                id="invalid-date",
+                member="Asha",
+                direction="sent",
+                amount=100,
+                date="2026-99-99",
             )
 
     def test_start_month_persists_with_transactions(self) -> None:

@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from datetime import datetime
@@ -6,6 +7,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+os.environ.setdefault("AUTH_SECRET_KEY", "test-only-auth-secret-that-is-long-enough")
 
 from app.database import Base, get_db
 from app.main import app
@@ -43,6 +46,19 @@ class MutationApiTests(unittest.TestCase):
         app.dependency_overrides.clear()
         self.engine.dispose()
         self.temp_dir.cleanup()
+
+    def test_tauri_origin_is_allowed_by_cors(self) -> None:
+        response = self.client.options(
+            "/health",
+            headers={
+                "Origin": "tauri://localhost",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "authorization",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["access-control-allow-origin"], "tauri://localhost")
 
     def test_settings_finance_and_pomodoro_mutations(self) -> None:
         settings = self.client.put(

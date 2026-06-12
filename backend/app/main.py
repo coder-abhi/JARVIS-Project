@@ -5,12 +5,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
 
+from . import auth, models  # noqa: F401 - importing models registers SQLAlchemy metadata
 from .database import Base, engine
 from .feature_registry import feature_manifest, include_enabled_feature_routers
 from .migrations import backup_sqlite_before_structured_migration, migrate_structured_storage
-from . import models  # noqa: F401 - importing registers SQLAlchemy models
 
 
+auth.validate_auth_configuration()
 Base.metadata.create_all(bind=engine)
 
 
@@ -369,21 +370,29 @@ migrate_structured_storage(engine)
 
 app = FastAPI(title="Jarvis Local API")
 
+default_frontend_origins = (
+    "http://localhost:1420",
+    "http://127.0.0.1:1420",
+    "tauri://localhost",
+    "http://tauri.localhost",
+)
 frontend_origins = [
     origin.strip()
     for origin in os.getenv(
         "FRONTEND_ORIGIN",
-        "http://localhost:1420,http://127.0.0.1:1420,http://localhost:3000,http://127.0.0.1:3000",
+        ",".join(default_frontend_origins),
     ).split(",")
     if origin.strip()
 ]
+if "*" in frontend_origins:
+    raise RuntimeError("FRONTEND_ORIGIN must list trusted origins explicitly")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=frontend_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 include_enabled_feature_routers(app)

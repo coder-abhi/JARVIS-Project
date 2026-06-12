@@ -1,3 +1,4 @@
+from datetime import date as calendar_date
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -19,6 +20,15 @@ class HelpingHandsTransaction(BaseModel):
         if not self.member:
             raise ValueError("Member name is required")
         return self
+
+    @field_validator("date")
+    @classmethod
+    def validate_date(cls, value: str) -> str:
+        try:
+            calendar_date.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError("date must be a valid YYYY-MM-DD value") from exc
+        return value
 
 
 class HelpingHandsData(BaseModel):

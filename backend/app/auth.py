@@ -17,6 +17,12 @@ from .database import get_db
 
 security = HTTPBearer(auto_error=False)
 password_iterations = 210_000
+minimum_auth_secret_bytes = 32
+insecure_auth_secrets = {
+    "change-me-for-your-machine",
+    "local-dev-auth-secret",
+    "replace-with-at-least-32-random-characters",
+}
 
 
 def normalize_username(username: str) -> str:
@@ -107,10 +113,27 @@ def verify_access_token(token: str) -> str | None:
     return user_id
 
 
+def validate_auth_configuration() -> None:
+    _auth_secret()
+
+
 def _sign(value: str) -> str:
-    secret = os.getenv("AUTH_SECRET_KEY", "local-dev-auth-secret")
+    secret = _auth_secret()
     digest = hmac.new(secret.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).digest()
     return _urlsafe_b64encode(digest)
+
+
+def _auth_secret() -> str:
+    secret = os.getenv("AUTH_SECRET_KEY") or os.getenv("SECRET_KEY")
+    if not secret or secret in insecure_auth_secrets:
+        raise RuntimeError(
+            "AUTH_SECRET_KEY must be set to a unique random value before starting the API"
+        )
+    if len(secret.encode("utf-8")) < minimum_auth_secret_bytes:
+        raise RuntimeError(
+            f"AUTH_SECRET_KEY must be at least {minimum_auth_secret_bytes} bytes"
+        )
+    return secret
 
 
 def _urlsafe_b64encode(value: bytes) -> str:

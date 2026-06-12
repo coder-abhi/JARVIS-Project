@@ -2,7 +2,11 @@
   "auth": true,
   "projects": true,
   "tasks": true,
+  "pomodoro": true,
   "goals": true,
   "library": true,
+  "money": true,
+  "helping-hands": true,
+  "settings": true,
   "ai": true
 }

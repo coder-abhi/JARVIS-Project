@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Iterable
 
 from fastapi import APIRouter
 
@@ -42,7 +41,14 @@ FEATURES: tuple[FeatureDefinition, ...] = (
 
 def enabled_features() -> list[FeatureDefinition]:
     settings = _load_feature_settings()
-    return [feature for feature in FEATURES if settings.get(feature.key, feature.enabled_by_default)]
+    enabled_keys: set[str] = set()
+    enabled: list[FeatureDefinition] = []
+    for feature in FEATURES:
+        requested = settings.get(feature.key, feature.enabled_by_default)
+        if requested and all(dependency in enabled_keys for dependency in feature.depends_on):
+            enabled.append(feature)
+            enabled_keys.add(feature.key)
+    return enabled
 
 
 def include_enabled_feature_routers(app) -> None:

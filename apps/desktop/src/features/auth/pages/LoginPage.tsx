@@ -6,6 +6,10 @@ import { FormEvent, useEffect, useState } from "react";
 import { login } from "@/lib/api";
 import { getStoredUser, setAuthSession } from "@/lib/auth";
 
+function safeNextPath(value: string | null) {
+  return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -16,9 +20,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const next = params.get("next");
-    setNextPath(next?.startsWith("/") ? next : "/");
-    if (getStoredUser()) router.replace(next?.startsWith("/") ? next : "/");
+    const next = safeNextPath(params.get("next"));
+    setNextPath(next);
+    if (getStoredUser()) router.replace(next);
   }, [router]);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
@@ -44,7 +48,7 @@ export default function LoginPage() {
         <p className="text-sm font-semibold uppercase tracking-wide text-teal-700">Welcome back</p>
         <h1 className="mt-2 text-3xl font-semibold text-stone-950">Login</h1>
 
-        {error ? <p className="mt-5 rounded-md bg-red-50 p-3 text-sm font-medium text-red-700">{error}</p> : null}
+        {error ? <p role="alert" className="mt-5 rounded-md bg-red-50 p-3 text-sm font-medium text-red-700">{error}</p> : null}
 
         <label className="mt-6 block text-sm font-semibold text-stone-700" htmlFor="username">
           Username
@@ -54,6 +58,7 @@ export default function LoginPage() {
           value={username}
           onChange={(event) => setUsername(event.target.value)}
           autoComplete="username"
+          required
           autoFocus
           className="field-input mt-2"
         />
@@ -67,6 +72,7 @@ export default function LoginPage() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           autoComplete="current-password"
+          required
           className="field-input mt-2"
         />
 

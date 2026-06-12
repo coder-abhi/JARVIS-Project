@@ -335,42 +335,80 @@ export type AiCostSummary = {
   recent_requests: AiRecentRequest[];
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
+const API_BASE_URL = (configuredApiUrl || "http://127.0.0.1:8000").replace(/\/+$/, "");
 const saveQueues = new Map<string, Promise<unknown>>();
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAuthToken();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init?.headers,
-    },
-    cache: "no-store",
-  });
+  const headers = new Headers(init?.headers);
+  if (init?.body !== undefined && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers,
+      cache: "no-store",
+    });
+  } catch {
+    throw new Error(`Could not reach the Jarvis API at ${API_BASE_URL}`);
+  }
 
   if (!response.ok) {
     if (response.status === 401 && typeof window !== "undefined" && !path.startsWith("/auth/")) {
       clearAuthSession();
       if (!["/login", "/signup"].includes(window.location.pathname)) {
-        window.location.href = "/login";
+        const nextPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+        window.location.href = `/login?next=${encodeURIComponent(nextPath)}`;
       }
     }
     const body = await response.text();
-    let message = body;
-    try {
-      const error = JSON.parse(body) as { detail?: unknown };
-      if (typeof error.detail === "string") message = error.detail;
-    } catch {
-      // Keep non-JSON response bodies as the error message.
-    }
-    throw new Error(message || `Request failed with ${response.status}`);
+    throw new Error(readErrorMessage(body, response.status));
   }
 
   if (response.status === 204) return undefined as T;
 
   return response.json() as Promise<T>;
+}
+
+function readErrorMessage(body: string, status: number) {
+  if (!body) return `Request failed with ${status}`;
+  try {
+    const error = JSON.parse(body) as { detail?: unknown };
+    if (typeof error.detail === "string") return error.detail;
+    if (Array.isArray(error.detail)) {
+      const messages = error.detail
+        .map((item) => (
+          typeof item === "object" && item !== null && "msg" in item
+            ? String(item.msg)
+            : null
+        ))
+        .filter((message): message is string => Boolean(message));
+      if (messages.length) return messages.join("; ");
+    }
+  } catch {
+    // Keep non-JSON response bodies as the error message.
+  }
+  return body;
+}
+
+function enqueueSave<T>(key: string, operation: () => Promise<T>) {
+  const previous = saveQueues.get(key) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(operation);
+  saveQueues.set(key, next);
+  const cleanup = () => {
+    if (saveQueues.get(key) === next) saveQueues.delete(key);
+  };
+  void next.then(cleanup, cleanup);
+  return next;
+}
+
+function pathSegment(value: string) {
+  return encodeURIComponent(value);
 }
 
 export function login(username: string, password: string) {
@@ -424,19 +462,16 @@ export function savePomodoroHistorySession<T extends { id: string }>(data: T) {
     focus: session.focus,
     isManual: session.isManual,
   };
-  const previous = saveQueues.get(key) ?? Promise.resolve();
-  const next = previous
-    .catch(() => undefined)
-    .then(() => request<PomodoroHistorySessionInput>(`/pomodoro/sessions/${encodeURIComponent(data.id)}`, {
+  return enqueueSave(key, () => (
+    request<PomodoroHistorySessionInput>(`/pomodoro/sessions/${pathSegment(data.id)}`, {
       method: "PUT",
       body: JSON.stringify(payload),
-    }));
-  saveQueues.set(key, next);
-  return next;
+    })
+  ));
 }
 
 export function deletePomodoroHistorySession(sessionId: string) {
-  return request<void>(`/pomodoro/sessions/${encodeURIComponent(sessionId)}`, {
+  return request<void>(`/pomodoro/sessions/${pathSegment(sessionId)}`, {
     method: "DELETE",
   });
 }
@@ -446,16 +481,12 @@ export function getWealthData<T>() {
 }
 
 export function saveWealthData<T>(data: T) {
-  const key = "wealth-data";
-  const previous = saveQueues.get(key) ?? Promise.resolve();
-  const next = previous
-    .catch(() => undefined)
-    .then(() => request<T>("/money", {
+  return enqueueSave("wealth-data", () => (
+    request<T>("/money", {
       method: "PUT",
       body: JSON.stringify(data),
-    }));
-  saveQueues.set(key, next);
-  return next;
+    })
+  ));
 }
 
 export function getHelpingHandsData<T>() {
@@ -471,19 +502,16 @@ export function saveHelpingHandsStartMonth<T>(startMonth: string) {
 
 export function saveHelpingHandsTransaction<T>(data: { id: string }) {
   const key = `helping-hands-transaction:${data.id}`;
-  const previous = saveQueues.get(key) ?? Promise.resolve();
-  const next = previous
-    .catch(() => undefined)
-    .then(() => request<T>(`/helping-hands/transactions/${encodeURIComponent(data.id)}`, {
+  return enqueueSave(key, () => (
+    request<T>(`/helping-hands/transactions/${pathSegment(data.id)}`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }));
-  saveQueues.set(key, next);
-  return next;
+    })
+  ));
 }
 
 export function deleteHelpingHandsTransaction<T>(transactionId: string) {
-  return request<T>(`/helping-hands/transactions/${encodeURIComponent(transactionId)}`, {
+  return request<T>(`/helping-hands/transactions/${pathSegment(transactionId)}`, {
     method: "DELETE",
   });
 }
@@ -504,18 +532,18 @@ export function createProject(project: ProjectInput) {
 }
 
 export function updateProject(projectId: string, project: ProjectUpdate) {
-  return request<Project>(`/projects/${projectId}`, {
+  return request<Project>(`/projects/${pathSegment(projectId)}`, {
     method: "PUT",
     body: JSON.stringify(project),
   });
 }
 
 export function getProjectTasks(projectId: string) {
-  return request<Task[]>(`/projects/${projectId}/tasks`);
+  return request<Task[]>(`/projects/${pathSegment(projectId)}/tasks`);
 }
 
 export function deleteTask(taskId: string) {
-  return request<void>(`/tasks/${taskId}`, {
+  return request<void>(`/tasks/${pathSegment(taskId)}`, {
     method: "DELETE",
   });
 }
@@ -528,7 +556,7 @@ export function createTask(task: TaskInput) {
 }
 
 export function updateTask(taskId: string, task: TaskUpdate) {
-  return request<Task>(`/tasks/${taskId}`, {
+  return request<Task>(`/tasks/${pathSegment(taskId)}`, {
     method: "PUT",
     body: JSON.stringify(task),
   });
@@ -542,22 +570,22 @@ export function matchPomodoroAssignment(note: string, projectIds: string[] = [])
 }
 
 export function getProjectPomodoroSessions(projectId: string) {
-  return request<PomodoroProjectSession[]>(`/projects/${projectId}/pomodoro-sessions`);
+  return request<PomodoroProjectSession[]>(`/projects/${pathSegment(projectId)}/pomodoro-sessions`);
 }
 
 export function getProjectCompletions(projectId: string) {
-  return request<CompletedGoalLog[]>(`/projects/${projectId}/completions`);
+  return request<CompletedGoalLog[]>(`/projects/${pathSegment(projectId)}/completions`);
 }
 
 export function saveProjectPomodoroSession(session: PomodoroProjectSessionInput) {
-  return request<PomodoroProjectSession>(`/projects/pomodoro-sessions/${session.id}`, {
+  return request<PomodoroProjectSession>(`/projects/pomodoro-sessions/${pathSegment(session.id)}`, {
     method: "PUT",
     body: JSON.stringify(session),
   });
 }
 
 export function deleteProjectPomodoroSession(sessionId: string) {
-  return request<void>(`/projects/pomodoro-sessions/${sessionId}`, {
+  return request<void>(`/projects/pomodoro-sessions/${pathSegment(sessionId)}`, {
     method: "DELETE",
   });
 }
@@ -576,7 +604,7 @@ export function getAiFeatureSettings() {
 }
 
 export function updateAiFeatureSetting(feature: string, changes: { enabled?: boolean; model?: string }) {
-  return request<AiFeatureSetting>(`/ai/features/${encodeURIComponent(feature)}`, {
+  return request<AiFeatureSetting>(`/ai/features/${pathSegment(feature)}`, {
     method: "PUT",
     body: JSON.stringify(changes),
   });
@@ -594,7 +622,7 @@ export function createGoal(goal: GoalInput) {
 }
 
 export function updateGoal(goalId: string, goal: GoalUpdate) {
-  return request<Goal>(`/goals/${goalId}`, {
+  return request<Goal>(`/goals/${pathSegment(goalId)}`, {
     method: "PUT",
     body: JSON.stringify(goal),
   });
@@ -608,19 +636,19 @@ export function logGoalEntry(text: string) {
 }
 
 export function completeGoalTask(taskId: string) {
-  return request<CompletedGoalLog>(`/goals/tasks/${taskId}/complete`, {
+  return request<CompletedGoalLog>(`/goals/tasks/${pathSegment(taskId)}/complete`, {
     method: "PUT",
   });
 }
 
 export function restoreCompletedGoal(completionId: string) {
-  return request<GoalTask>(`/goals/completions/${completionId}/restore`, {
+  return request<GoalTask>(`/goals/completions/${pathSegment(completionId)}/restore`, {
     method: "PUT",
   });
 }
 
 export function deleteCompletedGoal(completionId: string) {
-  return request<void>(`/goals/completions/${completionId}`, {
+  return request<void>(`/goals/completions/${pathSegment(completionId)}`, {
     method: "DELETE",
   });
 }
@@ -658,40 +686,40 @@ export function createBook(book: BookInput) {
 }
 
 export function updateBook(bookId: string, book: BookUpdate) {
-  return request<Book>(`/library/books/${bookId}`, {
+  return request<Book>(`/library/books/${pathSegment(bookId)}`, {
     method: "PUT",
     body: JSON.stringify(book),
   });
 }
 
 export function updateChapter(chapterId: string, resonated: boolean) {
-  return request<BookChapter>(`/library/chapters/${chapterId}`, {
+  return request<BookChapter>(`/library/chapters/${pathSegment(chapterId)}`, {
     method: "PUT",
     body: JSON.stringify({ resonated }),
   });
 }
 
 export function addChapter(bookId: string, title: string) {
-  return request<BookChapter>(`/library/books/${bookId}/chapters`, {
+  return request<BookChapter>(`/library/books/${pathSegment(bookId)}/chapters`, {
     method: "POST",
     body: JSON.stringify({ title }),
   });
 }
 
 export function regenerateChapters(bookId: string) {
-  return request<{ status: string }>(`/library/books/${bookId}/chapters/regenerate`, {
+  return request<{ status: string }>(`/library/books/${pathSegment(bookId)}/chapters/regenerate`, {
     method: "POST",
   });
 }
 
 export function deleteChapter(chapterId: string) {
-  return request<void>(`/library/chapters/${chapterId}`, {
+  return request<void>(`/library/chapters/${pathSegment(chapterId)}`, {
     method: "DELETE",
   });
 }
 
 export function deleteBookChapters(bookId: string) {
-  return request<void>(`/library/books/${bookId}/chapters`, {
+  return request<void>(`/library/books/${pathSegment(bookId)}/chapters`, {
     method: "DELETE",
   });
 }

@@ -6,7 +6,7 @@ from .models import BookStatus, GoalCategory, ProjectType, TaskPriority, TaskSta
 
 class UserCreate(BaseModel):
     username: str = Field(min_length=3, max_length=80)
-    password: str = Field(min_length=6, max_length=128)
+    password: str = Field(min_length=8, max_length=128)
 
     @model_validator(mode="after")
     def validate_normalized_username(self):
@@ -155,10 +155,6 @@ class TaskRead(TaskBase):
     id: str
     completed_at: datetime | None = None
     created_at: datetime
-
-
-class PomodoroAssignmentProject(BaseModel):
-    project_id: str
 
 
 class PomodoroAssignmentRequest(BaseModel):
@@ -361,7 +357,7 @@ class BookRead(BookBase):
     current_page: int
     pages_read: int
     pages_remaining: int
-    chapters: list[ChapterRead] = []
+    chapters: list[ChapterRead] = Field(default_factory=list)
 
 
 class ChapterUpdate(BaseModel):

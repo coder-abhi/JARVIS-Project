@@ -17,6 +17,10 @@ export default function SignupPage() {
   async function handleSignup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!username.trim() || !password || isSaving) return;
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
@@ -41,7 +45,7 @@ export default function SignupPage() {
         <p className="text-sm font-semibold uppercase tracking-wide text-teal-700">New account</p>
         <h1 className="mt-2 text-3xl font-semibold text-stone-950">Sign up</h1>
 
-        {error ? <p className="mt-5 rounded-md bg-red-50 p-3 text-sm font-medium text-red-700">{error}</p> : null}
+        {error ? <p role="alert" className="mt-5 rounded-md bg-red-50 p-3 text-sm font-medium text-red-700">{error}</p> : null}
 
         <label className="mt-6 block text-sm font-semibold text-stone-700" htmlFor="signup-username">
           Username
@@ -51,6 +55,8 @@ export default function SignupPage() {
           value={username}
           onChange={(event) => setUsername(event.target.value)}
           autoComplete="username"
+          required
+          minLength={3}
           autoFocus
           className="field-input mt-2"
         />
@@ -64,6 +70,8 @@ export default function SignupPage() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           autoComplete="new-password"
+          required
+          minLength={8}
           className="field-input mt-2"
         />
 
@@ -76,6 +84,8 @@ export default function SignupPage() {
           value={confirmPassword}
           onChange={(event) => setConfirmPassword(event.target.value)}
           autoComplete="new-password"
+          required
+          minLength={8}
           className="field-input mt-2"
         />
 
