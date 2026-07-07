@@ -11,9 +11,79 @@
   --ops-dim: #71717a;
   --ops-signal: #22c55e;
   --ops-danger: #ef4444;
+  --ops-danger-soft: #f87171;
+  --ops-brand: var(--ops-signal);
+  --ops-info: var(--ops-signal);
+  --ops-warn: #eab308;
+  --ops-signal-rgb: 34, 197, 94;
+  --ops-danger-rgb: 239, 68, 68;
+  --ops-warn-rgb: 234, 179, 8;
+  --ops-info-rgb: 34, 197, 94;
+  --ops-brand-rgb: 34, 197, 94;
+  --ops-radius: 0px;
+  --ops-radius-sm: 0px;
+  --ops-shadow: none;
+  --ops-font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ops-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   background: var(--ops-black);
   color: var(--ops-text);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--ops-font);
+}
+
+/* Theme: Terminal (design 4, dense Bloomberg-style terminal) */
+:root[data-theme="dense-terminal"] {
+  color-scheme: dark;
+  --ops-black: #000;
+  --ops-panel: #000;
+  --ops-border: #1a1a1a;
+  --ops-border-strong: #333333;
+  --ops-text: #cccccc;
+  --ops-muted: #999999;
+  --ops-dim: #666666;
+  --ops-signal: #00ff00;
+  --ops-danger: #ff3333;
+  --ops-danger-soft: #ff6666;
+  --ops-brand: #ff8c00;
+  --ops-info: #00aaff;
+  --ops-warn: #ffaa00;
+  --ops-signal-rgb: 0, 255, 0;
+  --ops-danger-rgb: 255, 51, 51;
+  --ops-warn-rgb: 255, 170, 0;
+  --ops-info-rgb: 0, 170, 255;
+  --ops-brand-rgb: 255, 140, 0;
+  --ops-radius: 0px;
+  --ops-radius-sm: 0px;
+  --ops-shadow: none;
+  --ops-font: "JetBrains Mono", "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --ops-font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+
+/* Theme: Daylight (design 5, friendly modern SaaS) */
+:root[data-theme="friendly-saas"] {
+  color-scheme: light;
+  --ops-black: #fafafa;
+  --ops-panel: #ffffff;
+  --ops-border: rgba(0, 0, 0, 0.08);
+  --ops-border-strong: rgba(0, 0, 0, 0.14);
+  --ops-text: #1a1a1a;
+  --ops-muted: #6b6b6b;
+  --ops-dim: #a3a3a3;
+  --ops-signal: #16a34a;
+  --ops-danger: #dc2626;
+  --ops-danger-soft: #ef4444;
+  --ops-brand: #4f46e5;
+  --ops-info: #0891b2;
+  --ops-warn: #d97706;
+  --ops-signal-rgb: 22, 163, 74;
+  --ops-danger-rgb: 220, 38, 38;
+  --ops-warn-rgb: 217, 119, 6;
+  --ops-info-rgb: 8, 145, 178;
+  --ops-brand-rgb: 79, 70, 229;
+  --ops-radius: 12px;
+  --ops-radius-sm: 8px;
+  --ops-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --ops-font: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ops-font-mono: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 * {
@@ -630,4 +700,573 @@ option {
     align-items: stretch;
     flex-direction: column;
   }
+}
+
+/* ==========================================================================
+   Appearance themes (Terminal / Daylight)
+   Everything below is additive and scoped under [data-theme="..."] so the
+   default (Dark Green) look above is completely untouched.
+   ========================================================================== */
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) {
+  font-family: var(--ops-font);
+}
+
+[data-theme="dense-terminal"] body {
+  font-size: 12px;
+}
+
+/* -- Screen surface: terminal is flat black (no dotted grid), saas is flat light -- */
+[data-theme="dense-terminal"] .ops-screen,
+[data-theme="friendly-saas"] .ops-screen {
+  background: var(--ops-black);
+}
+
+[data-theme="friendly-saas"] .ops-screen {
+  padding: 1.5rem;
+}
+
+/* -- Header -- */
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) .ops-header {
+  background: var(--ops-panel);
+  border-radius: var(--ops-radius);
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="friendly-saas"] .ops-header {
+  align-items: center;
+  padding: 1.1rem 1.35rem;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) .ops-header h1,
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) .ops-panel h2 {
+  font-family: var(--ops-font-mono);
+}
+
+[data-theme="friendly-saas"] .ops-header h1,
+[data-theme="friendly-saas"] .ops-panel h2 {
+  text-transform: none;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+[data-theme="friendly-saas"] .ops-kicker {
+  text-transform: none;
+  color: var(--ops-brand);
+  font-weight: 500;
+}
+
+/* -- Panels -- */
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) .ops-panel {
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="dense-terminal"] .ops-panel {
+  border-color: var(--ops-border);
+  background: var(--ops-black);
+}
+
+[data-theme="friendly-saas"] .ops-panel {
+  border-radius: var(--ops-radius);
+  border-color: var(--ops-border);
+  background: var(--ops-panel);
+  padding: 1.15rem;
+}
+
+[data-theme="friendly-saas"] .ops-panel-head span {
+  text-transform: none;
+  font-weight: 500;
+}
+
+/* -- Metric tiles -- */
+[data-theme="friendly-saas"] .system-metric,
+[data-theme="friendly-saas"] .briefing-metric {
+  border-radius: var(--ops-radius-sm);
+  background: var(--ops-panel);
+  box-shadow: var(--ops-shadow);
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) .system-metric span,
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) .briefing-metric span,
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) .analysis-stack span,
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) .allocation-list span {
+  font-family: var(--ops-font-mono);
+}
+
+[data-theme="friendly-saas"] .system-metric span,
+[data-theme="friendly-saas"] .briefing-metric span,
+[data-theme="friendly-saas"] .analysis-stack span,
+[data-theme="friendly-saas"] .allocation-list span {
+  text-transform: none;
+  font-weight: 500;
+}
+
+/* -- Dot indicator: square blink for terminal, soft round pulse for saas -- */
+[data-theme="dense-terminal"] .ops-dot {
+  border-radius: 0;
+  animation: none;
+}
+
+[data-theme="dense-terminal"] .ops-dot.pulse {
+  animation: term-blink 1.1s steps(1) infinite;
+  box-shadow: none;
+}
+
+@keyframes term-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+[data-theme="friendly-saas"] .ops-dot {
+  border-radius: 999px;
+  border-color: var(--ops-signal);
+  background: var(--ops-signal);
+}
+
+[data-theme="friendly-saas"] .ops-dot.pulse {
+  animation: saas-pulse 1.6s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(var(--ops-signal-rgb), 0.45);
+}
+
+@keyframes saas-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(var(--ops-signal-rgb), 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 0.5rem rgba(var(--ops-signal-rgb), 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--ops-signal-rgb), 0);
+  }
+}
+
+/* -- Chips: bracketed text for terminal, pill for saas -- */
+[data-theme="dense-terminal"] .ops-chip {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.15rem 0.2rem;
+  font-family: var(--ops-font-mono);
+}
+
+[data-theme="dense-terminal"] .ops-chip::before {
+  content: "[";
+}
+
+[data-theme="dense-terminal"] .ops-chip::after {
+  content: "]";
+}
+
+[data-theme="friendly-saas"] .ops-chip {
+  border: none;
+  border-radius: 999px;
+  background: rgba(var(--ops-info-rgb), 0.12);
+  color: var(--ops-info);
+  padding: 0.3rem 0.7rem;
+  text-transform: none;
+  font-weight: 500;
+}
+
+[data-theme="friendly-saas"] .ops-chip.signal,
+[data-theme="friendly-saas"] .ops-status.signal {
+  background: rgba(var(--ops-signal-rgb), 0.14);
+  color: var(--ops-signal);
+}
+
+[data-theme="friendly-saas"] .ops-chip.danger,
+[data-theme="friendly-saas"] .ops-status.danger {
+  background: rgba(var(--ops-danger-rgb), 0.14);
+  color: var(--ops-danger);
+}
+
+/* -- Buttons -- */
+[data-theme="dense-terminal"] .ops-button {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.45rem 0.35rem;
+}
+
+[data-theme="dense-terminal"] .ops-button::before {
+  margin-right: 0.3rem;
+  content: ">";
+  color: var(--ops-dim);
+}
+
+[data-theme="dense-terminal"] .ops-button.primary {
+  color: var(--ops-brand);
+}
+
+[data-theme="friendly-saas"] .ops-button {
+  border: 1px solid var(--ops-border);
+  border-radius: var(--ops-radius-sm);
+  background: var(--ops-panel);
+  color: var(--ops-text);
+  text-transform: none;
+  font-weight: 500;
+  letter-spacing: 0;
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="friendly-saas"] .ops-button:hover:not(:disabled) {
+  border-color: var(--ops-border-strong);
+}
+
+[data-theme="friendly-saas"] .ops-button.primary {
+  border-color: var(--ops-brand);
+  background: var(--ops-brand);
+  color: #fff;
+}
+
+/* -- Tables / rows -- */
+[data-theme="friendly-saas"] .ops-table {
+  border-radius: var(--ops-radius);
+  overflow: hidden;
+  border-color: var(--ops-border);
+}
+
+[data-theme="friendly-saas"] .ops-row {
+  min-height: 2.9rem;
+  background: var(--ops-panel);
+}
+
+[data-theme="friendly-saas"] .ops-row-head {
+  background: rgba(0, 0, 0, 0.02);
+  text-transform: none;
+  font-weight: 500;
+}
+
+:is([data-theme="dense-terminal"]) .ops-row-head,
+[data-theme="friendly-saas"] .ops-row-head {
+  font-family: var(--ops-font-mono);
+}
+
+/* -- Progress bar: ASCII block-fill for terminal, rounded track for saas -- */
+[data-theme="dense-terminal"] .ops-progress {
+  border-color: var(--ops-border-strong);
+}
+
+[data-theme="friendly-saas"] .ops-progress {
+  border: none;
+  border-radius: 999px;
+  background: rgba(var(--ops-brand-rgb), 0.14);
+}
+
+[data-theme="friendly-saas"] .ops-progress span {
+  border-radius: 999px;
+  background: var(--ops-brand);
+}
+
+/* -- Status label -- */
+[data-theme="friendly-saas"] .ops-status {
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.04);
+  text-transform: none;
+  font-weight: 500;
+}
+
+/* -- Feed lines -- */
+[data-theme="dense-terminal"] .feed-line {
+  border: none;
+  border-bottom: 1px solid var(--ops-border);
+  background: transparent;
+  padding: 0.3rem 0;
+}
+
+[data-theme="friendly-saas"] .feed-line {
+  border: none;
+  border-radius: var(--ops-radius-sm);
+  background: var(--ops-panel);
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="friendly-saas"] .feed-line span {
+  color: var(--ops-brand);
+}
+
+/* -- Empty state -- */
+[data-theme="friendly-saas"] .ops-empty {
+  border-radius: var(--ops-radius-sm);
+  border-style: solid;
+}
+
+/* -- Alert banner -- */
+[data-theme="friendly-saas"] .ops-alert {
+  border: none;
+  border-radius: var(--ops-radius-sm);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="friendly-saas"] .ops-alert.signal {
+  background: rgba(var(--ops-signal-rgb), 0.12);
+}
+
+[data-theme="friendly-saas"] .ops-alert.danger {
+  background: rgba(var(--ops-danger-rgb), 0.12);
+  color: var(--ops-danger);
+}
+
+/* -- Segmented control -- */
+[data-theme="friendly-saas"] .ops-segment {
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.04);
+  text-transform: none;
+}
+
+/* -- Form fields -- */
+[data-theme="dense-terminal"] .field-input,
+[data-theme="dense-terminal"] input,
+[data-theme="dense-terminal"] select,
+[data-theme="dense-terminal"] textarea {
+  border: none !important;
+  border-bottom: 1px solid var(--ops-border-strong) !important;
+  border-radius: 0 !important;
+  background: #000 !important;
+  color: var(--ops-text) !important;
+  caret-color: var(--ops-brand);
+}
+
+[data-theme="dense-terminal"] input:focus,
+[data-theme="dense-terminal"] select:focus,
+[data-theme="dense-terminal"] textarea:focus,
+[data-theme="dense-terminal"] .field-input:focus {
+  border-bottom-color: var(--ops-brand) !important;
+  box-shadow: none !important;
+}
+
+[data-theme="friendly-saas"] .field-input,
+[data-theme="friendly-saas"] input,
+[data-theme="friendly-saas"] select,
+[data-theme="friendly-saas"] textarea {
+  border: 1px solid var(--ops-border) !important;
+  border-radius: var(--ops-radius-sm) !important;
+  background: var(--ops-panel) !important;
+  color: var(--ops-text) !important;
+}
+
+[data-theme="friendly-saas"] input::placeholder,
+[data-theme="friendly-saas"] textarea::placeholder {
+  color: var(--ops-dim) !important;
+}
+
+[data-theme="friendly-saas"] input:focus,
+[data-theme="friendly-saas"] select:focus,
+[data-theme="friendly-saas"] textarea:focus,
+[data-theme="friendly-saas"] .field-input:focus {
+  border-color: var(--ops-brand) !important;
+  box-shadow: 0 0 0 3px rgba(var(--ops-brand-rgb), 0.15) !important;
+}
+
+[data-theme="friendly-saas"] option {
+  background: var(--ops-panel);
+  color: var(--ops-text);
+}
+
+/* -- Re-enable rounded corners / shadows for saas (default theme forces them off above) -- */
+[data-theme="friendly-saas"] .rounded-full {
+  border-radius: 999px !important;
+}
+
+[data-theme="friendly-saas"] .rounded-2xl,
+[data-theme="friendly-saas"] .rounded-xl,
+[data-theme="friendly-saas"] .rounded-lg,
+[data-theme="friendly-saas"] .rounded-md {
+  border-radius: var(--ops-radius) !important;
+}
+
+[data-theme="friendly-saas"] .shadow-sm {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06) !important;
+}
+
+[data-theme="friendly-saas"] .shadow-lg,
+[data-theme="friendly-saas"] .shadow-xl,
+[data-theme="friendly-saas"] .shadow-2xl {
+  box-shadow: var(--ops-shadow) !important;
+}
+
+[data-theme="dense-terminal"] .bg-gradient-to-r,
+[data-theme="friendly-saas"] .bg-gradient-to-r {
+  background-image: linear-gradient(90deg, var(--ops-brand), var(--ops-signal)) !important;
+}
+
+[data-theme="dense-terminal"] [class*="bg-[conic-gradient"],
+[data-theme="friendly-saas"] [class*="bg-[conic-gradient"] {
+  background: conic-gradient(var(--ops-signal) var(--progress), var(--ops-border) 0) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Tailwind utility-class re-tinting for the two new themes.
+   Mirrors the "Legacy Tailwind utility safety net" above, but bucketed by
+   hue family and driven by theme tokens so both themes share one rule set.
+   -------------------------------------------------------------------------- */
+
+/* Neutral surfaces -> panel */
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-white"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-stone-50"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-gray-50"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-stone-100"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-gray-100"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-stone-200"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-stone-300"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-gray-300"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-gray-400"] {
+  background-color: var(--ops-panel) !important;
+}
+
+/* Neutral dark surfaces (solid buttons/badges) -> brand color. Exact-token match
+   (class~=) so opacity-suffixed overlay variants like "bg-gray-950/35" are NOT
+   caught here -- those are handled as translucent scrims just below. */
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class~="bg-stone-800"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class~="bg-gray-800"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class~="bg-stone-950"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class~="bg-gray-950"] {
+  background-color: var(--ops-brand) !important;
+  color: #fff !important;
+}
+
+/* Modal/overlay scrims (opacity-suffixed dark backgrounds) -> plain translucent
+   black regardless of theme, since a dark backdrop behind a modal is correct
+   even on the light Daylight theme. */
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-stone-950/"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-gray-950/"] {
+  background-color: rgba(0, 0, 0, 0.45) !important;
+  color: inherit !important;
+}
+
+/* Neutral borders */
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="border-stone-"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="border-gray-"] {
+  border-color: var(--ops-border) !important;
+}
+
+/* Neutral text: darkest -> primary text, mid -> muted, light -> dim */
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-stone-950"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-gray-950"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-stone-900"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-stone-800"] {
+  color: var(--ops-text) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-stone-700"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-stone-600"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-stone-500"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-gray-700"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-gray-600"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-gray-500"] {
+  color: var(--ops-muted) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-stone-400"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-stone-300"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-stone-200"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-stone-100"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-gray-400"] {
+  color: var(--ops-dim) !important;
+}
+
+/* Signal (teal/emerald/lime/green) */
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-teal-50"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-teal-100"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-emerald-50"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-emerald-100"] {
+  background-color: rgba(var(--ops-signal-rgb), 0.14) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-teal-500"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-teal-600"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="from-teal-500"] {
+  background-color: var(--ops-signal) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-teal-"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-emerald-"] {
+  color: var(--ops-signal) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="border-teal-"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="border-emerald-200"] {
+  border-color: rgba(var(--ops-signal-rgb), 0.55) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="ring-teal-"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="ring-emerald-100"] {
+  --tw-ring-color: rgba(var(--ops-signal-rgb), 0.2) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="shadow-teal-"] {
+  box-shadow: var(--ops-shadow) !important;
+}
+
+/* Warn (amber/orange/yellow) */
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-amber-50"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-amber-100"] {
+  background-color: rgba(var(--ops-warn-rgb), 0.14) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-amber-"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-orange-"] {
+  color: var(--ops-warn) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="border-amber-"] {
+  border-color: rgba(var(--ops-warn-rgb), 0.5) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="ring-amber-100"] {
+  --tw-ring-color: rgba(var(--ops-warn-rgb), 0.2) !important;
+}
+
+/* Danger (red/rose) */
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-red-50"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-red-100"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-rose-100"] {
+  background-color: rgba(var(--ops-danger-rgb), 0.16) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-red-"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-rose-"] {
+  color: var(--ops-danger) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="border-red-"] {
+  border-color: rgba(var(--ops-danger-rgb), 0.5) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="ring-red-100"] {
+  --tw-ring-color: rgba(var(--ops-danger-rgb), 0.2) !important;
+}
+
+/* Info / brand (blue/sky/cyan/indigo) */
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-blue-50"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-blue-100"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-cyan-100"] {
+  background-color: rgba(var(--ops-info-rgb), 0.14) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="bg-blue-600"] {
+  background-color: var(--ops-info) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-blue-"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-cyan-"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="text-sky-"] {
+  color: var(--ops-info) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="border-blue-"] {
+  border-color: rgba(var(--ops-info-rgb), 0.5) !important;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="shadow-blue-"] {
+  box-shadow: var(--ops-shadow) !important;
+}
+
+/* Gradient fade edges (scroll masks) -> panel based */
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="from-stone-950"],
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) [class*="to-stone-950"] {
+  --tw-gradient-from: var(--ops-panel) !important;
+  --tw-gradient-to: transparent !important;
 }

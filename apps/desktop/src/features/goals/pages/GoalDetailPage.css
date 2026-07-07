@@ -1,6 +1,6 @@
 .goal-detail-state {
   color: var(--ops-muted);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
 }
 
 .goal-detail-heading {
@@ -46,9 +46,9 @@
   gap: 0.75rem;
   margin-top: 0.75rem;
   border: 1px solid var(--ops-border-strong);
-  background: #000;
+  background: var(--ops-panel);
   padding: 0.9rem;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
 }
 
 .goal-metadata-editor label,
@@ -113,7 +113,7 @@
 .goal-progress-copy span,
 .goal-signal-foot {
   color: var(--ops-muted);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.66rem;
   text-transform: uppercase;
 }
@@ -154,7 +154,7 @@
 .goal-text-section {
   margin-top: 1.1rem;
   color: var(--ops-text);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
 }
 
 .goal-text-section h2 {
@@ -260,11 +260,11 @@
 }
 
 .goal-project-type.fixed {
-  color: #fbbf24;
+  color: var(--ops-warn);
 }
 
 .goal-project-type.continuous {
-  color: #22d3ee;
+  color: var(--ops-info);
 }
 
 .goal-project-progress > div:first-child {
@@ -325,7 +325,7 @@
   height: 0.5rem;
   margin-top: 0.18rem;
   border: 1px solid var(--ops-dim);
-  background: #000;
+  background: var(--ops-panel);
 }
 
 .goal-timeline-item.signal .goal-timeline-marker {
@@ -399,4 +399,75 @@
   .goal-timeline-item div {
     grid-column: 2;
   }
+}
+
+/* -- Terminal: flat block-fill progress bars, dense table-row timeline/rows -- */
+[data-theme="dense-terminal"] .goal-progress-track,
+[data-theme="dense-terminal"] .goal-project-progress-track {
+  border: 1px solid var(--ops-border-strong);
+  border-radius: 0;
+  background: var(--ops-black);
+}
+
+[data-theme="dense-terminal"] .goal-metadata-editor {
+  border-radius: 0;
+}
+
+[data-theme="dense-terminal"] .goal-timeline-marker {
+  border-radius: 0;
+}
+
+[data-theme="dense-terminal"] .goal-project-row {
+  border-radius: 0;
+}
+
+/* -- Daylight: rounded pill progress bars, soft rounded cards for rows/panels -- */
+[data-theme="friendly-saas"] .goal-progress-track,
+[data-theme="friendly-saas"] .goal-project-progress-track {
+  border-radius: 999px;
+  background: rgba(var(--ops-brand-rgb), 0.14);
+}
+
+[data-theme="friendly-saas"] .goal-progress-track span,
+[data-theme="friendly-saas"] .goal-project-progress-track span {
+  border-radius: 999px;
+  background: var(--ops-brand);
+}
+
+[data-theme="friendly-saas"] .goal-why-panel {
+  background: rgba(var(--ops-brand-rgb), 0.04);
+}
+
+[data-theme="friendly-saas"] .goal-metadata-editor {
+  border: none;
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="friendly-saas"] .goal-project-creator {
+  border-bottom: none;
+  border-radius: var(--ops-radius-sm);
+  background: var(--ops-panel);
+  box-shadow: var(--ops-shadow);
+  padding: 0.75rem;
+}
+
+[data-theme="friendly-saas"] .goal-project-row {
+  border-bottom: none;
+  border-radius: var(--ops-radius-sm);
+  margin-bottom: 0.5rem;
+  background: var(--ops-panel);
+  box-shadow: var(--ops-shadow);
+  padding: 0.65rem 0.85rem;
+}
+
+[data-theme="friendly-saas"] .goal-timeline-item {
+  border-bottom: none;
+  border-radius: var(--ops-radius-sm);
+  margin-bottom: 0.4rem;
+  background: var(--ops-panel);
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="friendly-saas"] .goal-timeline-marker {
+  border-radius: 999px;
 }

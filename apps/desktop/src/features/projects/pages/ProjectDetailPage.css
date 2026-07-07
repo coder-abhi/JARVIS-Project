@@ -14,9 +14,9 @@
   gap: 0.75rem;
   margin-top: 1rem;
   border: 1px solid var(--ops-border-strong);
-  background: #000;
+  background: var(--ops-panel);
   padding: 0.9rem;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
 }
 
 .project-metadata-editor label {
@@ -87,7 +87,7 @@
 .project-text-section {
   margin-top: 1.1rem;
   color: var(--ops-text);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
 }
 
 .project-text-section h2 {
@@ -151,7 +151,7 @@
 .project-filter-line select {
   min-height: 1.8rem;
   border: 1px solid var(--ops-border);
-  background: #000;
+  background: var(--ops-panel);
   color: var(--ops-text);
   padding: 0.2rem 0.45rem;
   font-size: 0.68rem;
@@ -209,7 +209,7 @@
 }
 
 .project-priority.high {
-  color: #f87171;
+  color: var(--ops-danger-soft);
 }
 
 .project-priority.medium {
@@ -267,19 +267,19 @@
 
 .project-delete-button {
   justify-self: end;
-  border: 1px solid rgba(239, 68, 68, 0.52);
-  background: #000;
-  color: #f87171;
+  border: 1px solid rgba(var(--ops-danger-rgb), 0.52);
+  background: var(--ops-panel);
+  color: var(--ops-danger-soft);
   padding: 0.32rem 0.5rem;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.6rem;
   font-weight: 700;
   text-transform: uppercase;
 }
 
 .project-delete-button:hover {
-  border-color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--ops-danger);
+  background: rgba(var(--ops-danger-rgb), 0.1);
 }
 
 .project-session-line.interactive:hover p:first-child {
@@ -291,7 +291,7 @@
   border-bottom: 1px solid var(--ops-border);
   color: var(--ops-muted);
   padding: 0.75rem 0;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
 }
 
 @media (max-width: 900px) {
@@ -306,4 +306,84 @@
   .project-filter-line {
     justify-content: start;
   }
+}
+
+/* -- Terminal: bracket-style priority badges, flat dense rows -- */
+[data-theme="dense-terminal"] .project-priority::before {
+  content: "[";
+}
+
+[data-theme="dense-terminal"] .project-priority::after {
+  content: "]";
+}
+
+[data-theme="dense-terminal"] .project-metadata-editor,
+[data-theme="dense-terminal"] .project-objective-row,
+[data-theme="dense-terminal"] .project-session-group,
+[data-theme="dense-terminal"] .project-delete-button {
+  border-radius: 0;
+}
+
+/* -- Daylight: rounded card editor, checkbox-style objective rows,
+      grouped session cards, tinted pill priority badges -- */
+[data-theme="friendly-saas"] .project-metadata-editor {
+  border: none;
+  border-radius: var(--ops-radius);
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="friendly-saas"] .project-filter-line select {
+  border-radius: var(--ops-radius-sm);
+}
+
+[data-theme="friendly-saas"] .project-objective-row {
+  border-bottom: none;
+  border-radius: var(--ops-radius-sm);
+  margin-bottom: 0.4rem;
+  background: var(--ops-panel);
+  box-shadow: var(--ops-shadow);
+  padding: 0.6rem 0.85rem;
+}
+
+[data-theme="friendly-saas"] .project-priority {
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  text-transform: none;
+  font-weight: 500;
+}
+
+[data-theme="friendly-saas"] .project-priority.low {
+  background: rgba(var(--ops-signal-rgb), 0.14);
+  color: var(--ops-signal);
+}
+
+[data-theme="friendly-saas"] .project-priority.medium {
+  background: rgba(var(--ops-warn-rgb), 0.14);
+  color: var(--ops-warn);
+}
+
+[data-theme="friendly-saas"] .project-priority.high {
+  background: rgba(var(--ops-danger-rgb), 0.14);
+  color: var(--ops-danger);
+}
+
+[data-theme="friendly-saas"] .project-session-group {
+  border-bottom: none;
+  border-radius: var(--ops-radius-sm);
+  margin-bottom: 0.5rem;
+  background: var(--ops-panel);
+  box-shadow: var(--ops-shadow);
+  padding: 0.75rem 0.85rem;
+}
+
+[data-theme="friendly-saas"] .project-delete-button {
+  border: none;
+  border-radius: var(--ops-radius-sm);
+  background: rgba(var(--ops-danger-rgb), 0.1);
+  text-transform: none;
+  font-weight: 500;
+}
+
+[data-theme="friendly-saas"] .project-delete-button:hover {
+  background: rgba(var(--ops-danger-rgb), 0.18);
 }

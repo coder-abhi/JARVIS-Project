@@ -22,11 +22,11 @@
 .marathon-period-select {
   appearance: none;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--ops-radius-sm);
   background: transparent;
   color: var(--ops-signal);
   cursor: pointer;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.65rem;
   text-align: right;
   text-transform: uppercase;
@@ -62,7 +62,7 @@
 .marathon-ranking-row,
 .marathon-empty {
   color: var(--ops-muted);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.68rem;
   text-transform: uppercase;
 }
@@ -70,7 +70,7 @@
 .marathon-latest strong {
   margin-top: 0.35rem;
   color: var(--ops-signal);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: clamp(2rem, 5vw, 3.25rem);
   line-height: 1;
 }
@@ -78,7 +78,7 @@
 .marathon-latest p {
   margin-top: 0.55rem;
   color: var(--ops-dim);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.68rem;
   text-transform: uppercase;
 }
@@ -112,8 +112,8 @@
 }
 
 .marathon-ranking-row.current-period {
-  border-color: rgba(34, 197, 94, 0.52);
-  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(var(--ops-signal-rgb), 0.52);
+  background: rgba(var(--ops-signal-rgb), 0.1);
   color: var(--ops-signal);
 }
 
@@ -153,7 +153,7 @@
   display: grid;
   gap: 0.30rem;
   color: var(--ops-muted);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -163,10 +163,10 @@
 .pomodoro-session-note {
   width: 100%;
   border: 0.75px solid var(--ops-border);
-  border-radius: 0;
-  background: #000;
+  border-radius: var(--ops-radius-sm);
+  background: var(--ops-panel);
   color: var(--ops-text);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   outline: none;
   transition:
     border-color 160ms ease,
@@ -216,7 +216,7 @@
 
 .pomodoro-log-row:hover {
   border-color: var(--ops-border-strong);
-  background: rgba(34, 197, 94, 0.08);
+  background: rgba(var(--ops-signal-rgb), 0.08);
 }
 
 .pomodoro-log-projects {
@@ -244,7 +244,7 @@
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: var(--pomodoro-log-description-size, 0.86rem);
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -311,4 +311,72 @@
   .pomodoro-log-description {
     max-height: 2.7rem;
   }
+}
+
+/* ==========================================================================
+   Appearance themes (Terminal / Daylight) — additive, scoped shape tweaks.
+   Default (Dark Green) rules above are untouched.
+   ========================================================================== */
+
+/* -- Terminal: bracketed period selector, tighter dense rows -- */
+[data-theme="dense-terminal"] .marathon-period-select {
+  color: var(--ops-brand);
+}
+
+[data-theme="dense-terminal"] .marathon-ranking-row {
+  min-height: 1.9rem;
+}
+
+[data-theme="dense-terminal"] .pomodoro-log-row {
+  min-height: 3.6rem;
+  padding: 0.4rem 0.6rem;
+}
+
+/* -- Daylight: pill period selector, soft rounded timer + rows -- */
+[data-theme="friendly-saas"] .marathon-period-select {
+  border-radius: 999px;
+  border: 1px solid var(--ops-border);
+  background: var(--ops-panel);
+  color: var(--ops-brand);
+  padding: 0.2rem 0.65rem;
+  text-transform: none;
+}
+
+[data-theme="friendly-saas"] .marathon-latest,
+[data-theme="friendly-saas"] .marathon-ranking {
+  border-radius: var(--ops-radius);
+  background: var(--ops-panel);
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="friendly-saas"] .marathon-ranking-row {
+  border-radius: var(--ops-radius-sm);
+  min-height: 2.9rem;
+}
+
+[data-theme="friendly-saas"] .marathon-ranking-row.current-period {
+  background: rgba(var(--ops-warn-rgb), 0.12);
+  border-color: rgba(var(--ops-warn-rgb), 0.5);
+}
+
+[data-theme="friendly-saas"] .pomodoro-live-session,
+[data-theme="friendly-saas"] .pomodoro-recent-panel {
+  border-radius: var(--ops-radius);
+  background: var(--ops-panel);
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="friendly-saas"] .pomodoro-project-select,
+[data-theme="friendly-saas"] .pomodoro-session-note {
+  border-radius: var(--ops-radius-sm);
+}
+
+[data-theme="friendly-saas"] .pomodoro-log-row {
+  border-radius: var(--ops-radius-sm);
+  background: var(--ops-panel);
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="friendly-saas"] .pomodoro-log-row:hover {
+  background: rgba(var(--ops-signal-rgb), 0.06);
 }

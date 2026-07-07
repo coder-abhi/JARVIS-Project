@@ -14,9 +14,16 @@ import {
   type ProjectBehaviorSettings,
 } from "@/lib/appSettings";
 import { getStoredUser } from "@/lib/auth";
+import { readTheme, saveTheme, themes, type AppTheme } from "@/lib/theme";
 import "./SettingsPage.css";
 
-type SettingsSection = "projects" | "mission-control" | "ai";
+type SettingsSection = "projects" | "mission-control" | "ai" | "appearance";
+
+const themeSwatches: Record<AppTheme, string[]> = {
+  "dark-green": ["#000000", "#030303", "#22c55e", "#f4f4f5"],
+  "dense-terminal": ["#000000", "#1a1a1a", "#ff8c00", "#00ff00"],
+  "friendly-saas": ["#fafafa", "#ffffff", "#4f46e5", "#16a34a"],
+};
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -30,6 +37,13 @@ export default function SettingsPage() {
   const [openSection, setOpenSection] = useState<SettingsSection | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [theme, setTheme] = useState<AppTheme>(() => readTheme());
+
+  function updateTheme(nextTheme: AppTheme) {
+    setTheme(nextTheme);
+    saveTheme(nextTheme);
+    setMessage(`Appearance set to ${themes.find((item) => item.id === nextTheme)?.label ?? nextTheme}.`);
+  }
 
   useEffect(() => {
     getAiFeatureSettings()
@@ -116,6 +130,12 @@ export default function SettingsPage() {
           label="AI Routing"
           meta={`${features.filter((feature) => feature.enabled).length}/${features.length || 0} enabled`}
           onClick={() => setOpenSection((current) => current === "ai" ? null : "ai")}
+        />
+        <SettingsSectionButton
+          active={openSection === "appearance"}
+          label="Appearance"
+          meta={themes.find((item) => item.id === theme)?.label ?? theme}
+          onClick={() => setOpenSection((current) => current === "appearance" ? null : "appearance")}
         />
       </nav>
 
@@ -249,6 +269,39 @@ export default function SettingsPage() {
               );
             })}
             {!features.length ? <p className="ops-empty">Loading AI controls...</p> : null}
+          </div>
+        </section>
+      ) : null}
+
+      {openSection === "appearance" ? (
+        <section className="ops-panel settings-panel settings-workspace">
+          <div className="ops-panel-head">
+            <h2>Appearance</h2>
+            <span>Visual theme for this device</span>
+          </div>
+          <p className="settings-panel-copy">
+            Purely visual — switching themes never changes your data, settings, or how features behave.
+          </p>
+          <div className="settings-theme-list">
+            {themes.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className={item.id === theme ? "settings-theme-card active" : "settings-theme-card"}
+                onClick={() => updateTheme(item.id)}
+              >
+                <span className="settings-theme-swatch">
+                  {themeSwatches[item.id].map((color, index) => (
+                    <span key={`${item.id}-${index}`} style={{ background: color }} />
+                  ))}
+                </span>
+                <div>
+                  <strong>{item.label}</strong>
+                  <p>{item.description}</p>
+                </div>
+                {item.id === theme ? <b>Active</b> : null}
+              </button>
+            ))}
           </div>
         </section>
       ) : null}

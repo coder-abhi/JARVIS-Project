@@ -103,7 +103,7 @@ export function LineTrendChart<T>({
                     key={`${value}-${index}`}
                     points={`0,${y} 100,${y}`}
                     fill="none"
-                    stroke="#e7e5e4"
+                    style={{ stroke: "var(--ops-border)" }}
                     strokeWidth="0.45"
                     vectorEffect="non-scaling-stroke"
                   />
@@ -112,7 +112,7 @@ export function LineTrendChart<T>({
               <polyline
                 points={`0,${averageY} 100,${averageY}`}
                 fill="none"
-                stroke="#f97316"
+                style={{ stroke: "var(--ops-warn)" }}
                 strokeDasharray="5 5"
                 strokeWidth="1.2"
                 vectorEffect="non-scaling-stroke"
@@ -120,7 +120,7 @@ export function LineTrendChart<T>({
               <polyline
                 points={linePoints}
                 fill="none"
-                stroke="#0d9488"
+                style={{ stroke: "var(--ops-brand)" }}
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth="2"

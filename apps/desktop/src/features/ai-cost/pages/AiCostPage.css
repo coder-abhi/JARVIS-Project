@@ -14,7 +14,7 @@
 .ai-cost-view-switch button {
   min-width: 2.8rem;
   border: 1px solid transparent;
-  background: #000;
+  background: var(--ops-panel);
   color: var(--ops-muted);
   padding: 0.38rem 0.55rem;
   font-family: inherit;
@@ -25,7 +25,7 @@
 
 .ai-cost-segment button.active,
 .ai-cost-view-switch button.active {
-  border-color: rgba(34, 197, 94, 0.68);
+  border-color: rgba(var(--ops-signal-rgb), 0.68);
   color: var(--ops-signal);
 }
 
@@ -39,7 +39,7 @@
 .ai-cost-metric {
   min-width: 0;
   border: 1px solid var(--ops-border);
-  background: rgba(3, 3, 3, 0.96);
+  background: var(--ops-panel);
   padding: 0.7rem;
 }
 
@@ -47,7 +47,7 @@
   display: block;
   min-height: 1.7em;
   color: var(--ops-muted);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -58,12 +58,12 @@
   margin-top: 0.28rem;
   overflow-wrap: anywhere;
   color: var(--ops-text);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 1.15rem;
 }
 
 .ai-cost-metric.signal {
-  border-color: rgba(34, 197, 94, 0.65);
+  border-color: rgba(var(--ops-signal-rgb), 0.65);
 }
 
 .ai-cost-metric.signal strong {
@@ -99,12 +99,12 @@
   align-items: center;
   gap: 1rem;
   border: 1px solid var(--ops-border);
-  background: #000;
+  background: var(--ops-panel);
   padding: 0.75rem;
 }
 
 .ai-feature-control.enabled {
-  border-color: rgba(34, 197, 94, 0.38);
+  border-color: rgba(var(--ops-signal-rgb), 0.38);
 }
 
 .ai-feature-control > div {
@@ -130,10 +130,10 @@
   gap: 0.45rem;
   min-width: 5.2rem;
   border: 1px solid var(--ops-border-strong);
-  background: #080808;
+  background: var(--ops-panel);
   color: var(--ops-muted);
   padding: 0.42rem 0.52rem;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   text-transform: uppercase;
 }
 
@@ -143,7 +143,7 @@
   width: 2rem;
   height: 1rem;
   border: 1px solid var(--ops-border-strong);
-  background: #111;
+  background: var(--ops-panel);
 }
 
 .ai-feature-toggle > span::after {
@@ -162,12 +162,12 @@
 }
 
 .ai-feature-toggle.enabled {
-  border-color: rgba(34, 197, 94, 0.7);
+  border-color: rgba(var(--ops-signal-rgb), 0.7);
   color: var(--ops-signal);
 }
 
 .ai-feature-toggle.enabled > span {
-  border-color: rgba(34, 197, 94, 0.65);
+  border-color: rgba(var(--ops-signal-rgb), 0.65);
 }
 
 .ai-feature-toggle.enabled > span::after {
@@ -221,7 +221,7 @@
 .ai-cost-bar-value {
   overflow: hidden;
   color: var(--ops-muted);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.5rem;
   white-space: nowrap;
 }
@@ -233,7 +233,7 @@
   border-bottom: 1px solid var(--ops-border-strong);
   background:
     linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    #000;
+    var(--ops-panel);
   background-size: 100% 25%;
 }
 
@@ -242,13 +242,13 @@
   width: 100%;
   min-height: 1px;
   background: var(--ops-signal);
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.22);
+  box-shadow: 0 0 8px rgba(var(--ops-signal-rgb), 0.22);
 }
 
 .ai-cost-day small {
   overflow: hidden;
   color: var(--ops-dim);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.52rem;
   white-space: nowrap;
 }
@@ -262,7 +262,7 @@
 
 .ai-token-line {
   border: 1px solid var(--ops-border);
-  background: #000;
+  background: var(--ops-panel);
   padding: 0.6rem;
 }
 
@@ -277,7 +277,7 @@
 .ai-request-health span,
 .ai-feature-bar-row span {
   color: var(--ops-muted);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.62rem;
   text-transform: uppercase;
 }
@@ -287,8 +287,8 @@
   display: block;
   height: 0.35rem;
   margin-top: 0.45rem;
-  border: 1px solid rgba(34, 197, 94, 0.35);
-  background: #000;
+  border: 1px solid rgba(var(--ops-signal-rgb), 0.35);
+  background: var(--ops-panel);
 }
 
 .ai-token-track > span,
@@ -307,7 +307,7 @@
 
 .ai-request-health > div {
   border: 1px solid var(--ops-border);
-  background: #000;
+  background: var(--ops-panel);
   padding: 0.6rem;
 }
 
@@ -319,11 +319,11 @@
 }
 
 .ai-request-health .danger {
-  border-color: rgba(239, 68, 68, 0.55);
+  border-color: rgba(var(--ops-danger-rgb), 0.55);
 }
 
 .ai-request-health .danger strong {
-  color: #f87171;
+  color: var(--ops-danger-soft);
 }
 
 .ai-feature-bar-row {
@@ -332,7 +332,7 @@
   align-items: center;
   gap: 0.75rem;
   border: 1px solid var(--ops-border);
-  background: #000;
+  background: var(--ops-panel);
   padding: 0.6rem;
 }
 
@@ -347,7 +347,7 @@
 
 .ai-feature-bar-row > strong:last-child {
   color: var(--ops-signal);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   text-align: right;
 }
 
@@ -367,7 +367,7 @@
 .ai-feature-row strong,
 .ai-recent-row strong {
   color: var(--ops-signal);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
 }
 
 .ai-feature-row i {
@@ -431,4 +431,63 @@
   .ai-feature-bar-row > strong:last-child {
     text-align: left;
   }
+}
+
+/* -- Terminal: feature toggles as bracketed on/off text -- */
+[data-theme="dense-terminal"] .ai-feature-toggle {
+  border: none;
+  background: transparent;
+  padding: 0.42rem 0;
+}
+
+[data-theme="dense-terminal"] .ai-feature-toggle::before {
+  margin-right: 0.15rem;
+  color: var(--ops-dim);
+  content: "[";
+}
+
+[data-theme="dense-terminal"] .ai-feature-toggle::after {
+  margin-left: 0.15rem;
+  color: var(--ops-dim);
+  content: "]";
+}
+
+/* -- Daylight: rounded stacked bars, stat cards, and real switch toggles -- */
+[data-theme="friendly-saas"] .ai-cost-metric {
+  border-radius: var(--ops-radius-sm);
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="friendly-saas"] .ai-cost-bar-track {
+  border-radius: var(--ops-radius-sm);
+}
+
+[data-theme="friendly-saas"] .ai-token-track,
+[data-theme="friendly-saas"] .ai-feature-track {
+  border-radius: 999px;
+}
+
+[data-theme="friendly-saas"] .ai-token-track > span,
+[data-theme="friendly-saas"] .ai-feature-track > span {
+  border-radius: 999px;
+}
+
+[data-theme="friendly-saas"] .ai-feature-control,
+[data-theme="friendly-saas"] .ai-token-line,
+[data-theme="friendly-saas"] .ai-request-health > div,
+[data-theme="friendly-saas"] .ai-feature-bar-row {
+  border-radius: var(--ops-radius-sm);
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="friendly-saas"] .ai-feature-toggle {
+  border-radius: 999px;
+}
+
+[data-theme="friendly-saas"] .ai-feature-toggle > span {
+  border-radius: 999px;
+}
+
+[data-theme="friendly-saas"] .ai-feature-toggle > span::after {
+  border-radius: 999px;
 }

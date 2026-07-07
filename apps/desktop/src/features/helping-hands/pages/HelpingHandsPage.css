@@ -19,7 +19,7 @@
   display: grid;
   gap: 0.2rem;
   color: var(--ops-dim);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.58rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -48,7 +48,7 @@
 
 .helping-summary-card.featured {
   grid-column: span 2;
-  border-color: rgba(34, 197, 94, 0.55);
+  border-color: rgba(var(--ops-signal-rgb), 0.55);
 }
 
 .helping-summary-card > span,
@@ -60,7 +60,7 @@
 .helping-recent-row small,
 .helping-all-transaction-row small {
   color: var(--ops-muted);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.6rem;
   text-transform: uppercase;
 }
@@ -70,7 +70,7 @@
   margin-top: 0.42rem;
   overflow-wrap: anywhere;
   color: var(--ops-text);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 1.2rem;
 }
 
@@ -88,7 +88,7 @@
 
 .helping-summary-card.danger > strong,
 .helping-negative {
-  color: #f87171 !important;
+  color: var(--ops-danger-soft) !important;
 }
 
 .helping-warning {
@@ -106,7 +106,7 @@
   background: transparent;
   color: var(--ops-signal);
   cursor: pointer;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.59rem;
   font-weight: 700;
   text-decoration: none;
@@ -114,7 +114,7 @@
 }
 
 .helping-inline-button {
-  border: 1px solid rgba(34, 197, 94, 0.55);
+  border: 1px solid rgba(var(--ops-signal-rgb), 0.55);
   padding: 0.3rem 0.45rem;
 }
 
@@ -139,7 +139,7 @@
   border-bottom: 1px solid var(--ops-border);
   padding: 0.58rem 0.45rem;
   color: var(--ops-muted);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.63rem;
 }
 
@@ -178,7 +178,7 @@
 .helping-member-row.footer {
   border-top: 1px solid var(--ops-border-strong);
   border-bottom: 0;
-  background: rgba(34, 197, 94, 0.06);
+  background: rgba(var(--ops-signal-rgb), 0.06);
   color: var(--ops-text);
   text-transform: uppercase;
 }
@@ -201,7 +201,7 @@
   border: 1px solid var(--ops-border);
   color: var(--ops-muted);
   padding: 0.28rem 0.4rem;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.55rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -220,14 +220,14 @@
 
 .helping-status.signal,
 .helping-direction.received {
-  border-color: rgba(34, 197, 94, 0.55);
+  border-color: rgba(var(--ops-signal-rgb), 0.55);
   color: var(--ops-signal);
 }
 
 .helping-status.danger,
 .helping-direction.sent {
   border-color: rgba(248, 113, 113, 0.62);
-  color: #f87171;
+  color: var(--ops-danger-soft);
 }
 
 .helping-status.warning,
@@ -238,7 +238,7 @@
 
 .helping-source.cash {
   border-color: rgba(248, 113, 113, 0.5);
-  color: #f87171;
+  color: var(--ops-danger-soft);
 }
 
 .helping-allocation-rules {
@@ -253,13 +253,13 @@
   grid-template-columns: 2rem minmax(0, 1fr);
   gap: 0.55rem;
   border: 1px solid var(--ops-border);
-  background: #000;
+  background: var(--ops-panel);
   padding: 0.65rem;
 }
 
 .helping-allocation-rules article > span {
   color: var(--ops-signal);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.62rem;
   font-weight: 700;
 }
@@ -293,7 +293,7 @@
 
 .helping-rules-divider span,
 .helping-rules-divider small {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -326,18 +326,18 @@
 }
 
 .helping-recent-row:hover {
-  background: rgba(34, 197, 94, 0.05);
+  background: rgba(var(--ops-signal-rgb), 0.05);
 }
 
 .helping-recent-row > strong {
   color: var(--ops-text);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.66rem;
 }
 
 .helping-recent-row > span,
 .helping-recent-row > small {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.61rem;
 }
 
@@ -357,7 +357,7 @@
 
 .helping-rule-grid article {
   border: 1px solid var(--ops-border);
-  background: #000;
+  background: var(--ops-panel);
   padding: 0.65rem;
 }
 
@@ -369,7 +369,7 @@
 .helping-rule-grid strong {
   margin-top: 0.25rem;
   color: var(--ops-text);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.78rem;
   text-transform: uppercase;
 }
@@ -385,7 +385,7 @@
   border: 1px dashed var(--ops-border);
   color: var(--ops-dim);
   padding: 1rem;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.62rem;
   line-height: 1.5;
   text-align: center;
@@ -408,7 +408,7 @@
 .helping-transaction-toolbar > div strong,
 .helping-transaction-toolbar > div span {
   display: block;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
 }
 
 .helping-transaction-toolbar > div strong {
@@ -419,7 +419,7 @@
 .helping-transaction-toolbar > div span,
 .helping-transaction-toolbar label {
   color: var(--ops-dim);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.58rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -445,7 +445,7 @@
 }
 
 .helping-actions button.danger {
-  color: #f87171;
+  color: var(--ops-danger-soft);
 }
 
 .helping-modal-backdrop {
@@ -483,7 +483,7 @@
 .helping-modal h2 {
   margin: 0.25rem 0 0;
   color: var(--ops-text);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 1rem;
   text-transform: uppercase;
 }
@@ -492,7 +492,7 @@
   width: 2rem;
   height: 2rem;
   border: 1px solid var(--ops-border);
-  background: #000;
+  background: var(--ops-panel);
   color: var(--ops-muted);
   cursor: pointer;
   font-size: 1.1rem;
@@ -508,23 +508,23 @@
 .helping-direction-switch button {
   min-height: 3rem;
   border: 1px solid var(--ops-border);
-  background: #000;
+  background: var(--ops-panel);
   color: var(--ops-muted);
   cursor: pointer;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
 }
 
 .helping-direction-switch button.active.received {
-  border-color: rgba(34, 197, 94, 0.75);
+  border-color: rgba(var(--ops-signal-rgb), 0.75);
   color: var(--ops-signal);
 }
 
 .helping-direction-switch button.active.sent {
   border-color: rgba(248, 113, 113, 0.75);
-  color: #f87171;
+  color: var(--ops-danger-soft);
 }
 
 .helping-direction-switch button:disabled,
@@ -560,7 +560,7 @@
 
 .helping-field > span {
   color: var(--ops-muted);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.61rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -572,7 +572,7 @@
   width: 100%;
   min-height: 2.35rem;
   border: 1px solid var(--ops-border);
-  border-radius: 0;
+  border-radius: var(--ops-radius-sm);
   padding: 0.5rem 0.6rem;
   outline: none;
 }
@@ -635,4 +635,113 @@
   .helping-actions {
     justify-content: flex-start;
   }
+}
+
+/* ==========================================================================
+   Appearance themes (Terminal / Daylight) — additive, scoped shape tweaks.
+   Default (Dark Green) rules above are untouched.
+   ========================================================================== */
+
+/* -- Terminal: bracketed badges, flat tight tables -- */
+[data-theme="dense-terminal"] .helping-status,
+[data-theme="dense-terminal"] .helping-source,
+[data-theme="dense-terminal"] .helping-direction {
+  border: none;
+  background: transparent;
+  padding: 0.15rem 0.2rem;
+}
+
+[data-theme="dense-terminal"] .helping-status::before,
+[data-theme="dense-terminal"] .helping-source::before,
+[data-theme="dense-terminal"] .helping-direction::before {
+  content: "[";
+}
+
+[data-theme="dense-terminal"] .helping-status::after,
+[data-theme="dense-terminal"] .helping-source::after,
+[data-theme="dense-terminal"] .helping-direction::after {
+  content: "]";
+}
+
+[data-theme="dense-terminal"] .helping-allocation-rules article,
+[data-theme="dense-terminal"] .helping-rule-grid article {
+  background: var(--ops-black);
+}
+
+/* -- Daylight: pill badges, rounded cards, comfy row height -- */
+[data-theme="friendly-saas"] .helping-status,
+[data-theme="friendly-saas"] .helping-source,
+[data-theme="friendly-saas"] .helping-direction {
+  border: none;
+  border-radius: 999px;
+  background: rgba(var(--ops-info-rgb), 0.14);
+  color: var(--ops-info);
+  text-transform: none;
+  font-weight: 500;
+}
+
+[data-theme="friendly-saas"] .helping-status.signal,
+[data-theme="friendly-saas"] .helping-direction.received {
+  background: rgba(var(--ops-signal-rgb), 0.14);
+  color: var(--ops-signal);
+}
+
+[data-theme="friendly-saas"] .helping-status.danger,
+[data-theme="friendly-saas"] .helping-direction.sent,
+[data-theme="friendly-saas"] .helping-source.cash {
+  background: rgba(var(--ops-danger-rgb), 0.14);
+  color: var(--ops-danger);
+}
+
+[data-theme="friendly-saas"] .helping-status.warning,
+[data-theme="friendly-saas"] .helping-source.missed_contribution {
+  background: rgba(var(--ops-warn-rgb), 0.14);
+  color: var(--ops-warn);
+}
+
+[data-theme="friendly-saas"] .helping-summary-card {
+  border-radius: var(--ops-radius);
+  background: var(--ops-panel);
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="friendly-saas"] .helping-allocation-rules article,
+[data-theme="friendly-saas"] .helping-rule-grid article {
+  border-radius: var(--ops-radius-sm);
+  background: var(--ops-panel);
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="friendly-saas"] .helping-member-row,
+[data-theme="friendly-saas"] .helping-loan-row,
+[data-theme="friendly-saas"] .helping-interest-row,
+[data-theme="friendly-saas"] .helping-all-transaction-row,
+[data-theme="friendly-saas"] .helping-recent-row {
+  min-height: 3rem;
+}
+
+[data-theme="friendly-saas"] .helping-member-row.head,
+[data-theme="friendly-saas"] .helping-loan-row.head,
+[data-theme="friendly-saas"] .helping-interest-row.head,
+[data-theme="friendly-saas"] .helping-all-transaction-row.head {
+  background: rgba(0, 0, 0, 0.02);
+  text-transform: none;
+  font-weight: 500;
+}
+
+[data-theme="friendly-saas"] .helping-modal {
+  background: var(--ops-panel);
+  background-image: none;
+  border-radius: var(--ops-radius);
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="friendly-saas"] .helping-modal-head > button {
+  border-radius: 999px;
+}
+
+[data-theme="friendly-saas"] .helping-direction-switch button {
+  border-radius: var(--ops-radius-sm);
+  text-transform: none;
+  font-weight: 500;
 }

@@ -11,14 +11,14 @@
 
 .reading-log-panel {
   border: 1px solid var(--ops-border);
-  background: rgba(3, 3, 3, 0.96);
+  background: var(--ops-panel);
   padding: 0.85rem;
 }
 
 .reading-log-panel h2 {
   margin: 0.18rem 0 0;
   color: var(--ops-text);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0;
@@ -58,7 +58,7 @@
   gap: 0.25rem;
   min-width: 0;
   color: var(--ops-muted) !important;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.62rem !important;
   font-weight: 700 !important;
   text-transform: uppercase;
@@ -76,11 +76,11 @@
   min-width: 0;
   border: 0 !important;
   border-bottom: 1px solid var(--ops-border-strong) !important;
-  border-radius: 0;
-  background: #000 !important;
+  border-radius: var(--ops-radius-sm);
+  background: var(--ops-panel) !important;
   color: var(--ops-text) !important;
   padding: 0 0.15rem;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.72rem;
   font-weight: 700;
   outline: none;
@@ -138,4 +138,15 @@
   .reading-log-button {
     grid-column: auto;
   }
+}
+
+/* -- Daylight: reading log as a rounded form card -- */
+[data-theme="friendly-saas"] .reading-log-panel {
+  border-radius: var(--ops-radius);
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="friendly-saas"] .reading-log-form label {
+  text-transform: none;
+  font-weight: 500;
 }

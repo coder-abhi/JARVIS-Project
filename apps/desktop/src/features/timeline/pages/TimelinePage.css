@@ -11,7 +11,7 @@
 .mission-schedule-embedded-head h2 {
   margin: 0.15rem 0 0;
   color: var(--ops-text);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 1rem;
   text-transform: uppercase;
 }
@@ -64,17 +64,17 @@
 .timeline-filter-button {
   min-height: 1.75rem;
   border: 1px solid transparent;
-  background: #000;
+  background: var(--ops-panel);
   color: var(--ops-muted);
   padding: 0.3rem 0.55rem;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
 }
 
 .timeline-view-switcher button.active {
-  border-color: rgba(34, 197, 94, 0.65);
+  border-color: rgba(var(--ops-signal-rgb), 0.65);
   color: var(--ops-signal);
 }
 
@@ -87,7 +87,7 @@
 }
 
 .timeline-filter-button.active {
-  border-color: rgba(34, 197, 94, 0.65);
+  border-color: rgba(var(--ops-signal-rgb), 0.65);
   color: var(--ops-signal);
 }
 
@@ -100,7 +100,7 @@
   width: 15rem;
   gap: 0.65rem;
   border: 1px solid var(--ops-border-strong);
-  background: #000;
+  background: var(--ops-panel);
   padding: 0.75rem;
   box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.45);
 }
@@ -109,7 +109,7 @@
   display: grid;
   gap: 0.3rem;
   color: var(--ops-muted);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.6rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -119,7 +119,7 @@
 .timeline-filter-popover input {
   min-width: 0;
   border: 1px solid var(--ops-border);
-  background: #050505;
+  background: var(--ops-panel);
   color: var(--ops-text);
   padding: 0.5rem;
   font: inherit;
@@ -139,10 +139,10 @@
 
 .timeline-filter-clear {
   border: 1px solid var(--ops-border);
-  background: #050505;
+  background: var(--ops-panel);
   color: var(--ops-muted);
   padding: 0.5rem;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.6rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -181,14 +181,14 @@
 
 .timeline-grid-head,
 .timeline-project-row {
-  background: #000;
+  background: var(--ops-panel);
 }
 
 .timeline-task-column,
 .timeline-project-row > div:first-child {
   padding: 0.75rem 1rem;
   color: var(--ops-muted);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.64rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -209,7 +209,7 @@
 
 .timeline-date-column p {
   margin: 0;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.6rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -241,9 +241,9 @@
   top: 0.25rem;
   left: 0.3rem;
   padding: 0.15rem 0.25rem;
-  background: #000;
+  background: var(--ops-panel);
   color: var(--ops-signal);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.58rem;
   font-weight: 700;
   white-space: nowrap;
@@ -305,7 +305,7 @@
   height: 1.75rem;
   overflow: hidden;
   border: 1px solid var(--ops-border-strong);
-  background: #070707;
+  background: var(--ops-panel);
   transform: translateY(-50%);
 }
 
@@ -318,7 +318,7 @@
 
 .timeline-task-track.in_progress .timeline-task-fill,
 .timeline-task-track.done .timeline-task-fill {
-  background: rgba(34, 197, 94, 0.45);
+  background: rgba(var(--ops-signal-rgb), 0.45);
 }
 
 .timeline-task-percent {
@@ -327,7 +327,7 @@
   display: grid;
   place-items: center;
   color: var(--ops-text);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.62rem;
   font-weight: 700;
 }
@@ -341,7 +341,7 @@
   cursor: ew-resize;
   border: 0;
   border-left: 1px solid var(--ops-border-strong);
-  background: #111;
+  background: var(--ops-panel);
 }
 
 .timeline-text-list,
@@ -365,7 +365,7 @@
 
 .timeline-text-row span,
 .timeline-text-row strong {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.66rem;
 }
 
@@ -409,7 +409,7 @@
 }
 
 .timeline-project-link span {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--ops-font-mono);
   font-size: 0.6rem;
   text-transform: uppercase;
   white-space: nowrap;
@@ -435,4 +435,84 @@
   .timeline-project-link span:nth-of-type(3) {
     display: none;
   }
+}
+
+/* -- Terminal: bracketed hotkey controls instead of bordered boxes -- */
+[data-theme="dense-terminal"] .timeline-view-switcher button,
+[data-theme="dense-terminal"] .timeline-today-button,
+[data-theme="dense-terminal"] .timeline-filter-button {
+  border-color: transparent;
+  background: transparent;
+}
+
+[data-theme="dense-terminal"] .timeline-today-button::before,
+[data-theme="dense-terminal"] .timeline-filter-button::before {
+  margin-right: 0.15rem;
+  color: var(--ops-dim);
+  content: "[";
+}
+
+[data-theme="dense-terminal"] .timeline-today-button::after,
+[data-theme="dense-terminal"] .timeline-filter-button::after {
+  margin-left: 0.15rem;
+  color: var(--ops-dim);
+  content: "]";
+}
+
+/* -- Daylight: pill segmented controls -- */
+[data-theme="friendly-saas"] .timeline-view-switcher {
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="friendly-saas"] .timeline-view-switcher button,
+[data-theme="friendly-saas"] .timeline-today-button,
+[data-theme="friendly-saas"] .timeline-filter-button {
+  border-radius: 999px;
+  text-transform: none;
+  font-weight: 500;
+}
+
+[data-theme="friendly-saas"] .timeline-view-switcher button.active,
+[data-theme="friendly-saas"] .timeline-filter-button.active {
+  background: var(--ops-panel);
+  box-shadow: var(--ops-shadow);
+}
+
+[data-theme="friendly-saas"] .timeline-today-button {
+  border-color: var(--ops-border);
+}
+
+[data-theme="friendly-saas"] .timeline-filter-popover {
+  border-radius: var(--ops-radius);
+  box-shadow: var(--ops-shadow);
+}
+
+/* -- Daylight: rounded pill task bars -- */
+[data-theme="friendly-saas"] .timeline-task-track {
+  border-radius: 999px;
+  background: rgba(var(--ops-brand-rgb), 0.12);
+}
+
+[data-theme="friendly-saas"] .timeline-task-fill {
+  border-radius: 999px;
+}
+
+[data-theme="friendly-saas"] .timeline-task-track.in_progress .timeline-task-fill,
+[data-theme="friendly-saas"] .timeline-task-track.done .timeline-task-fill {
+  background: var(--ops-signal);
+}
+
+[data-theme="friendly-saas"] .timeline-status-mark {
+  border-radius: 999px;
+}
+
+/* -- Daylight: softly rounded project register rows -- */
+[data-theme="friendly-saas"] .timeline-project-link {
+  border-top: none;
+  border-radius: var(--ops-radius-sm);
+  background: var(--ops-panel);
+  padding: 0.7rem 0.85rem;
+  box-shadow: var(--ops-shadow);
 }

@@ -159,3 +159,66 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Appearance themes: shell/sidebar */
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) .desktop-shell,
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) .desktop-content,
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) .auth-content {
+  background: var(--ops-black);
+}
+
+[data-theme="dense-terminal"] .desktop-sidebar {
+  background: var(--ops-black);
+  backdrop-filter: none;
+}
+
+[data-theme="friendly-saas"] .desktop-sidebar {
+  background: var(--ops-panel);
+  backdrop-filter: none;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) .brand-mark {
+  border-color: var(--ops-brand);
+  color: var(--ops-brand);
+  background: transparent;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) .sidebar-nav span {
+  border-color: rgba(var(--ops-brand-rgb), 0.42);
+  color: var(--ops-brand);
+  background: transparent;
+}
+
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) .sidebar-footer .sidebar-user-link:hover,
+:is([data-theme="dense-terminal"], [data-theme="friendly-saas"]) .sidebar-footer .sidebar-user-link.active {
+  border-color: rgba(var(--ops-brand-rgb), 0.6);
+  color: var(--ops-brand);
+}
+
+[data-theme="friendly-saas"] .brand-lockup,
+[data-theme="friendly-saas"] .brand-mark,
+[data-theme="friendly-saas"] .sidebar-nav a,
+[data-theme="friendly-saas"] .sidebar-nav span,
+[data-theme="friendly-saas"] .sidebar-footer .sidebar-user-link {
+  border-radius: var(--ops-radius-sm);
+}
+
+[data-theme="friendly-saas"] .brand-lockup strong,
+[data-theme="friendly-saas"] .sidebar-nav a,
+[data-theme="friendly-saas"] .sidebar-footer {
+  font-family: var(--ops-font);
+  text-transform: none;
+  font-weight: 500;
+}
+
+[data-theme="friendly-saas"] .sidebar-nav a:hover,
+[data-theme="friendly-saas"] .sidebar-nav a.active {
+  background: rgba(var(--ops-brand-rgb), 0.1);
+  border-color: transparent;
+  color: var(--ops-brand);
+}
+
+[data-theme="dense-terminal"] .sidebar-nav a:hover,
+[data-theme="dense-terminal"] .sidebar-nav a.active {
+  background: #0a0a0a;
+}
