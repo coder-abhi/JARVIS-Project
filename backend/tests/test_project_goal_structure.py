@@ -6,8 +6,13 @@ from unittest.mock import patch
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 
-from app import crud, models, schemas
+from app import models, schemas
 from app.database import Base
+from app.features.ai import service as ai_service
+from app.features.goals import service as goals_service
+from app.features.projects import repository as projects_repository
+from app.features.projects import service as projects_service
+from app.features.tasks import service as tasks_service
 
 
 class ProjectGoalStructureTests(unittest.TestCase):
@@ -47,7 +52,7 @@ class ProjectGoalStructureTests(unittest.TestCase):
         self.session.add(goal)
         self.session.commit()
 
-        project = crud.create_project(
+        project = projects_service.create_project(
             self.session,
             schemas.ProjectCreate(
                 name="Release",
@@ -56,7 +61,7 @@ class ProjectGoalStructureTests(unittest.TestCase):
             ),
             self.user,
         )
-        task = crud.create_task(
+        task = tasks_service.create_task(
             self.session,
             schemas.TaskCreate(
                 project_id=project.id,
@@ -64,10 +69,10 @@ class ProjectGoalStructureTests(unittest.TestCase):
             ),
         )
 
-        task_read = crud._goal_task_read(crud.list_goal_active_tasks(self.session, self.user)[0])
+        task_read = goals_service.goal_task_read(goals_service.list_goal_active_tasks(self.session, self.user)[0])
         self.assertEqual([linked_goal.id for linked_goal in task_read.linked_goals], [goal.id])
 
-        completion = crud.complete_goal_task(self.session, task.id, self.user)
+        completion = goals_service.complete_goal_task(self.session, task.id, self.user)
         self.assertIsNotNone(completion)
         self.session.refresh(goal)
         self.assertEqual(goal.current_value, 1)
@@ -84,7 +89,7 @@ class ProjectGoalStructureTests(unittest.TestCase):
         )
         self.session.add(goal)
         self.session.commit()
-        project = crud.create_project(
+        project = projects_service.create_project(
             self.session,
             schemas.ProjectCreate(
                 name="Release",
@@ -93,7 +98,7 @@ class ProjectGoalStructureTests(unittest.TestCase):
             ),
             self.user,
         )
-        task = crud.create_task(
+        task = tasks_service.create_task(
             self.session,
             schemas.TaskCreate(
                 project_id=project.id,
@@ -103,27 +108,27 @@ class ProjectGoalStructureTests(unittest.TestCase):
         )
 
         self.assertEqual(task.completion_percentage, 45)
-        completed = crud.update_task(
+        completed = tasks_service.update_task(
             self.session,
             task.id,
             schemas.TaskUpdate(status=models.TaskStatus.done),
             self.user,
         )
         self.assertEqual(completed.completion_percentage, 100)
-        overview = crud.get_goals_overview(self.session, self.user)
+        overview = goals_service.get_goals_overview(self.session, self.user)
         self.assertEqual(len(overview.recent_completed_tasks), 1)
         self.assertEqual(overview.recent_completed_tasks[0].task.completion_percentage, 100)
         self.session.refresh(goal)
         self.assertEqual(goal.current_value, 1)
 
-        reopened = crud.update_task(
+        reopened = tasks_service.update_task(
             self.session,
             task.id,
             schemas.TaskUpdate(status=models.TaskStatus.in_progress, completion_percentage=60),
             self.user,
         )
         self.assertEqual(reopened.completion_percentage, 60)
-        self.assertEqual(crud.list_recent_goal_completions(self.session, self.user), [])
+        self.assertEqual(goals_service.list_recent_goal_completions(self.session, self.user), [])
         self.session.refresh(goal)
         self.assertEqual(goal.current_value, 0)
 
@@ -144,7 +149,7 @@ class ProjectGoalStructureTests(unittest.TestCase):
         self.session.add_all([first_goal, second_goal])
         self.session.commit()
 
-        project = crud.create_project(
+        project = projects_service.create_project(
             self.session,
             schemas.ProjectCreate(
                 name="Content",
@@ -156,7 +161,7 @@ class ProjectGoalStructureTests(unittest.TestCase):
         )
         self.assertEqual([goal.id for goal in project.linked_goals], [first_goal.id, second_goal.id])
 
-        updated = crud.update_project(
+        updated = projects_service.update_project(
             self.session,
             project.id,
             schemas.ProjectUpdate(
@@ -173,7 +178,7 @@ class ProjectGoalStructureTests(unittest.TestCase):
         self.assertEqual(updated.description, "Posts, essays, and publishing tasks.")
         self.assertEqual(updated.type, models.ProjectType.fixed)
         self.assertEqual([goal.id for goal in updated.linked_goals], [second_goal.id])
-        summary = next(item for item in crud.list_project_summaries(self.session, self.user) if item.id == project.id)
+        summary = next(item for item in projects_service.list_project_summaries(self.session, self.user) if item.id == project.id)
         self.assertEqual(summary.description, "Posts, essays, and publishing tasks.")
         self.assertEqual(summary.goal_id, second_goal.id)
         self.assertEqual([goal.id for goal in summary.linked_goals], [second_goal.id])
@@ -187,7 +192,7 @@ class ProjectGoalStructureTests(unittest.TestCase):
         )
         self.session.add(goal)
         self.session.commit()
-        project = crud.create_project(
+        project = projects_service.create_project(
             self.session,
             schemas.ProjectCreate(
                 name="General Work",
@@ -196,19 +201,19 @@ class ProjectGoalStructureTests(unittest.TestCase):
             self.user,
         )
 
-        crud.update_project(
+        projects_service.update_project(
             self.session,
             project.id,
             schemas.ProjectUpdate(type=models.ProjectType.fixed, goal_id=goal.id),
             self.user,
         )
-        reused = crud._get_or_create_general_work_project(self.session, self.user)
+        reused = projects_repository.get_or_create_general_work_project(self.session, self.user)
 
         self.assertEqual(reused.type, models.ProjectType.fixed)
         self.assertEqual(reused.parent_goal.id, goal.id)
 
     def test_goal_log_uses_existing_project_or_general_work_only(self) -> None:
-        project = crud.create_project(
+        project = projects_service.create_project(
             self.session,
             schemas.ProjectCreate(
                 name="Content Engine",
@@ -219,8 +224,8 @@ class ProjectGoalStructureTests(unittest.TestCase):
         )
 
         with patch.object(
-            crud,
-            "_call_openai_json",
+            ai_service,
+            "call_ai_json",
             return_value={
                 "corrected_text": "Draft a LinkedIn post",
                 "project_id": project.id,
@@ -228,18 +233,18 @@ class ProjectGoalStructureTests(unittest.TestCase):
                 "importance": 4,
             },
         ):
-            response = crud.log_goal_entry(
+            response = goals_service.log_goal_entry(
                 self.session,
                 schemas.GoalLogRequest(text="+ draft linkedin post"),
                 self.user,
             )
 
         self.assertEqual(response.task.project_id, project.id)
-        self.assertEqual(len(crud.list_projects(self.session, self.user)), 1)
+        self.assertEqual(len(projects_service.list_projects(self.session, self.user)), 1)
 
         with patch.object(
-            crud,
-            "_call_openai_json",
+            ai_service,
+            "call_ai_json",
             return_value={
                 "corrected_text": "Handle an unmatched errand",
                 "project_id": None,
@@ -247,16 +252,16 @@ class ProjectGoalStructureTests(unittest.TestCase):
                 "importance": 2,
             },
         ):
-            fallback_response = crud.log_goal_entry(
+            fallback_response = goals_service.log_goal_entry(
                 self.session,
                 schemas.GoalLogRequest(text="+ handle unmatched errand"),
                 self.user,
             )
 
-        fallback_project = crud.get_project(self.session, fallback_response.task.project_id, self.user)
+        fallback_project = projects_service.get_project(self.session, fallback_response.task.project_id, self.user)
         self.assertEqual(fallback_project.name, "General Work")
         self.assertEqual(fallback_project.type, models.ProjectType.continuous)
-        self.assertFalse(any(item.name.endswith(" Actions") for item in crud.list_projects(self.session, self.user)))
+        self.assertFalse(any(item.name.endswith(" Actions") for item in projects_service.list_projects(self.session, self.user)))
 
     def test_project_completion_history_and_task_deletion_stay_consistent(self) -> None:
         goal = models.Goal(
@@ -270,7 +275,7 @@ class ProjectGoalStructureTests(unittest.TestCase):
         )
         self.session.add(goal)
         self.session.commit()
-        project = crud.create_project(
+        project = projects_service.create_project(
             self.session,
             schemas.ProjectCreate(
                 name="Delivery",
@@ -279,7 +284,7 @@ class ProjectGoalStructureTests(unittest.TestCase):
             ),
             self.user,
         )
-        task = crud.create_task(
+        task = tasks_service.create_task(
             self.session,
             schemas.TaskCreate(
                 project_id=project.id,
@@ -287,32 +292,32 @@ class ProjectGoalStructureTests(unittest.TestCase):
                 time_spent_hours=1.5,
             ),
         )
-        completion = crud.complete_goal_task(self.session, task.id, self.user)
+        completion = goals_service.complete_goal_task(self.session, task.id, self.user)
 
-        project_history = crud.list_goal_completions_by_project(self.session, project.id, self.user)
+        project_history = goals_service.list_goal_completions_by_project(self.session, project.id, self.user)
         self.assertEqual([item.id for item in project_history], [completion.id])
-        self.assertTrue(crud.delete_task(self.session, task.id, self.user))
-        self.assertEqual(crud.list_tasks_by_project(self.session, project.id), [])
-        self.assertEqual(crud.list_goal_completions_by_project(self.session, project.id, self.user), [])
+        self.assertTrue(tasks_service.delete_task(self.session, task.id, self.user))
+        self.assertEqual(tasks_service.list_tasks_by_project(self.session, project.id), [])
+        self.assertEqual(goals_service.list_goal_completions_by_project(self.session, project.id, self.user), [])
         self.session.refresh(goal)
         self.assertEqual(goal.current_value, 0)
 
     def test_direct_completion_can_be_deleted_without_creating_a_task(self) -> None:
-        project = crud.create_project(
+        project = projects_service.create_project(
             self.session,
             schemas.ProjectCreate(name="General Work", type=models.ProjectType.continuous),
             self.user,
         )
-        completion = crud.create_goal_completion_log(
+        completion = goals_service.create_goal_completion_log(
             self.session,
             self.user,
             "Handled the admin task",
             project,
         )
 
-        self.assertTrue(crud.delete_goal_completion(self.session, completion.id, self.user))
-        self.assertEqual(crud.list_goal_completions_by_project(self.session, project.id, self.user), [])
-        self.assertEqual(crud.list_tasks_by_project(self.session, project.id), [])
+        self.assertTrue(goals_service.delete_goal_completion(self.session, completion.id, self.user))
+        self.assertEqual(goals_service.list_goal_completions_by_project(self.session, project.id, self.user), [])
+        self.assertEqual(tasks_service.list_tasks_by_project(self.session, project.id), [])
 
 
 if __name__ == "__main__":

@@ -161,12 +161,12 @@ function toMarathonSession(log: FocusMetricLog): MarathonSession | null {
   };
 }
 
-function getDefaultFocusPercent(value: unknown) {
+export function getDefaultFocusPercent(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) && value > 0
     ? clamp(value, 0, 100)
     : 80;
 }
 
-function clamp(value: number, min: number, max: number) {
+export function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }

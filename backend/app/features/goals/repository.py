@@ -1,3 +1,69 @@
-from .service import create_goal, get_goal, update_goal
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
 
-__all__ = ["create_goal", "get_goal", "update_goal"]
+from ... import models
+
+
+def get_goal(db: Session, goal_id: str, user: models.User) -> models.Goal | None:
+    return db.scalar(
+        select(models.Goal)
+        .where(models.Goal.id == goal_id, models.Goal.user_id == user.id)
+        .options(selectinload(models.Goal.linked_projects))
+    )
+
+
+def get_user_goals_by_ids(db: Session, goal_ids: list[str], user: models.User) -> list[models.Goal]:
+    unique_ids = list(dict.fromkeys(goal_ids))
+    if not unique_ids:
+        return []
+    goals = list(
+        db.scalars(
+            select(models.Goal)
+            .where(models.Goal.user_id == user.id, models.Goal.id.in_(unique_ids))
+            .order_by(models.Goal.created_at.asc())
+        )
+    )
+    if len(goals) != len(unique_ids):
+        raise ValueError("One or more linked goals were not found")
+    return goals
+
+
+def list_goal_active_tasks(db: Session, user: models.User) -> list[models.Task]:
+    query = (
+        select(models.Task)
+        .join(models.Project)
+        .where(models.Project.user_id == user.id, models.Task.status != models.TaskStatus.done)
+        .options(selectinload(models.Task.project).selectinload(models.Project.linked_goals))
+        .order_by(models.Task.importance_rating.desc(), models.Task.created_at.desc())
+    )
+    return list(db.scalars(query))
+
+
+def list_recent_goal_completions(db: Session, user: models.User, limit: int = 12) -> list[models.CompletedGoalLog]:
+    return list(
+        db.scalars(
+            select(models.CompletedGoalLog)
+            .where(models.CompletedGoalLog.user_id == user.id)
+            .options(selectinload(models.CompletedGoalLog.task))
+            .order_by(models.CompletedGoalLog.created_at.desc())
+            .limit(limit)
+        )
+    )
+
+
+def list_goal_completions_by_project(
+    db: Session,
+    project_id: str,
+    user: models.User,
+) -> list[models.CompletedGoalLog]:
+    return list(
+        db.scalars(
+            select(models.CompletedGoalLog)
+            .where(
+                models.CompletedGoalLog.user_id == user.id,
+                models.CompletedGoalLog.project_id == project_id,
+            )
+            .options(selectinload(models.CompletedGoalLog.task))
+            .order_by(models.CompletedGoalLog.created_at.desc())
+        )
+    )

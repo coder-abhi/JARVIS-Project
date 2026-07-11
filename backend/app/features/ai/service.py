@@ -8,12 +8,19 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
 from threading import Lock
+from time import perf_counter
 from typing import Iterator
 
 from sqlalchemy.orm import Session
 
 from ...database import SessionLocal
 from . import models, repository
+
+try:
+    from openai import OpenAI, OpenAIError
+except ImportError:  # pragma: no cover - depends on local environment setup
+    OpenAI = None
+    OpenAIError = Exception
 
 
 logger = logging.getLogger(__name__)
@@ -268,6 +275,198 @@ def cache_lock(
 
 def _cache_user_id(user_id: str | None) -> str:
     return user_id or ANONYMOUS_CACHE_USER
+
+
+def call_ai_json(
+    system_prompt: str,
+    user_prompt: str,
+    max_tokens: int,
+    *,
+    feature: str,
+    user_id: str | None = None,
+    usage_db: Session | None = None,
+    use_cache: bool = True,
+    force_refresh: bool = False,
+    cache_only: bool = False,
+) -> dict:
+    if not is_ai_feature_enabled(user_id=user_id, feature=feature):
+        return {}
+
+    model = resolve_ai_model(user_id=user_id, feature=feature)
+    input_fingerprint = build_cache_fingerprint(
+        feature=feature,
+        model=model,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        max_tokens=max_tokens,
+    )
+
+    if use_cache and not force_refresh:
+        cached = get_cached_json(
+            user_id=user_id,
+            feature=feature,
+            model=model,
+            input_fingerprint=input_fingerprint,
+        )
+        if cached is not None:
+            return cached
+        if cache_only:
+            return {}
+
+    if cache_only:
+        return {}
+
+    if not use_cache:
+        return _request_openai_json(
+            system_prompt,
+            user_prompt,
+            max_tokens,
+            feature=feature,
+            model=model,
+            user_id=user_id,
+            usage_db=usage_db,
+        ) or {}
+
+    with cache_lock(
+        user_id=user_id,
+        feature=feature,
+        model=model,
+        input_fingerprint=input_fingerprint,
+    ):
+        if not force_refresh:
+            cached = get_cached_json(
+                user_id=user_id,
+                feature=feature,
+                model=model,
+                input_fingerprint=input_fingerprint,
+            )
+            if cached is not None:
+                return cached
+
+        data = _request_openai_json(
+            system_prompt,
+            user_prompt,
+            max_tokens,
+            feature=feature,
+            model=model,
+            user_id=user_id,
+            usage_db=usage_db,
+        )
+        if data is None:
+            return {}
+        store_cached_json(
+            user_id=user_id,
+            feature=feature,
+            model=model,
+            input_fingerprint=input_fingerprint,
+            data=data,
+        )
+        return data
+
+
+def _request_openai_json(
+    system_prompt: str,
+    user_prompt: str,
+    max_tokens: int,
+    *,
+    feature: str,
+    model: str,
+    user_id: str | None,
+    usage_db: Session | None,
+) -> dict | None:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        logger.warning("OPENAI_API_KEY is not set. Skipping OpenAI LLM call.")
+        return None
+
+    if OpenAI is None:
+        logger.warning("OpenAI Python SDK is not installed. Run `pip install -r backend/requirements.txt`.")
+        return None
+
+    client = OpenAI(api_key=api_key)
+    started_at = perf_counter()
+
+    try:
+        response = client.responses.create(
+            model=model,
+            input=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            text={"format": {"type": "json_object"}},
+            max_output_tokens=max_tokens,
+        )
+    except (OpenAIError, OSError) as err:
+        record_ai_usage(
+            db=usage_db,
+            user_id=user_id,
+            feature=feature,
+            model=model,
+            response_id=None,
+            status="failed",
+            latency_ms=round((perf_counter() - started_at) * 1000),
+        )
+        logger.warning("OpenAI LLM call failed: %s", err)
+        return None
+
+    text = getattr(response, "output_text", None) or _extract_response_text(response)
+    usage = getattr(response, "usage", None)
+    input_details = getattr(usage, "input_tokens_details", None)
+    output_details = getattr(usage, "output_tokens_details", None)
+    input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
+    cached_input_tokens = int(getattr(input_details, "cached_tokens", 0) or 0)
+    output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
+    reasoning_tokens = int(getattr(output_details, "reasoning_tokens", 0) or 0)
+    total_tokens = int(getattr(usage, "total_tokens", input_tokens + output_tokens) or 0)
+    usage_fields = {
+        "db": usage_db,
+        "user_id": user_id,
+        "feature": feature,
+        "model": str(getattr(response, "model", model) or model),
+        "response_id": getattr(response, "id", None),
+        "input_tokens": input_tokens,
+        "cached_input_tokens": cached_input_tokens,
+        "output_tokens": output_tokens,
+        "reasoning_tokens": reasoning_tokens,
+        "total_tokens": total_tokens,
+    }
+
+    try:
+        data = json.loads(text)
+    except (TypeError, json.JSONDecodeError):
+        record_ai_usage(
+            **usage_fields,
+            status="invalid_json",
+            latency_ms=round((perf_counter() - started_at) * 1000),
+        )
+        logger.warning("OpenAI LLM returned non-JSON content.")
+        return None
+
+    if not isinstance(data, dict):
+        record_ai_usage(
+            **usage_fields,
+            status="invalid_json",
+            latency_ms=round((perf_counter() - started_at) * 1000),
+        )
+        logger.warning("OpenAI LLM returned a non-object JSON response.")
+        return None
+
+    record_ai_usage(
+        **usage_fields,
+        status="success",
+        latency_ms=round((perf_counter() - started_at) * 1000),
+    )
+    return data
+
+
+def _extract_response_text(response: object) -> str:
+    response_dict = response.model_dump() if hasattr(response, "model_dump") else {}
+    text_parts = []
+    for output in response_dict.get("output", []):
+        for content in output.get("content", []):
+            if content.get("type") == "output_text":
+                text_parts.append(content.get("text", ""))
+    return "".join(text_parts)
 
 
 def record_ai_usage(

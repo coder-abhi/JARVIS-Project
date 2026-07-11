@@ -616,7 +616,13 @@ def _validate_owned_ids(db: Session, *, user_id: str, data: schemas.WealthData) 
         (models.WealthExpectedBill, data.bills),
     )
     for model, items in resources:
-        for item in items:
-            existing = db.get(model, item.id)
-            if existing is not None and existing.user_id != user_id:
-                raise PermissionError("Finance record id belongs to another user")
+        item_ids = [item.id for item in items]
+        if not item_ids:
+            continue
+        foreign_owner = db.scalar(
+            select(model.id)
+            .where(model.id.in_(item_ids), model.user_id != user_id)
+            .limit(1)
+        )
+        if foreign_owner is not None:
+            raise PermissionError("Finance record id belongs to another user")

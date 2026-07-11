@@ -19,6 +19,8 @@ import {
   type LibrarySummary,
   type SuggestedBook,
 } from "@/lib/api";
+import { DEFAULT_CURRENCY, formatCurrency, getPreferredCurrency, type Currency } from "@/lib/currency";
+import { formatShortDate } from "@/lib/dates";
 import { LineTrendChart } from "@/components/LineTrendChart";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import "./LibraryPage.css";
@@ -133,6 +135,7 @@ export default function LibraryPage() {
   const [readingTrendMode, setReadingTrendMode] = useState<ReadingTrendMode>("regular");
   const [readingTrendRange, setReadingTrendRange] = useState<ReadingTrendRange>(7);
   const [error, setError] = useState<string | null>(null);
+  const [currency, setCurrency] = useState<Currency>(DEFAULT_CURRENCY);
 
   async function loadLocalLibraryData() {
     setError(null);
@@ -169,6 +172,7 @@ export default function LibraryPage() {
   }
 
   useEffect(() => {
+    void getPreferredCurrency().then(setCurrency);
     loadLocalLibraryData()
       .catch((err: Error) => setError(err.message))
       .finally(() => {
@@ -624,8 +628,8 @@ export default function LibraryPage() {
                             {[book.category || "Uncategorized", book.total_pages ? `${book.total_pages} pages` : null].filter(Boolean).join(" - ")}
                           </p>
                           <p className="mt-2 text-sm text-stone-500">
-                            Bought {book.purchase_date ? formatDate(book.purchase_date) : "date not logged"}
-                            {typeof book.purchase_price === "number" ? ` for ${formatCurrency(book.purchase_price)}` : ""}
+                            Bought {book.purchase_date ? formatShortDate(book.purchase_date) : "date not logged"}
+                            {typeof book.purchase_price === "number" ? ` for ${formatCurrency(book.purchase_price, currency)}` : ""}
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -785,10 +789,10 @@ export default function LibraryPage() {
                 <div key={book.id} className="flex items-center justify-between gap-4 border-b border-stone-100 pb-3 last:border-0 last:pb-0">
                   <div>
                     <p className="text-sm font-semibold text-stone-950">{book.title}</p>
-                    <p className="mt-1 text-xs text-stone-500">{formatDate(book.purchase_date ?? "")}</p>
+                    <p className="mt-1 text-xs text-stone-500">{formatShortDate(book.purchase_date ?? "")}</p>
                   </div>
                   <p className="text-sm font-semibold text-stone-700">
-                    {typeof book.purchase_price === "number" ? formatCurrency(book.purchase_price) : "-"}
+                    {typeof book.purchase_price === "number" ? formatCurrency(book.purchase_price, currency) : "-"}
                   </p>
                 </div>
               ))}
@@ -1148,10 +1152,3 @@ function formatMonth(value: string) {
   return new Date(`${value}-01T00:00:00`).toLocaleDateString(undefined, { month: "short" });
 }
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
-}

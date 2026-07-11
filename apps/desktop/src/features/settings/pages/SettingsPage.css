@@ -33,7 +33,7 @@
   gap: 0.2rem 0.75rem;
   align-items: center;
   border: 1px solid var(--ops-border);
-  background: #000;
+  background: var(--ops-panel);
   color: var(--ops-text);
   padding: 0.65rem 0.75rem;
   text-align: left;
@@ -80,7 +80,7 @@
   display: grid;
   gap: 0.35rem;
   border: 1px solid var(--ops-border);
-  background: #000;
+  background: var(--ops-panel);
   padding: 0.6rem;
 }
 
@@ -106,7 +106,7 @@
 .settings-ai-row select {
   min-height: 2.15rem;
   border: 1px solid var(--ops-border);
-  background: #050505;
+  background: var(--ops-panel);
   color: var(--ops-text);
   padding: 0.4rem 0.55rem;
 }
@@ -134,7 +134,7 @@
   align-items: center;
   gap: 0.75rem;
   border: 1px solid var(--ops-border);
-  background: #000;
+  background: var(--ops-panel);
   padding: 0.6rem;
 }
 
@@ -162,7 +162,7 @@
   align-items: center;
   gap: 0.75rem;
   border: 1px solid var(--ops-border);
-  background: #000;
+  background: var(--ops-panel);
   padding: 0.55rem 0.65rem;
 }
 
@@ -177,7 +177,7 @@
 .settings-toggle {
   min-height: 2.15rem;
   border: 1px solid var(--ops-border-strong);
-  background: #050505;
+  background: var(--ops-panel);
   color: var(--ops-muted);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 0.66rem;
@@ -201,7 +201,7 @@
   display: grid;
   gap: 0.6rem;
   border: 1px solid var(--ops-border);
-  background: #000;
+  background: var(--ops-panel);
   padding: 0.75rem;
   text-align: left;
   cursor: pointer;
@@ -251,6 +251,19 @@
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 0.6rem;
   text-transform: uppercase;
+}
+
+[data-theme="friendly-saas"] .settings-section-button,
+[data-theme="friendly-saas"] .settings-field,
+[data-theme="friendly-saas"] .settings-field select,
+[data-theme="friendly-saas"] .settings-field input,
+[data-theme="friendly-saas"] .settings-ai-row select,
+[data-theme="friendly-saas"] .settings-visibility-row,
+[data-theme="friendly-saas"] .settings-ai-row,
+[data-theme="friendly-saas"] .settings-theme-card,
+[data-theme="friendly-saas"] .settings-toggle {
+  border-radius: var(--ops-radius-sm);
+  box-shadow: var(--ops-shadow);
 }
 
 @media (max-width: 760px) {

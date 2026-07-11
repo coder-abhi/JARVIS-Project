@@ -1,9 +1,8 @@
-from datetime import datetime, timezone
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ...models import Project, ProjectType
+from ...shared.utils import as_utc
 from . import models, schemas
 
 
@@ -72,9 +71,9 @@ def delete_history(db: Session, *, user_id: str, session_id: str) -> bool:
 def _to_read(session: models.PomodoroHistorySession) -> schemas.PomodoroHistoryRead:
     return schemas.PomodoroHistoryRead(
         id=session.id,
-        completedAt=_as_utc(session.completed_at),
-        startAt=_as_utc(session.started_at),
-        endAt=_as_utc(session.completed_at),
+        completedAt=as_utc(session.completed_at),
+        startAt=as_utc(session.started_at),
+        endAt=as_utc(session.completed_at),
         minutes=session.minutes,
         mode=session.mode,
         projectId=session.fixed_project_id,
@@ -84,12 +83,8 @@ def _to_read(session: models.PomodoroHistorySession) -> schemas.PomodoroHistoryR
         done=session.description,
         focus=session.focus_rating,
         isManual=session.is_manual,
-        created_at=_as_utc(session.created_at),
+        created_at=as_utc(session.created_at),
     )
-
-
-def _as_utc(value: datetime) -> datetime:
-    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
 def _owned_project_id(

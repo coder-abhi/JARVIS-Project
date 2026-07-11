@@ -2,10 +2,10 @@
 
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { getWealthData, saveWealthData } from "@/lib/api";
+import { normalizeCurrency, type Currency } from "@/lib/currency";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import "./MoneyPage.css";
 
-type Currency = "INR" | "USD" | "EUR" | "GBP";
 type EntryKind = "transaction" | "account" | "card" | "loan" | "investment" | "goal" | "income" | "bill";
 type TransactionType = "expense" | "income";
 type SourceKind = "account" | "card" | "cash";
@@ -1102,10 +1102,9 @@ function normalizeMoneyData(value: unknown): MoneyData {
   const parsed = asRecord(value);
   const today = toDateValue(new Date());
   const now = toDateTimeValue(new Date());
-  const currency = parsed.currency;
   return {
     version: 1,
-    currency: currency === "USD" || currency === "EUR" || currency === "GBP" ? currency : "INR",
+    currency: normalizeCurrency(parsed.currency),
     categories: recordList(parsed.categories).map((item) => ({
       id: stringValue(item.id) || createId(),
       transactionType: item.transactionType === "income" ? "income" : "expense",

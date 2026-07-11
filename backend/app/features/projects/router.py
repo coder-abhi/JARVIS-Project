@@ -1,20 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from ... import auth, crud, models, schemas
+from ... import auth, models, schemas
 from ...database import get_db
+from ..goals.repository import list_goal_completions_by_project
+from ..pomodoro import service as pomodoro_service
+from ..tasks.repository import list_tasks_by_project
+from . import service
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 @router.get("", response_model=list[schemas.ProjectRead])
 async def list_projects(db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-    return crud.list_projects(db, current_user)
+    return service.list_projects(db, current_user)
 
 
 @router.get("/summary", response_model=list[schemas.ProjectSummary])
 async def list_project_summaries(db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-    return crud.list_project_summaries(db, current_user)
+    return service.list_project_summaries(db, current_user)
 
 
 @router.post("", response_model=schemas.ProjectRead, status_code=status.HTTP_201_CREATED)
@@ -24,7 +28,7 @@ async def create_project(
     current_user: models.User = Depends(auth.get_current_user),
 ):
     try:
-        return crud.create_project(db, project, current_user)
+        return service.create_project(db, project, current_user)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -37,7 +41,7 @@ async def update_project(
     current_user: models.User = Depends(auth.get_current_user),
 ):
     try:
-        db_project = crud.update_project(db, project_id, project, current_user)
+        db_project = service.update_project(db, project_id, project, current_user)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     if db_project is None:
@@ -51,9 +55,9 @@ async def list_project_tasks(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    if crud.get_project(db, project_id, current_user) is None:
+    if service.get_project(db, project_id, current_user) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    return crud.list_tasks_by_project(db, project_id)
+    return list_tasks_by_project(db, project_id)
 
 
 @router.get("/{project_id}/pomodoro-sessions", response_model=list[schemas.PomodoroSessionLogRead])
@@ -62,9 +66,9 @@ async def list_project_pomodoro_sessions(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    if crud.get_project(db, project_id, current_user) is None:
+    if service.get_project(db, project_id, current_user) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    return crud.list_pomodoro_sessions_by_project(db, project_id, current_user)
+    return pomodoro_service.list_pomodoro_sessions_by_project(db, project_id, current_user)
 
 
 @router.get("/{project_id}/completions", response_model=list[schemas.CompletedGoalLogRead])
@@ -73,9 +77,9 @@ async def list_project_completions(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    if crud.get_project(db, project_id, current_user) is None:
+    if service.get_project(db, project_id, current_user) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    return crud.list_goal_completions_by_project(db, project_id, current_user)
+    return list_goal_completions_by_project(db, project_id, current_user)
 
 
 @router.put("/pomodoro-sessions/{session_id}", response_model=schemas.PomodoroSessionLogRead)
@@ -87,7 +91,7 @@ async def upsert_project_pomodoro_session(
 ):
     if session_id != session_log.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Session id mismatch")
-    db_log = crud.upsert_pomodoro_session_log(db, session_log, current_user)
+    db_log = pomodoro_service.upsert_pomodoro_session_log(db, session_log, current_user)
     if db_log is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return db_log
@@ -99,4 +103,4 @@ async def delete_project_pomodoro_session(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    crud.delete_pomodoro_session_log(db, session_id, current_user)
+    pomodoro_service.delete_pomodoro_session_log(db, session_id, current_user)

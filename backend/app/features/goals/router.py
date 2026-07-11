@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from ... import auth, crud, models, schemas
+from ... import auth, models, schemas
 from ...database import get_db
+from . import service
 
 router = APIRouter(prefix="/goals", tags=["goals"])
 
@@ -12,7 +13,7 @@ async def goals_overview(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    return crud.get_goals_overview(db, current_user)
+    return service.get_goals_overview(db, current_user)
 
 
 @router.post("", response_model=schemas.GoalRead, status_code=201)
@@ -22,7 +23,7 @@ async def create_goal(
     current_user: models.User = Depends(auth.get_current_user),
 ):
     try:
-        return crud.create_goal(db, goal, current_user)
+        return service.create_goal(db, goal, current_user)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -35,7 +36,7 @@ async def update_goal(
     current_user: models.User = Depends(auth.get_current_user),
 ):
     try:
-        db_goal = crud.update_goal(db, goal_id, goal, current_user)
+        db_goal = service.update_goal(db, goal_id, goal, current_user)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if db_goal is None:
@@ -49,7 +50,7 @@ async def log_goal_entry(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    return crud.log_goal_entry(db, request, current_user)
+    return service.log_goal_entry(db, request, current_user)
 
 
 @router.put("/tasks/{task_id}/complete", response_model=schemas.CompletedGoalLogRead)
@@ -58,7 +59,7 @@ async def complete_goal_task(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    completion = crud.complete_goal_task(db, task_id, current_user)
+    completion = service.complete_goal_task(db, task_id, current_user)
     if completion is None:
         raise HTTPException(status_code=404, detail="Task not found")
     return completion
@@ -70,10 +71,10 @@ async def restore_goal_completion(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    task = crud.restore_goal_completion(db, completion_id, current_user)
+    task = service.restore_goal_completion(db, completion_id, current_user)
     if task is None:
         raise HTTPException(status_code=404, detail="Completion not found")
-    return crud._goal_task_read(task)
+    return service.goal_task_read(task)
 
 
 @router.delete("/completions/{completion_id}", status_code=204)
@@ -82,7 +83,7 @@ async def delete_goal_completion(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    if not crud.delete_goal_completion(db, completion_id, current_user):
+    if not service.delete_goal_completion(db, completion_id, current_user):
         raise HTTPException(status_code=404, detail="Completion not found")
 
 
@@ -91,7 +92,7 @@ async def refresh_personality_insight(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    return crud.refresh_personality_insight(db, current_user)
+    return service.refresh_personality_insight(db, current_user)
 
 
 @router.get("/next-actions", response_model=list[schemas.GoalNextActionRead])
@@ -100,7 +101,7 @@ async def next_goal_actions(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    return crud.suggest_goal_next_actions(db, current_user, force_refresh=refresh)
+    return service.suggest_goal_next_actions(db, current_user, force_refresh=refresh)
 
 
 @router.get("/captain-compass", response_model=schemas.CaptainCompassRead)
@@ -111,9 +112,9 @@ async def captain_compass(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    if days not in crud.CAPTAIN_COMPASS_CONTEXT_DAYS:
+    if days not in service.CAPTAIN_COMPASS_CONTEXT_DAYS:
         raise HTTPException(status_code=422, detail="days must be 7, 30, or 90")
-    return crud.get_captain_compass(
+    return service.get_captain_compass(
         db,
         current_user,
         force_refresh=refresh,

@@ -15,11 +15,13 @@ from sqlalchemy.orm import sessionmaker
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app import auth, crud, models
+from app import auth, models
 from app.database import get_db
 from app.database import Base
 from app.features.ai import models as ai_models
 from app.features.ai import service as ai_service
+from app.features.goals import service as goals_service
+from app.features.library import service as library_service
 
 
 goals_router = importlib.import_module("app.features.goals.router")
@@ -84,7 +86,7 @@ class AiResponseCacheTests(unittest.TestCase):
         Base.metadata.create_all(self.engine)
         self.session_factory = sessionmaker(bind=self.engine, autoflush=False, autocommit=False)
         self.session_patcher = patch.object(ai_service, "SessionLocal", self.session_factory)
-        self.openai_patcher = patch.object(crud, "OpenAI", FakeOpenAI)
+        self.openai_patcher = patch.object(ai_service, "OpenAI", FakeOpenAI)
         self.environment_patcher = patch.dict(
             os.environ,
             {"OPENAI_API_KEY": "test-key", "OPENAI_MODEL": "gpt-4.1-mini"},
@@ -369,11 +371,11 @@ class AiResponseCacheTests(unittest.TestCase):
             created_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
         )
 
-        crud.generate_book_suggestions([book], user_id="user-1")
+        library_service.generate_book_suggestions([book], user_id="user-1")
         book.purchase_price = 20
-        crud.generate_book_suggestions([book], user_id="user-1")
+        library_service.generate_book_suggestions([book], user_id="user-1")
         book.liked = True
-        crud.generate_book_suggestions([book], user_id="user-1")
+        library_service.generate_book_suggestions([book], user_id="user-1")
 
         self.assertEqual(FakeOpenAI.calls, 2)
 
@@ -390,11 +392,11 @@ class AiResponseCacheTests(unittest.TestCase):
         )
         book = self.make_book()
 
-        crud.generate_next_owned_book_suggestions([book], user_id="user-1")
+        library_service.generate_next_owned_book_suggestions([book], user_id="user-1")
         book.purchase_price = 20
-        crud.generate_next_owned_book_suggestions([book], user_id="user-1")
+        library_service.generate_next_owned_book_suggestions([book], user_id="user-1")
         book.current_page = 40
-        crud.generate_next_owned_book_suggestions([book], user_id="user-1")
+        library_service.generate_next_owned_book_suggestions([book], user_id="user-1")
 
         self.assertEqual(FakeOpenAI.calls, 2)
 
@@ -451,22 +453,22 @@ class AiResponseCacheTests(unittest.TestCase):
             created_at=datetime(2026, 1, 3, tzinfo=timezone.utc),
         )
 
-        crud.generate_goal_next_actions([goal], [completion], [task], user_id="user-1")
+        goals_service.generate_goal_next_actions([goal], [completion], [task], user_id="user-1")
         task.description = "Not part of the AI context"
-        crud.generate_goal_next_actions([goal], [completion], [task], user_id="user-1")
+        goals_service.generate_goal_next_actions([goal], [completion], [task], user_id="user-1")
         task.title = "Changed task"
-        crud.generate_goal_next_actions([goal], [completion], [task], user_id="user-1")
+        goals_service.generate_goal_next_actions([goal], [completion], [task], user_id="user-1")
         completion.title = "Changed completion"
-        crud.generate_goal_next_actions([goal], [completion], [task], user_id="user-1")
+        goals_service.generate_goal_next_actions([goal], [completion], [task], user_id="user-1")
         goal.current_value = 3
-        crud.generate_goal_next_actions([goal], [completion], [task], user_id="user-1")
+        goals_service.generate_goal_next_actions([goal], [completion], [task], user_id="user-1")
 
         self.assertEqual(FakeOpenAI.calls, 4)
 
     def test_goal_next_actions_route_forwards_explicit_refresh(self) -> None:
         current_user = SimpleNamespace(id="user-1")
         db = object()
-        with patch.object(crud, "suggest_goal_next_actions", return_value=[]) as suggest:
+        with patch.object(goals_service, "suggest_goal_next_actions", return_value=[]) as suggest:
             result = self.run_async(
                 goals_router.next_goal_actions(
                     refresh=True,
@@ -596,21 +598,21 @@ class AiResponseCacheTests(unittest.TestCase):
         )
         completion_logs = [old_completion, recent_completion]
 
-        automatic = crud.generate_captain_compass(
+        automatic = goals_service.generate_captain_compass(
             [goal],
             [project],
             completion_logs,
             user_id="user-1",
             cache_only=True,
         )
-        first = crud.generate_captain_compass(
+        first = goals_service.generate_captain_compass(
             [goal],
             [project],
             completion_logs,
             user_id="user-1",
             force_refresh=True,
         )
-        cached = crud.generate_captain_compass(
+        cached = goals_service.generate_captain_compass(
             [goal],
             [project],
             completion_logs,
@@ -618,14 +620,14 @@ class AiResponseCacheTests(unittest.TestCase):
             cache_only=True,
         )
         task.title = "Publish signed build"
-        changed_automatic = crud.generate_captain_compass(
+        changed_automatic = goals_service.generate_captain_compass(
             [goal],
             [project],
             completion_logs,
             user_id="user-1",
             cache_only=True,
         )
-        second = crud.generate_captain_compass(
+        second = goals_service.generate_captain_compass(
             [goal],
             [project],
             completion_logs,
@@ -701,7 +703,7 @@ class AiResponseCacheTests(unittest.TestCase):
         current_user = SimpleNamespace(id="user-1")
         db = object()
         compass = SimpleNamespace(overall_rating=7)
-        with patch.object(crud, "get_captain_compass", return_value=compass) as get_compass:
+        with patch.object(goals_service, "get_captain_compass", return_value=compass) as get_compass:
             result = self.run_async(
                 goals_router.captain_compass(
                     refresh=True,
@@ -739,7 +741,7 @@ class AiResponseCacheTests(unittest.TestCase):
             "context_days": 7,
         }
 
-        with patch.object(crud, "get_captain_compass", return_value=compass) as get_compass:
+        with patch.object(goals_service, "get_captain_compass", return_value=compass) as get_compass:
             response = TestClient(app).get(
                 "/goals/captain-compass?refresh=true&days=7&timezone_offset_minutes=-330"
             )
@@ -763,7 +765,7 @@ class AiResponseCacheTests(unittest.TestCase):
         max_tokens: int = 300,
         force_refresh: bool = False,
     ) -> dict:
-        return crud._call_openai_json(
+        return ai_service.call_ai_json(
             "system",
             user_prompt,
             max_tokens,

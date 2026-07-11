@@ -140,7 +140,7 @@
 .sidebar-footer button {
   width: 100%;
   cursor: pointer;
-  background: #000;
+  background: var(--ops-panel);
 }
 
 @media (max-width: 860px) {

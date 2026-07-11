@@ -425,7 +425,7 @@ option {
 .analysis-stack > div,
 .allocation-list > div {
   border: 1px solid var(--ops-border);
-  background: #000;
+  background: var(--ops-panel);
   padding: 0.5rem;
 }
 
@@ -451,7 +451,7 @@ option {
 .ops-empty {
   margin: 0.5rem;
   border: 1px dashed var(--ops-border);
-  background: #000;
+  background: var(--ops-panel);
   color: var(--ops-muted);
   padding: 0.75rem;
   text-align: center;
@@ -1063,6 +1063,85 @@ option {
 [data-theme="friendly-saas"] option {
   background: var(--ops-panel);
   color: var(--ops-text);
+}
+
+/* -- Re-enable light surfaces for saas: the legacy Tailwind safety net above
+   forces old bg-white, bg-stone, bg-gray utility classes to pure black for
+   the dark themes, which reads as an unreadable black box in Daylight. -- */
+[data-theme="friendly-saas"] .bg-white,
+[data-theme="friendly-saas"] .bg-white\/60,
+[data-theme="friendly-saas"] .bg-white\/70,
+[data-theme="friendly-saas"] .bg-white\/75,
+[data-theme="friendly-saas"] .bg-white\/80,
+[data-theme="friendly-saas"] .bg-white\/85,
+[data-theme="friendly-saas"] .bg-white\/90,
+[data-theme="friendly-saas"] .bg-stone-50,
+[data-theme="friendly-saas"] .bg-stone-50\/60,
+[data-theme="friendly-saas"] .bg-stone-50\/70,
+[data-theme="friendly-saas"] .bg-stone-50\/80,
+[data-theme="friendly-saas"] .bg-stone-50\/90,
+[data-theme="friendly-saas"] .bg-gray-50,
+[data-theme="friendly-saas"] .bg-gray-50\/60,
+[data-theme="friendly-saas"] .bg-gray-50\/70,
+[data-theme="friendly-saas"] .bg-gray-50\/80,
+[data-theme="friendly-saas"] .bg-stone-100,
+[data-theme="friendly-saas"] .bg-stone-200,
+[data-theme="friendly-saas"] .bg-stone-300,
+[data-theme="friendly-saas"] .bg-gray-100,
+[data-theme="friendly-saas"] .bg-gray-300,
+[data-theme="friendly-saas"] .bg-gray-400,
+[data-theme="friendly-saas"] .bg-\[\#080c14\],
+[data-theme="friendly-saas"] .bg-\[\#f4f6f3\],
+[data-theme="friendly-saas"] .bg-\[\#f4f6f3\]\/95 {
+  background-color: var(--ops-panel) !important;
+}
+
+[data-theme="friendly-saas"] .bg-stone-950,
+[data-theme="friendly-saas"] .bg-gray-950,
+[data-theme="friendly-saas"] .bg-stone-800,
+[data-theme="friendly-saas"] .bg-gray-800,
+[data-theme="friendly-saas"] .bg-teal-600,
+[data-theme="friendly-saas"] .bg-teal-700 {
+  background-color: var(--ops-brand) !important;
+  color: #fff !important;
+}
+
+[data-theme="friendly-saas"] .bg-stone-950\/45,
+[data-theme="friendly-saas"] .bg-gray-950\/35 {
+  background-color: rgba(0, 0, 0, 0.45) !important;
+}
+
+[data-theme="friendly-saas"] .disabled\:bg-stone-300:disabled,
+[data-theme="friendly-saas"] .disabled\:bg-gray-400:disabled {
+  background-color: var(--ops-border) !important;
+  color: var(--ops-dim) !important;
+}
+
+[data-theme="friendly-saas"] [class*="bg-[linear-gradient"],
+[data-theme="friendly-saas"] [class*="bg-[radial-gradient"] {
+  background: var(--ops-panel) !important;
+}
+
+/* -- Focus heatmap: swap the GitHub dark-mode scale for GitHub's own
+   light-mode scale so the calendar doesn't read as five shades of black. -- */
+[data-theme="friendly-saas"] .bg-\[\#161b22\] {
+  background-color: #ebedf0 !important;
+}
+
+[data-theme="friendly-saas"] .bg-\[\#0e4429\] {
+  background-color: #9be9a8 !important;
+}
+
+[data-theme="friendly-saas"] .bg-\[\#006d32\] {
+  background-color: #40c463 !important;
+}
+
+[data-theme="friendly-saas"] .bg-\[\#26a641\] {
+  background-color: #30a14e !important;
+}
+
+[data-theme="friendly-saas"] .bg-\[\#39d353\] {
+  background-color: #216e39 !important;
 }
 
 /* -- Re-enable rounded corners / shadows for saas (default theme forces them off above) -- */

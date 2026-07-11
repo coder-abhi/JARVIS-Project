@@ -82,13 +82,6 @@ PERSONALITY_INSIGHT_USER_PROMPT = (
     "with an insight string of 120 to 180 words."
 )
 
-# CAPTAIN_COMPASS_SYSTEM_PROMPT = (
-#     "You are Captain Compass, a direct but constructive execution coach. Judge only from two supplied sources: "
-#     "(1) the monthly, quarterly, yearly, and five-year goals with each goal's why and timeline, and "
-#     "(2) project timeline entries inside the selected time range. Project timeline entries can include Pomodoro "
-#     "sessions, completion logs, and completed tasks. Distinguish healthy deliberate pace from stagnation, and high "
-#     "output from activity drifting away from stated goals. Be honest. Reply with valid JSON only."
-# )
 CAPTAIN_COMPASS_SYSTEM_PROMPT = (
     "You are Captain Compass, a direct, evidence-based execution coach. "
     "Evaluate only from the supplied goal context, active commitments, recent execution, period metrics, "
@@ -102,12 +95,6 @@ CAPTAIN_COMPASS_SYSTEM_PROMPT = (
     "Reply with valid JSON only."
 )
 
-# CAPTAIN_COMPASS_USER_PROMPT = (
-#     "Rate the user's execution from 1 to 10 for speed, direction, consistency, and overall. Choose status from "
-#     "on_track, drifting, stalled, or overextended. Return JSON with speed_rating, direction_rating, "
-#     "consistency_rating, overall_rating, status, summary, and advice. Summary must be 2 to 4 concise sentences "
-#     "grounded in the provided evidence. Advice must be 1 or 2 short lines. Be Honest"
-# )
 CAPTAIN_COMPASS_USER_PROMPT = (
     "Analyze the user's recent activity against their stated goals and return JSON only.\n\n"
     "Rating definitions:\n"

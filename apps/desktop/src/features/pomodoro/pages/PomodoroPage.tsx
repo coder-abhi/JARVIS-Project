@@ -27,6 +27,8 @@ import {
   type PersistedPomodoroSession,
 } from "@/lib/pomodoroSession";
 import {
+  clamp,
+  getDefaultFocusPercent,
   getFocusMarathonMetrics,
   getFocusMinutesToday,
   getFocusMomentum,
@@ -34,6 +36,8 @@ import {
   type FocusDay,
   type FocusMarathon,
 } from "@/lib/focusMetrics";
+import { getAverage } from "@/lib/chartAverage";
+import { formatShortDate } from "@/lib/dates";
 import { LineTrendChart } from "@/components/LineTrendChart";
 import { addCalendarDays, dateKey, getSessionWorkDayDate, getWorkDayDate, isCurrentWorkDay, startOfCalendarDay, workDaysBetween } from "@/lib/workDay";
 import { getAutoFocusMinutes } from "../autoTiming";
@@ -1034,11 +1038,7 @@ function isSameMarathon(marathon: FocusMarathon, candidate: FocusMarathon | null
 }
 
 function formatMarathonDate(marathon: FocusMarathon) {
-  return new Date(marathon.endedAt).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatShortDate(marathon.endedAt);
 }
 
 function isMarathonInHighlightPeriod(marathon: FocusMarathon, today: Date, period: MarathonHighlightPeriod) {
@@ -1061,11 +1061,7 @@ function isDateInHighlightPeriod(date: Date, today: Date, period: MarathonHighli
 }
 
 function formatFocusDay(day: FocusDay) {
-  return parseFocusDay(day).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatShortDate(parseFocusDay(day));
 }
 
 function parseFocusDay(day: FocusDay) {
@@ -1266,7 +1262,7 @@ function buildHeatmap(logs: PomodoroLog[]) {
         ...day,
         iso: date.toISOString(),
         isCurrentYear,
-        label: date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
+        label: formatShortDate(date),
       };
     }),
     };
@@ -1712,10 +1708,6 @@ function isMissingDetails(log: PomodoroLog) {
   return !log.done;
 }
 
-function getDefaultFocusPercent(value: unknown) {
-  return isNumber(value) ? clamp(value, 0, 100) : 80;
-}
-
 function getDescriptionFontSize(description: string) {
   if (description.length > 180) return 0.66;
   if (description.length > 120) return 0.72;
@@ -1745,17 +1737,8 @@ function titleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function getAverage(values: number[]) {
-  if (values.length === 0) return 0;
-  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
-}
-
 function isNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
 }
 
 function getSelectedProjectIds(fixedProjectId: string, continuousProjectId: string) {
