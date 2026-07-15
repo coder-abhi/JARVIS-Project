@@ -3,24 +3,29 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { LineTrendChart } from "@/components/LineTrendChart";
 import { TaskEditor } from "@/components/TaskEditor";
 import {
+  breakdownGoalTask,
   completeGoalTask,
   createProject,
   createGoal,
-  getGoalNextActions,
+  createTask,
+  getGoalCompletionTrend,
   getGoalsOverview,
-  refreshPersonalityInsight,
+  getProjects,
   restoreCompletedGoal,
   updateTask,
+  type CaptainCompassContextDays,
   type Goal,
   type GoalCategory,
-  type GoalNextAction,
+  type GoalCompletionTrend,
   type GoalTask,
   type GoalsOverview,
-  type PersonalityInsight,
+  type Project,
   type ProjectType,
   type Task,
+  type TaskPriority,
   type TaskUpdate,
 } from "@/lib/api";
 import TimelinePage from "@/features/timeline/pages/TimelinePage";
@@ -39,17 +44,15 @@ const projectTypes: { value: ProjectType; label: string; description: string }[]
   { value: "fixed", label: "Fixed", description: "Scoped mission with a defined extraction point." },
   { value: "continuous", label: "Continuous", description: "Persistent operating loop or habit system." },
 ];
-type SortMode = "importance" | "time" | "goal";
 
 export default function GoalsPage() {
   const router = useRouter();
   const [overview, setOverview] = useState<GoalsOverview | null>(null);
-  const [nextActions, setNextActions] = useState<GoalNextAction[]>([]);
-  const [sortMode, setSortMode] = useState<SortMode>("importance");
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshingNextActions, setIsRefreshingNextActions] = useState(false);
-  const [isRefreshingPersonality, setIsRefreshingPersonality] = useState(false);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const [collapsedTaskIds, setCollapsedTaskIds] = useState<Set<string>>(new Set());
+  const [splittingTaskId, setSplittingTaskId] = useState<string | null>(null);
+  const [splitErrors, setSplitErrors] = useState<Record<string, string>>({});
   const [creatingGoalCategory, setCreatingGoalCategory] = useState<GoalCategory | null>(null);
   const [restoringCompletionId, setRestoringCompletionId] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -63,34 +66,60 @@ export default function GoalsPage() {
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [completionTrendRange, setCompletionTrendRange] = useState<CaptainCompassContextDays>(30);
+  const [completionTrendMetric, setCompletionTrendMetric] = useState<CompletionTrendMetric>("tasks");
+  const [completionTrend, setCompletionTrend] = useState<GoalCompletionTrend | null>(null);
+  const [isCompletionTrendLoading, setIsCompletionTrendLoading] = useState(true);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
+  const [isSavingTask, setIsSavingTask] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskDescription, setNewTaskDescription] = useState("");
+  const [newTaskProjectId, setNewTaskProjectId] = useState("");
+  const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>(
+    () => readProjectBehaviorSettings().defaultTaskPriority,
+  );
+  const [newTaskImportance, setNewTaskImportance] = useState(3);
+  const [newTaskEta, setNewTaskEta] = useState(() => String(readProjectBehaviorSettings().defaultTaskMinutes));
+  const [newTaskDeadline, setNewTaskDeadline] = useState("");
 
   async function loadGoals() {
     setError(null);
-    const data = await getGoalsOverview();
+    const [data, projectList] = await Promise.all([getGoalsOverview(), getProjects()]);
     setOverview(data);
-  }
-
-  async function loadNextActions(refresh = false) {
-    const actions = await getGoalNextActions(refresh);
-    setNextActions(actions);
+    setProjects(projectList);
   }
 
   useEffect(() => {
-    Promise.all([loadGoals(), loadNextActions()])
+    loadGoals()
       .catch((err: Error) => setError(err.message))
       .finally(() => setIsLoading(false));
   }, []);
 
-  const sortedTasks = useMemo(() => {
-    const tasks = [...(overview?.active_tasks ?? [])];
-    if (sortMode === "time") {
-      return tasks.sort((a, b) => a.time_required_minutes - b.time_required_minutes);
-    }
-    if (sortMode === "goal") {
-      return tasks.sort((a, b) => goalSortLabel(a).localeCompare(goalSortLabel(b)) || b.importance_rating - a.importance_rating);
-    }
-    return tasks.sort((a, b) => b.importance_rating - a.importance_rating || a.time_required_minutes - b.time_required_minutes);
-  }, [overview?.active_tasks, sortMode]);
+  useEffect(() => {
+    let cancelled = false;
+    setIsCompletionTrendLoading(true);
+    getGoalCompletionTrend(completionTrendRange)
+      .then((data) => {
+        if (!cancelled) setCompletionTrend(data);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setIsCompletionTrendLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [completionTrendRange]);
+
+  const taskTree = useMemo(() => buildTaskTree(overview?.active_tasks ?? []), [overview?.active_tasks]);
+
+  const sortedTaskTree = useMemo(() => {
+    const roots = [...taskTree];
+    return roots.sort((a, b) => b.importance_rating - a.importance_rating || a.time_required_minutes - b.time_required_minutes);
+  }, [taskTree]);
 
   const goalsByCategory = useMemo(() => {
     const grouped: Record<GoalCategory, Goal[]> = {
@@ -104,9 +133,12 @@ export default function GoalsPage() {
     }
     return grouped;
   }, [overview?.goals]);
+
+  const leafTasks = useMemo(() => (overview?.active_tasks ?? []).filter((task) => !task.has_children), [overview?.active_tasks]);
+  const openTaskCount = useMemo(() => leafTasks.filter((task) => task.status !== "done").length, [leafTasks]);
   const requiredMinutes = useMemo(
-    () => sortedTasks.reduce((sum, task) => sum + getRemainingTaskMinutes(task), 0),
-    [sortedTasks],
+    () => leafTasks.reduce((sum, task) => sum + getRemainingTaskMinutes(task), 0),
+    [leafTasks],
   );
 
   async function handleCreateGoal(category: GoalCategory) {
@@ -136,7 +168,6 @@ export default function GoalsPage() {
       await completeGoalTask(task.id);
       setMessage("Task logged as complete.");
       await loadGoals();
-      await loadNextActions();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not complete task");
     } finally {
@@ -151,7 +182,6 @@ export default function GoalsPage() {
       await restoreCompletedGoal(completionId);
       setMessage("Moved back to the task list.");
       await loadGoals();
-      await loadNextActions();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not restore completed task");
     } finally {
@@ -161,34 +191,37 @@ export default function GoalsPage() {
 
   async function handleTaskSave(taskId: string, changes: TaskUpdate) {
     await updateTask(taskId, changes);
-    await Promise.all([loadGoals(), loadNextActions()]);
+    await loadGoals();
     setMessage("Objective updated.");
   }
 
-  async function handleRefreshPersonality() {
-    setIsRefreshingPersonality(true);
-    setError(null);
-    try {
-      const insight = await refreshPersonalityInsight();
-      setOverview((current) => (current ? { ...current, personality_insight: insight } : current));
-      setMessage("Personality insight refreshed.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not refresh personality insight");
-    } finally {
-      setIsRefreshingPersonality(false);
-    }
+  function toggleTaskExpanded(taskId: string) {
+    setCollapsedTaskIds((current) => {
+      const next = new Set(current);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
   }
 
-  async function handleRefreshNextActions() {
-    setIsRefreshingNextActions(true);
-    setError(null);
+  async function handleSplitTask(task: GoalTask) {
+    setSplittingTaskId(task.id);
+    setSplitErrors((current) => {
+      if (!(task.id in current)) return current;
+      const next = { ...current };
+      delete next[task.id];
+      return next;
+    });
     try {
-      await loadNextActions(true);
-      setMessage("AI next goals refreshed.");
+      await breakdownGoalTask(task.id);
+      await loadGoals();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not refresh AI next goals");
+      setSplitErrors((current) => ({
+        ...current,
+        [task.id]: err instanceof Error ? err.message : "Could not split task",
+      }));
     } finally {
-      setIsRefreshingNextActions(false);
+      setSplittingTaskId(null);
     }
   }
 
@@ -224,20 +257,60 @@ export default function GoalsPage() {
     setIsCreateProjectOpen(true);
   }
 
+  function openAddTask() {
+    const defaults = readProjectBehaviorSettings();
+    const generalWorkProject = projects.find((project) => project.name.trim().toLowerCase() === "general work");
+    setNewTaskTitle("");
+    setNewTaskDescription("");
+    setNewTaskProjectId(generalWorkProject?.id ?? projects[0]?.id ?? "");
+    setNewTaskPriority(defaults.defaultTaskPriority);
+    setNewTaskImportance(3);
+    setNewTaskEta(String(defaults.defaultTaskMinutes));
+    setNewTaskDeadline("");
+    setIsAddTaskOpen(true);
+  }
+
+  async function handleCreateTask(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!newTaskTitle.trim() || !newTaskProjectId || isSavingTask) return;
+
+    setIsSavingTask(true);
+    setError(null);
+    try {
+      await createTask({
+        project_id: newTaskProjectId,
+        title: newTaskTitle.trim(),
+        description: newTaskDescription.trim() || null,
+        status: readProjectBehaviorSettings().defaultTaskStatus,
+        priority: newTaskPriority,
+        importance_rating: newTaskImportance,
+        completion_percentage: 0,
+        eta_hours: Math.round(((Number(newTaskEta) || 0) / 60) * 100) / 100,
+        time_spent_hours: 0,
+        start_date: null,
+        deadline: newTaskDeadline ? new Date(newTaskDeadline).toISOString() : null,
+      });
+      await loadGoals();
+      setIsAddTaskOpen(false);
+      setMessage("Objective added to the queue.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add task");
+    } finally {
+      setIsSavingTask(false);
+    }
+  }
+
   return (
     <main className="ops-screen">
-      <section className="ops-header">
-        <div>
-          <p className="ops-kicker">MISSION CONTROL</p>
+      <section className="ops-header mission-control-header">
+        <div className="mission-header-title">
           <h1>Mission Control</h1>
-          <p className="ops-subtitle">Mission queue, campaign planning horizons, AI assessment, and execution profile.</p>
+          <p className="ops-subtitle">Mission queue and campaign planning horizons.</p>
         </div>
-        <div className="grid gap-3">
-          <div className="ops-mini-metrics">
-            <Metric label="Open Tasks" value={overview?.active_tasks.length ?? 0} />
-            <Metric label="Req Time To Complete All" value={formatRequiredTime(requiredMinutes)} />
-          </div>
-          <button type="button" onClick={openCreateProject} className="ops-button primary justify-self-end">
+        <div className="ops-header-actions">
+          <Metric label="Open Tasks" value={openTaskCount} />
+          <Metric label="Req Time To Complete All" value={formatRequiredTime(requiredMinutes)} />
+          <button type="button" onClick={openCreateProject} className="ops-button primary">
             New Mission
           </button>
         </div>
@@ -251,108 +324,56 @@ export default function GoalsPage() {
           <TimelinePage embedded />
         </div>
 
-        <section className="ops-panel span-8">
+        <section className="ops-panel span-12">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="ops-kicker">MISSION QUEUE</p>
               <h2 className="mt-1 text-lg font-semibold">Active Objectives</h2>
             </div>
-            <div className="ops-segment">
-              <SortButton active={sortMode === "importance"} onClick={() => setSortMode("importance")} label="Importance" />
-              <SortButton active={sortMode === "time"} onClick={() => setSortMode("time")} label="Time" />
-              <SortButton active={sortMode === "goal"} onClick={() => setSortMode("goal")} label="Mission" />
-            </div>
+            <button type="button" onClick={openAddTask} disabled={isLoading} className="ops-button primary">
+              Add Task
+            </button>
           </div>
 
-          <div className="mt-4 overflow-hidden rounded-md border border-stone-200 bg-white">
+          <div className="task-tree mt-4">
             {isLoading ? (
-              [0, 1, 2].map((item) => <div key={item} className="h-10 animate-pulse border-b border-stone-100 bg-stone-50 last:border-b-0" />)
-            ) : sortedTasks.length ? (
-              <>
-                <div className="hidden grid-cols-[32px_minmax(0,1fr)_72px_72px_92px_minmax(110px,0.7fr)_minmax(120px,0.75fr)] gap-3 border-b border-stone-200 bg-stone-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500 md:grid">
-                  <span />
-                  <span>Task</span>
-                  <span>Progress</span>
-                  <span>Time Left</span>
-                  <span>Importance</span>
-                  <span>Project</span>
-                  <span>Project Goal</span>
+              [0, 1, 2].map((item) => <div key={item} className="task-tree-skeleton" />)
+            ) : sortedTaskTree.length ? (
+              sortedTaskTree.map((node, index) => (
+                <div key={node.id} className={index > 0 ? "task-tree-main-divider" : undefined}>
+                  <TaskTreeRow
+                    node={node}
+                    depth={0}
+                    collapsedIds={collapsedTaskIds}
+                    onToggleExpand={toggleTaskExpanded}
+                    onComplete={handleCompleteTask}
+                    completingTaskId={completingTaskId}
+                    onSplit={handleSplitTask}
+                    splittingTaskId={splittingTaskId}
+                    splitErrors={splitErrors}
+                    onOpenTask={setEditingTask}
+                  />
                 </div>
-                {sortedTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setEditingTask(task)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") setEditingTask(task);
-                    }}
-                    className="grid cursor-pointer gap-1 border-b border-stone-100 px-3 py-2 text-xs transition last:border-b-0 hover:bg-teal-50/35 md:grid-cols-[32px_minmax(0,1fr)_72px_72px_92px_minmax(110px,0.7fr)_minmax(120px,0.75fr)] md:items-center md:gap-3"
-                  >
-                    <input
-                      type="checkbox"
-                      disabled={completingTaskId === task.id}
-                      onClick={(event) => event.stopPropagation()}
-                      onChange={() => void handleCompleteTask(task)}
-                      className="h-3.5 w-3.5 rounded border-stone-300 accent-teal-600"
-                      aria-label={`Mark ${task.title} complete`}
-                    />
-                    <p className="min-w-0 truncate font-semibold text-stone-950">{task.title}</p>
-                    <span className="font-semibold text-teal-800">{task.completion_percentage}%</span>
-                    <span className="text-stone-600">{getRemainingTaskMinutes(task)} min</span>
-                    <span className="font-semibold text-teal-800">{task.importance_rating}/5</span>
-                    <span className="min-w-0 truncate text-stone-500">{task.project_name}</span>
-                    <span className="min-w-0 truncate text-amber-800">
-                      {task.linked_goals.map((goal) => goal.title).join(", ") || "No goal assigned"}
-                    </span>
-                  </div>
-                ))}
-              </>
+              ))
             ) : (
-              <div className="bg-stone-50 p-5 text-center">
-                <h3 className="text-sm font-semibold text-stone-950">No active objectives</h3>
-                <p className="mt-1 text-xs text-stone-600">Use the fixed logger below with a + prefix to add one.</p>
+              <div className="task-tree-empty">
+                <h3>No active objectives</h3>
+                <p>Use the fixed logger below with a + prefix to add one.</p>
               </div>
             )}
           </div>
         </section>
 
-        <section className="span-4 grid gap-4">
-          <div className="ops-panel">
-            <div className="ops-panel-head">
-              <h2>AI Mission Analysis</h2>
-              <span>leverage / conflict / risk</span>
-            </div>
-            <MissionAnalysis actions={nextActions} openTasks={overview?.active_tasks.length ?? 0} overdueTasks={0} />
-            <button
-              type="button"
-              onClick={handleRefreshNextActions}
-              disabled={isRefreshingNextActions}
-              className="ops-button primary mt-4 w-full"
-            >
-              {isRefreshingNextActions ? "Refreshing..." : "Refresh Analysis"}
-            </button>
-          </div>
-
-          <PersonalityPanel
-            insight={overview?.personality_insight ?? null}
-            isRefreshing={isRefreshingPersonality}
-            onRefresh={handleRefreshPersonality}
+        <div className="span-12">
+          <CompletionTrendSection
+            isLoading={isCompletionTrendLoading}
+            metric={completionTrendMetric}
+            range={completionTrendRange}
+            setMetric={setCompletionTrendMetric}
+            setRange={setCompletionTrendRange}
+            trend={completionTrend}
           />
-        </section>
-
-        <section className="ops-panel span-12">
-          <div className="ops-panel-head">
-            <h2>Execution Patterns</h2>
-            <span>strengths / weaknesses</span>
-          </div>
-          <div className="system-metrics">
-            <div className="system-metric signal"><span>Strength</span><strong>Prioritization</strong></div>
-            <div className="system-metric"><span>Weakness</span><strong>Context Switching</strong></div>
-            <div className="system-metric"><span>Pattern</span><strong>{sortedTasks.length ? "Action-biased" : "Planning mode"}</strong></div>
-            <div className="system-metric"><span>Next Move</span><strong>{nextActions[0]?.title ?? "Log next objective"}</strong></div>
-          </div>
-        </section>
+        </div>
 
         <section className="ops-panel span-12">
           <p className="ops-kicker">RECENTLY COMPLETED OBJECTIVES</p>
@@ -487,6 +508,98 @@ export default function GoalsPage() {
         </div>
       ) : null}
 
+      {isAddTaskOpen ? (
+        <div className="mission-modal-backdrop">
+          <form onSubmit={handleCreateTask} className="mission-control-modal">
+            <div className="mission-modal-head">
+              <div>
+                <p className="ops-kicker">MISSION QUEUE</p>
+                <h2>Add Task</h2>
+              </div>
+              <button type="button" onClick={() => setIsAddTaskOpen(false)} className="mission-modal-close" aria-label="Close">
+                x
+              </button>
+            </div>
+
+            <label className="mission-modal-field" htmlFor="task-title">
+              Task title
+              <input id="task-title" value={newTaskTitle} onChange={(event) => setNewTaskTitle(event.target.value)} autoFocus />
+            </label>
+
+            <label className="mission-modal-field" htmlFor="task-description">
+              Description
+              <textarea
+                id="task-description"
+                value={newTaskDescription}
+                onChange={(event) => setNewTaskDescription(event.target.value)}
+                rows={3}
+                placeholder="Notes, acceptance details, or context"
+              />
+            </label>
+
+            <label className="mission-modal-field" htmlFor="task-project">
+              Mission
+              <select id="task-project" value={newTaskProjectId} onChange={(event) => setNewTaskProjectId(event.target.value)}>
+                {projects.length === 0 ? <option value="">No missions available</option> : null}
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="mission-task-grid">
+              <label className="mission-modal-field" htmlFor="task-priority">
+                Priority
+                <select id="task-priority" value={newTaskPriority} onChange={(event) => setNewTaskPriority(event.target.value as TaskPriority)}>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </label>
+
+              <label className="mission-modal-field" htmlFor="task-importance">
+                Importance (1-5)
+                <select id="task-importance" value={newTaskImportance} onChange={(event) => setNewTaskImportance(Number(event.target.value))}>
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="mission-modal-field" htmlFor="task-eta">
+                ETA (minutes)
+                <input
+                  id="task-eta"
+                  type="number"
+                  min="0"
+                  step="5"
+                  value={newTaskEta}
+                  onChange={(event) => setNewTaskEta(event.target.value)}
+                />
+              </label>
+
+              <label className="mission-modal-field" htmlFor="task-deadline">
+                Deadline (optional)
+                <input id="task-deadline" type="date" value={newTaskDeadline} onChange={(event) => setNewTaskDeadline(event.target.value)} />
+              </label>
+            </div>
+
+            <div className="mission-modal-actions">
+              <button type="button" onClick={() => setIsAddTaskOpen(false)} className="ops-button">
+                Cancel
+              </button>
+              <button disabled={isSavingTask || !newTaskTitle.trim() || !newTaskProjectId} className="ops-button primary">
+                {isSavingTask ? "Adding..." : "Add Task"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
       <TaskEditor task={editingTask} onClose={() => setEditingTask(null)} onSave={handleTaskSave} />
     </main>
   );
@@ -575,77 +688,237 @@ function GoalCard({ goal }: { goal: Goal }) {
   );
 }
 
-function PersonalityPanel({
-  insight,
-  isRefreshing,
-  onRefresh,
+type TaskTreeNode = GoalTask & { children: TaskTreeNode[] };
+
+function buildTaskTree(tasks: GoalTask[]): TaskTreeNode[] {
+  const byId = new Map<string, TaskTreeNode>();
+  tasks.forEach((task) => byId.set(task.id, { ...task, children: [] }));
+  const roots: TaskTreeNode[] = [];
+  tasks.forEach((task) => {
+    const node = byId.get(task.id);
+    if (!node) return;
+    const parent = task.parent_task_id ? byId.get(task.parent_task_id) : undefined;
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+  });
+  return roots;
+}
+
+function TaskTreeRow({
+  node,
+  depth,
+  collapsedIds,
+  onToggleExpand,
+  onComplete,
+  completingTaskId,
+  onSplit,
+  splittingTaskId,
+  splitErrors,
+  onOpenTask,
 }: {
-  insight: PersonalityInsight | null;
-  isRefreshing: boolean;
-  onRefresh: () => void;
+  node: TaskTreeNode;
+  depth: number;
+  collapsedIds: Set<string>;
+  onToggleExpand: (taskId: string) => void;
+  onComplete: (task: GoalTask) => void;
+  completingTaskId: string | null;
+  onSplit: (task: GoalTask) => void;
+  splittingTaskId: string | null;
+  splitErrors: Record<string, string>;
+  onOpenTask: (task: GoalTask) => void;
 }) {
+  const hasChildren = node.children.length > 0;
+  const isDone = node.status === "done";
+  const isExpanded = !collapsedIds.has(node.id);
+  const isSplitting = splittingTaskId === node.id;
+  const splitError = splitErrors[node.id];
+
   return (
-    <div className="ops-panel">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="ops-kicker">PERSONALITY ANALYSIS</p>
-          <h2 className="mt-1 text-lg font-semibold">Execution profile</h2>
-        </div>
-        <button type="button" onClick={onRefresh} disabled={isRefreshing} className="rounded-full bg-stone-950 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-stone-800 disabled:bg-stone-300">
-          {isRefreshing ? "Refreshing..." : "Refresh"}
-        </button>
+    <div>
+      <div className="task-tree-row" style={{ paddingLeft: `${depth * 1.1}rem` }}>
+        <span className="task-tree-leading">
+          {hasChildren ? (
+            <button
+              type="button"
+              className="task-tree-toggle"
+              onClick={() => onToggleExpand(node.id)}
+              aria-label={isExpanded ? `Collapse ${node.title}` : `Expand ${node.title}`}
+            >
+              {isExpanded ? "▾" : "▸"}
+            </button>
+          ) : isDone ? (
+            <span className="task-tree-spacer" />
+          ) : (
+            <input
+              type="checkbox"
+              className="task-tree-checkbox"
+              disabled={completingTaskId === node.id}
+              onChange={() => onComplete(node)}
+              aria-label={`Mark ${node.title} complete`}
+            />
+          )}
+        </span>
+        <p
+          className={isDone ? "task-tree-title done" : "task-tree-title"}
+          role="button"
+          tabIndex={0}
+          onClick={() => onOpenTask(node)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") onOpenTask(node);
+          }}
+        >
+          {node.title}
+        </p>
+        <span className="task-tree-time">{formatRequiredTime(node.time_required_minutes)}</span>
+        {isDone ? (
+          <span className="task-tree-check" aria-hidden>
+            {"✓"}
+          </span>
+        ) : hasChildren ? (
+          <span className="task-tree-spacer" />
+        ) : (
+          <button
+            type="button"
+            className="task-tree-split"
+            onClick={() => onSplit(node)}
+            disabled={isSplitting}
+            aria-label={`Split ${node.title}`}
+          >
+            {isSplitting ? "⋯" : "+"}
+          </button>
+        )}
       </div>
-      <p className="mt-4 text-xs leading-5 text-stone-700">
-        {insight?.text ?? "No personality analysis yet. Refresh to analyze strengths, weaknesses, and execution patterns from missions and completions."}
-      </p>
-      {insight?.refreshed_at ? <p className="mt-3 text-[11px] font-semibold text-stone-400">Last refreshed {formatDate(insight.refreshed_at)}</p> : null}
+      {splitError ? <p className="task-tree-error">{splitError}</p> : null}
+      {hasChildren && isExpanded ? (
+        <div className="task-tree-children">
+          {node.children.map((child) => (
+            <TaskTreeRow
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              collapsedIds={collapsedIds}
+              onToggleExpand={onToggleExpand}
+              onComplete={onComplete}
+              completingTaskId={completingTaskId}
+              onSplit={onSplit}
+              splittingTaskId={splittingTaskId}
+              splitErrors={splitErrors}
+              onOpenTask={onOpenTask}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function SortButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+type CompletionTrendMetric = "tasks" | "minutes";
+
+type CompletionTrendChartPoint = {
+  value: number;
+  label: string;
+  shortLabel: string;
+};
+
+const completionTrendRangeLabels: Record<CaptainCompassContextDays, string> = {
+  7: "7 Days",
+  30: "30 Days",
+  90: "90 Days",
+};
+
+const completionTrendMetricLabels: Record<CompletionTrendMetric, string> = {
+  tasks: "Tasks Completed",
+  minutes: "Minutes Worked",
+};
+
+function CompletionTrendSection({
+  isLoading,
+  metric,
+  range,
+  setMetric,
+  setRange,
+  trend,
+}: {
+  isLoading: boolean;
+  metric: CompletionTrendMetric;
+  range: CaptainCompassContextDays;
+  setMetric: (metric: CompletionTrendMetric) => void;
+  setRange: (range: CaptainCompassContextDays) => void;
+  trend: GoalCompletionTrend | null;
+}) {
+  const points: CompletionTrendChartPoint[] = useMemo(() => {
+    return (trend?.points ?? []).map((point) => {
+      const date = new Date(`${point.date}T00:00:00`);
+      return {
+        value: metric === "tasks" ? point.tasks_completed : point.minutes_worked,
+        label: date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
+        shortLabel: date.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+      };
+    });
+  }, [trend, metric]);
+
   return (
-    <button type="button" onClick={onClick} className={`rounded px-3 py-1.5 transition ${active ? "bg-white text-stone-950 shadow-sm" : "hover:bg-white/70 hover:text-stone-950"}`}>
-      {label}
-    </button>
+    <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wide text-teal-700">Mission Output</p>
+          <h2 className="mt-2 text-2xl font-semibold text-stone-950">Daily Completion Trend</h2>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex rounded-full border border-stone-200 bg-stone-100 p-1">
+            {(["tasks", "minutes"] as CompletionTrendMetric[]).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setMetric(option)}
+                className={`inline-flex h-7 min-w-[8.5rem] items-center justify-center rounded-full px-3 text-xs font-semibold transition ${
+                  metric === option ? "bg-stone-950 text-white shadow-sm" : "text-stone-600 hover:bg-white hover:text-stone-950"
+                }`}
+              >
+                {completionTrendMetricLabels[option]}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {([7, 30, 90] as CaptainCompassContextDays[]).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setRange(option)}
+                className={`inline-flex h-8 min-w-[5.75rem] items-center justify-center rounded-full border px-3 text-xs font-semibold transition ${
+                  range === option ? "border-stone-950 bg-stone-950 text-white shadow-sm" : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50"
+                }`}
+              >
+                {completionTrendRangeLabels[option]}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <LineTrendChart
+        ariaLabel={`${completionTrendMetricLabels[metric]} Over The Last ${range} Days`}
+        emptyMessage="No completed objectives logged in this range yet."
+        getLabel={(point) => point.label}
+        getShortLabel={(point) => point.shortLabel}
+        getValue={(point) => point.value}
+        isLoading={isLoading}
+        maxLabels={range === 7 ? 7 : 10}
+        minY={metric === "tasks" ? 5 : 25}
+        points={points}
+        tickStep={metric === "tasks" ? 1 : 25}
+      />
+    </section>
   );
 }
 
 function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="system-metric">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-stone-950">{value}</p>
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
-}
-
-function MissionAnalysis({ actions, openTasks, overdueTasks }: { actions: GoalNextAction[]; openTasks: number; overdueTasks: number }) {
-  const topAction = actions[0];
-  return (
-    <div className="analysis-stack">
-      <div>
-        <span>Highest Leverage Action</span>
-        <strong>{topAction?.title ?? "Define next mission-critical action"}</strong>
-      </div>
-      <div>
-        <span>Goal Conflicts</span>
-        <strong>{openTasks > 7 ? "Capacity pressure detected" : "No major conflict detected"}</strong>
-      </div>
-      <div>
-        <span>Risk Assessment</span>
-        <strong>{overdueTasks > 0 ? "Schedule risk elevated" : openTasks > 0 ? "Operational" : "Idle risk"}</strong>
-      </div>
-      <div>
-        <span>Recommended Next Action</span>
-        <strong>{topAction ? `${topAction.related_goal}: urgency ${topAction.urgency}/5` : "Add or complete one objective"}</strong>
-      </div>
-    </div>
-  );
-}
-
-function goalSortLabel(task: GoalTask) {
-  return task.linked_goals[0] ? categoryLabels[task.linked_goals[0].category] : "General";
 }
 
 function getRemainingTaskMinutes(task: GoalTask) {

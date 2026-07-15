@@ -3,6 +3,7 @@ import { clearAuthSession, getAuthToken, type AuthSession, type AuthUser } from 
 export type ProjectType = "continuous" | "fixed";
 export type TaskStatus = "todo" | "in_progress" | "done";
 export type TaskPriority = "high" | "medium" | "low";
+export type TaskBreakdownType = "time_based" | "semantic";
 export type BookStatus = "yet_to_start" | "reading" | "read";
 export type GoalCategory = "monthly" | "quarterly" | "yearly" | "five_year";
 
@@ -94,6 +95,14 @@ export type GoalTask = Task & {
   project_name: string;
   linked_goals: LinkedGoal[];
   time_required_minutes: number;
+  parent_task_id?: string | null;
+  breakdown_type: TaskBreakdownType;
+  has_children: boolean;
+};
+
+export type TaskBreakdown = {
+  parent: GoalTask;
+  children: GoalTask[];
 };
 
 export type CompletedGoalLog = {
@@ -270,6 +279,17 @@ export type CaptainCompass = {
 };
 
 export type CaptainCompassContextDays = 7 | 30 | 90;
+
+export type GoalCompletionTrendPoint = {
+  date: string;
+  tasks_completed: number;
+  minutes_worked: number;
+};
+
+export type GoalCompletionTrend = {
+  context_days: number;
+  points: GoalCompletionTrendPoint[];
+};
 
 export type UserPreferences = {
   default_project_type: ProjectType;
@@ -636,8 +656,14 @@ export function logGoalEntry(text: string) {
 }
 
 export function completeGoalTask(taskId: string) {
-  return request<CompletedGoalLog>(`/goals/tasks/${pathSegment(taskId)}/complete`, {
+  return request<CompletedGoalLog | null>(`/goals/tasks/${pathSegment(taskId)}/complete`, {
     method: "PUT",
+  });
+}
+
+export function breakdownGoalTask(taskId: string) {
+  return request<TaskBreakdown>(`/goals/tasks/${pathSegment(taskId)}/breakdown`, {
+    method: "POST",
   });
 }
 
@@ -667,6 +693,13 @@ export function getCaptainCompass(refresh = false, days: CaptainCompassContextDa
   const timezoneOffsetMinutes = new Date().getTimezoneOffset();
   return request<CaptainCompass>(
     `/goals/captain-compass?refresh=${refresh}&days=${days}&timezone_offset_minutes=${timezoneOffsetMinutes}`,
+  );
+}
+
+export function getGoalCompletionTrend(days: CaptainCompassContextDays = 30) {
+  const timezoneOffsetMinutes = new Date().getTimezoneOffset();
+  return request<GoalCompletionTrend>(
+    `/goals/completion-trend?days=${days}&timezone_offset_minutes=${timezoneOffsetMinutes}`,
   );
 }
 

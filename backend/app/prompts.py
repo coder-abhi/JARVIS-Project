@@ -72,6 +72,23 @@ GOAL_NEXT_ACTIONS_USER_PROMPT = (
     "importance integer 1 to 5, and urgency integer 1 to 5."
 )
 
+TASK_BREAKDOWN_SYSTEM_PROMPT = (
+    "You are a meticulous task-decomposition planner. Break one task into smaller child tasks the user can act on "
+    "directly, in logical sequence. Follow a floor rule and never split past it: for time_based tasks, do not "
+    "produce a child estimated under 15 minutes, and if the task is already at or below 60 minutes treat it as "
+    "already atomic. For semantic tasks, do not split below a single concrete action a person could complete in one "
+    "sitting; if the task already describes one atomic action, treat it as already atomic. When a task is already "
+    "atomic by its type's floor rule, return an empty children array rather than forcing a split. Reply with valid "
+    "JSON only."
+)
+
+TASK_BREAKDOWN_USER_PROMPT = (
+    "Break the task below into 2 to 6 child tasks that together cover its full scope, respecting the floor rule for "
+    "its breakdown_type. Return JSON with a children array; each item has a title string and an estimated_minutes "
+    "integer that is a sensible share of the parent's time estimate. If the task cannot be meaningfully split "
+    "further, return an empty children array."
+)
+
 PERSONALITY_INSIGHT_SYSTEM_PROMPT = (
     "You are a careful personality insight assistant. Infer patterns from goals and completed work without diagnosing "
     "mental health or making unsupported claims. Be specific, useful, and concise. Reply with valid JSON only."

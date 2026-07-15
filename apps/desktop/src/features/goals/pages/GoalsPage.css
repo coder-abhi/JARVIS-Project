@@ -1,3 +1,149 @@
+.task-tree {
+  display: flex;
+  flex-direction: column;
+}
+
+.task-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.25rem;
+}
+
+.task-tree-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.task-tree-leading {
+  display: flex;
+  flex-shrink: 0;
+  width: 1.1rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.task-tree-toggle {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--ops-muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.task-tree-toggle:hover {
+  color: var(--ops-signal);
+}
+
+.task-tree-checkbox {
+  width: 0.9rem;
+  height: 0.9rem;
+  accent-color: var(--ops-signal);
+  cursor: pointer;
+}
+
+.task-tree-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ops-text);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.task-tree-title.done {
+  color: var(--ops-dim);
+  text-decoration: line-through;
+}
+
+.task-tree-time {
+  flex-shrink: 0;
+  color: var(--ops-muted);
+  font-family: var(--ops-font-mono);
+  font-size: 0.7rem;
+}
+
+.task-tree-split,
+.task-tree-check,
+.task-tree-spacer {
+  flex-shrink: 0;
+  width: 1.4rem;
+  height: 1.4rem;
+  display: grid;
+  place-items: center;
+}
+
+.task-tree-split {
+  border: 1px solid var(--ops-border);
+  background: transparent;
+  color: var(--ops-signal);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.task-tree-split:hover:not(:disabled) {
+  border-color: var(--ops-signal);
+  background: rgba(var(--ops-signal-rgb), 0.12);
+}
+
+.task-tree-split:disabled {
+  color: var(--ops-dim);
+  cursor: wait;
+}
+
+.task-tree-check {
+  color: var(--ops-dim);
+  font-size: 0.8rem;
+}
+
+.task-tree-main-divider {
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--ops-border);
+}
+
+.task-tree-children {
+  margin-left: 0.5rem;
+  padding-left: 0.7rem;
+  border-left: 1px solid var(--ops-border);
+}
+
+.task-tree-error {
+  margin: 0.1rem 0 0.3rem 1.7rem;
+  color: var(--ops-danger-soft);
+  font-size: 0.7rem;
+}
+
+.task-tree-skeleton {
+  height: 2.1rem;
+  margin-bottom: 0.4rem;
+  border: 1px solid var(--ops-border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.task-tree-empty {
+  border: 1px solid var(--ops-border);
+  padding: 1.25rem;
+  text-align: center;
+}
+
+.task-tree-empty h3 {
+  margin: 0;
+  color: var(--ops-text);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.task-tree-empty p {
+  margin: 0.35rem 0 0;
+  color: var(--ops-muted);
+  font-size: 0.75rem;
+}
+
 .mission-modal-head,
 .mission-modal-actions {
   display: flex;
@@ -105,6 +251,12 @@
   display: grid;
   gap: 0.5rem;
   margin-top: 0.75rem;
+}
+
+.mission-task-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
 }
 
 .mission-type-choice {

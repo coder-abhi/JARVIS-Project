@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .models import BookStatus, GoalCategory, ProjectType, TaskPriority, TaskStatus
+from .models import BookStatus, GoalCategory, ProjectType, TaskBreakdownType, TaskPriority, TaskStatus
 
 
 class UserCreate(BaseModel):
@@ -232,6 +232,9 @@ class GoalTaskRead(BaseModel):
     id: str
     project_id: str
     project_name: str
+    parent_task_id: str | None = None
+    breakdown_type: TaskBreakdownType
+    has_children: bool = False
     linked_goals: list[LinkedGoalRead] = Field(default_factory=list)
     title: str
     description: str | None = None
@@ -246,6 +249,11 @@ class GoalTaskRead(BaseModel):
     deadline: datetime | None = None
     completed_at: datetime | None = None
     created_at: datetime
+
+
+class TaskBreakdownRead(BaseModel):
+    parent: GoalTaskRead
+    children: list[GoalTaskRead]
 
 
 class CompletedGoalLogRead(BaseModel):
@@ -284,6 +292,17 @@ class CaptainCompassRead(BaseModel):
     model: str
     refreshed_at: datetime
     context_days: int = Field(ge=1)
+
+
+class GoalCompletionTrendPoint(BaseModel):
+    date: str
+    tasks_completed: int = Field(ge=0)
+    minutes_worked: int = Field(ge=0)
+
+
+class GoalCompletionTrendRead(BaseModel):
+    context_days: int = Field(ge=1)
+    points: list[GoalCompletionTrendPoint]
 
 
 class GoalsOverview(BaseModel):

@@ -53,16 +53,36 @@ async def log_goal_entry(
     return service.log_goal_entry(db, request, current_user)
 
 
-@router.put("/tasks/{task_id}/complete", response_model=schemas.CompletedGoalLogRead)
+@router.put("/tasks/{task_id}/complete", response_model=schemas.CompletedGoalLogRead | None)
 async def complete_goal_task(
     task_id: str,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    completion = service.complete_goal_task(db, task_id, current_user)
-    if completion is None:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return completion
+    try:
+        return service.complete_goal_task(db, task_id, current_user)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/tasks/{task_id}/breakdown", response_model=schemas.TaskBreakdownRead)
+async def breakdown_goal_task(
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    try:
+        parent, children = service.breakdown_goal_task(db, task_id, current_user)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not children:
+        raise HTTPException(status_code=422, detail="This task is already small enough to act on directly.")
+    return schemas.TaskBreakdownRead(
+        parent=service.goal_task_read(parent, has_children=True),
+        children=[service.goal_task_read(child) for child in children],
+    )
 
 
 @router.put("/completions/{completion_id}/restore", response_model=schemas.GoalTaskRead)
@@ -74,7 +94,7 @@ async def restore_goal_completion(
     task = service.restore_goal_completion(db, completion_id, current_user)
     if task is None:
         raise HTTPException(status_code=404, detail="Completion not found")
-    return service.goal_task_read(task)
+    return service.goal_task_read(task, has_children=service.task_has_children(db, task.id))
 
 
 @router.delete("/completions/{completion_id}", status_code=204)
@@ -118,6 +138,23 @@ async def captain_compass(
         db,
         current_user,
         force_refresh=refresh,
+        context_days=days,
+        timezone_offset_minutes=timezone_offset_minutes,
+    )
+
+
+@router.get("/completion-trend", response_model=schemas.GoalCompletionTrendRead)
+async def goal_completion_trend(
+    days: int = Query(default=30),
+    timezone_offset_minutes: int = Query(default=0, ge=-840, le=840),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    if days not in service.CAPTAIN_COMPASS_CONTEXT_DAYS:
+        raise HTTPException(status_code=422, detail="days must be 7, 30, or 90")
+    return service.get_goal_completion_trend(
+        db,
+        current_user,
         context_days=days,
         timezone_offset_minutes=timezone_offset_minutes,
     )

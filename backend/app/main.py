@@ -61,6 +61,11 @@ def ensure_sqlite_compatibility() -> None:
             connection.execute(text("ALTER TABLE tasks ADD COLUMN completed_at DATETIME"))
             connection.execute(text("UPDATE tasks SET completed_at = created_at WHERE status = 'done'"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS ix_tasks_completed_at ON tasks (completed_at)"))
+        if task_columns and "parent_task_id" not in task_columns:
+            connection.execute(text("ALTER TABLE tasks ADD COLUMN parent_task_id VARCHAR(36)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_tasks_parent_task_id ON tasks (parent_task_id)"))
+        if task_columns and "breakdown_type" not in task_columns:
+            connection.execute(text("ALTER TABLE tasks ADD COLUMN breakdown_type VARCHAR(11) NOT NULL DEFAULT 'time_based'"))
         if task_columns:
             connection.execute(text("UPDATE tasks SET status = 'todo' WHERE status = 'delayed'"))
         if task_columns and "goal_id" in task_columns and {"goal_id", "project_id"} <= goal_project_columns:

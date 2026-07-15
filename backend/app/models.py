@@ -25,6 +25,11 @@ class TaskPriority(str, enum.Enum):
     low = "low"
 
 
+class TaskBreakdownType(str, enum.Enum):
+    time_based = "time_based"
+    semantic = "semantic"
+
+
 class GoalCategory(str, enum.Enum):
     monthly = "monthly"
     quarterly = "quarterly"
@@ -122,10 +127,14 @@ class Task(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    parent_task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(220), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[TaskStatus] = mapped_column(Enum(TaskStatus), default=TaskStatus.todo, nullable=False)
     priority: Mapped[TaskPriority] = mapped_column(Enum(TaskPriority), default=TaskPriority.medium, nullable=False)
+    breakdown_type: Mapped[TaskBreakdownType] = mapped_column(
+        Enum(TaskBreakdownType), default=TaskBreakdownType.time_based, nullable=False
+    )
     importance_rating: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     completion_percentage: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     eta_hours: Mapped[float] = mapped_column(Float, default=0, nullable=False)
@@ -136,6 +145,12 @@ class Task(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     project: Mapped[Project] = relationship(back_populates="tasks")
+    parent: Mapped["Task | None"] = relationship(back_populates="children", remote_side=[id])
+    children: Mapped[list["Task"]] = relationship(
+        back_populates="parent",
+        cascade="all, delete-orphan",
+        order_by="Task.created_at",
+    )
 
 
 class Goal(Base):

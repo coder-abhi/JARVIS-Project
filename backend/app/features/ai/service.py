@@ -47,6 +47,7 @@ FEATURE_LABELS = {
     "personality_insight": "Personality insight",
     "pomodoro_assignment": "Pomodoro assignment",
     "captain_compass": "Captain Compass",
+    "task_breakdown": "Task breakdown",
 }
 
 FEATURE_DESCRIPTIONS = {
@@ -58,6 +59,7 @@ FEATURE_DESCRIPTIONS = {
     "personality_insight": "Generates the working-style insight shown on the Goals page.",
     "pomodoro_assignment": "Matches a completed Pomodoro note to the most relevant project and task.",
     "captain_compass": "Rates execution speed, direction, and consistency from goals and project timelines.",
+    "task_breakdown": "Splits a mission task into smaller child tasks when you click + on the Active Objectives tree.",
 }
 
 FEATURE_KEYS = tuple(FEATURE_LABELS)

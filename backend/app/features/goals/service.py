@@ -14,6 +14,8 @@ from ...prompts import (
     GOAL_NEXT_ACTIONS_USER_PROMPT,
     PERSONALITY_INSIGHT_SYSTEM_PROMPT,
     PERSONALITY_INSIGHT_USER_PROMPT,
+    TASK_BREAKDOWN_SYSTEM_PROMPT,
+    TASK_BREAKDOWN_USER_PROMPT,
 )
 from ...shared.utils import as_utc, bounded_int, canonical_json, clean_text
 from ..ai import service as ai_service
@@ -29,10 +31,12 @@ from .repository import (
     list_goal_active_tasks,
     list_goal_completions_by_project,
     list_recent_goal_completions,
+    task_has_children,
 )
 
 __all__ = [
     "CAPTAIN_COMPASS_CONTEXT_DAYS",
+    "breakdown_goal_task",
     "complete_goal_task",
     "create_goal",
     "create_goal_completion_log",
@@ -42,8 +46,10 @@ __all__ = [
     "generate_captain_compass",
     "generate_goal_next_actions",
     "generate_personality_insight",
+    "generate_task_breakdown",
     "get_captain_compass",
     "get_goal",
+    "get_goal_completion_trend",
     "get_goals_overview",
     "goal_context",
     "goal_task_read",
@@ -54,6 +60,7 @@ __all__ = [
     "refresh_personality_insight",
     "restore_goal_completion",
     "suggest_goal_next_actions",
+    "task_has_children",
     "update_goal",
 ]
 
@@ -175,9 +182,10 @@ def get_goals_overview(db: Session, user: models.User) -> schemas.GoalsOverview:
     completions = list_recent_goal_completions(db, user)
     insight = _latest_personality_insight(goals)
 
+    parent_ids = {task.parent_task_id for task in active_tasks if task.parent_task_id is not None}
     return schemas.GoalsOverview(
         goals=goals,
-        active_tasks=[goal_task_read(task) for task in active_tasks],
+        active_tasks=[goal_task_read(task, has_children=task.id in parent_ids) for task in active_tasks],
         recent_completed_tasks=completions,
         personality_insight=insight,
     )
@@ -264,6 +272,12 @@ def create_goal_task_from_log(
 
 
 def complete_goal_task(db: Session, task_id: str, user: models.User) -> schemas.CompletedGoalLogRead | None:
+    """Mark a task done and cascade completion up the tree.
+
+    A parent only auto-completes once every one of its children is done, so completing a
+    subtask never creates a "recently completed" log entry by itself - it only bubbles into
+    one once the cascade reaches an actual root task (one with no parent).
+    """
     db_task = db.scalar(
         select(models.Task)
         .join(models.Project)
@@ -271,7 +285,7 @@ def complete_goal_task(db: Session, task_id: str, user: models.User) -> schemas.
         .options(selectinload(models.Task.project).selectinload(models.Project.linked_goals))
     )
     if db_task is None:
-        return None
+        raise LookupError("Task not found")
 
     existing_log = db.scalar(
         select(models.CompletedGoalLog).where(
@@ -282,13 +296,133 @@ def complete_goal_task(db: Session, task_id: str, user: models.User) -> schemas.
     if existing_log is not None:
         return existing_log
 
-    db_task.status = models.TaskStatus.done
-    db_task.completed_at = datetime.now(timezone.utc)
-    db_task.completion_percentage = 100
-    db_log = create_task_completion_log(db, db_task, user)
+    db_log = _complete_task_and_cascade(db, db_task, user)
     db.commit()
-    db.refresh(db_log)
+    if db_log is not None:
+        db.refresh(db_log)
     return db_log
+
+
+def _complete_task_and_cascade(
+    db: Session,
+    task: models.Task,
+    user: models.User,
+) -> models.CompletedGoalLog | None:
+    task.status = models.TaskStatus.done
+    task.completed_at = datetime.now(timezone.utc)
+    task.completion_percentage = 100
+
+    current = task
+    while current.parent_task_id is not None:
+        parent = db.get(models.Task, current.parent_task_id)
+        if parent is None:
+            break
+        siblings = db.scalars(select(models.Task).where(models.Task.parent_task_id == parent.id)).all()
+        if not all(sibling.status == models.TaskStatus.done for sibling in siblings):
+            return None
+        parent.status = models.TaskStatus.done
+        parent.completed_at = datetime.now(timezone.utc)
+        parent.completion_percentage = 100
+        current = parent
+
+    return create_task_completion_log(db, current, user)
+
+
+def breakdown_goal_task(
+    db: Session,
+    task_id: str,
+    user: models.User,
+) -> tuple[models.Task, list[models.Task]]:
+    db_task = db.scalar(
+        select(models.Task)
+        .join(models.Project)
+        .where(models.Task.id == task_id, models.Project.user_id == user.id)
+        .options(selectinload(models.Task.project))
+    )
+    if db_task is None:
+        raise LookupError("Task not found")
+    if db_task.status == models.TaskStatus.done:
+        raise ValueError("Cannot split a completed task")
+    if task_has_children(db, db_task.id):
+        raise ValueError("Task has already been split")
+
+    children_data = generate_task_breakdown(
+        title=db_task.title,
+        estimated_minutes=round(db_task.eta_hours * 60),
+        breakdown_type=db_task.breakdown_type.value,
+        user_id=user.id,
+        usage_db=db,
+    )
+    if not children_data:
+        return db_task, []
+
+    children: list[models.Task] = []
+    for item in children_data:
+        child = models.Task(
+            project_id=db_task.project_id,
+            parent_task_id=db_task.id,
+            title=item["title"],
+            status=models.TaskStatus.todo,
+            priority=db_task.priority,
+            breakdown_type=db_task.breakdown_type,
+            importance_rating=db_task.importance_rating,
+            eta_hours=round(item["estimated_minutes"] / 60, 2),
+            time_spent_hours=0,
+        )
+        child.project = db_task.project
+        db.add(child)
+        children.append(child)
+
+    db.commit()
+    db.refresh(db_task)
+    for child in children:
+        db.refresh(child)
+    return db_task, children
+
+
+def generate_task_breakdown(
+    title: str,
+    estimated_minutes: int,
+    breakdown_type: str,
+    user_id: str | None = None,
+    usage_db: Session | None = None,
+) -> list[dict]:
+    context = {
+        "title": title,
+        "estimated_minutes": estimated_minutes,
+        "breakdown_type": breakdown_type,
+    }
+    data = ai_service.call_ai_json(
+        TASK_BREAKDOWN_SYSTEM_PROMPT,
+        f"{TASK_BREAKDOWN_USER_PROMPT} Context: {canonical_json(context)}",
+        max_tokens=600,
+        feature="task_breakdown",
+        user_id=user_id,
+        usage_db=usage_db,
+    )
+    items = data.get("children") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        return []
+
+    cleaned: list[dict] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item_title = clean_text(item.get("title"))
+        if not item_title:
+            continue
+        cleaned.append(
+            {
+                "title": item_title[:220],
+                "estimated_minutes": bounded_int(
+                    item.get("estimated_minutes"), 1, max(estimated_minutes, 1), max(1, estimated_minutes // 2)
+                ),
+            }
+        )
+        if len(cleaned) == 6:
+            break
+
+    return cleaned if len(cleaned) >= 2 else []
 
 
 def restore_goal_completion(db: Session, completion_id: str, user: models.User) -> models.Task | None:
@@ -451,6 +585,73 @@ def get_captain_compass(
         timezone_offset_minutes=timezone_offset_minutes,
     )
     return schemas.CaptainCompassRead(**assessment)
+
+
+def get_goal_completion_trend(
+    db: Session,
+    user: models.User,
+    *,
+    context_days: int = 30,
+    timezone_offset_minutes: int = 0,
+) -> schemas.GoalCompletionTrendRead:
+    if context_days not in CAPTAIN_COMPASS_CONTEXT_DAYS:
+        raise ValueError(f"Completion trend context must be one of {CAPTAIN_COMPASS_CONTEXT_DAYS}")
+    if not -840 <= timezone_offset_minutes <= 840:
+        raise ValueError("Completion trend timezone offset must be between -840 and 840 minutes")
+
+    projects = list(
+        db.scalars(
+            select(models.Project)
+            .where(models.Project.user_id == user.id)
+            .options(
+                selectinload(models.Project.tasks),
+                selectinload(models.Project.pomodoro_sessions),
+            )
+        )
+    )
+    all_tasks = [task for project in projects for task in project.tasks]
+    parent_task_ids = {task.parent_task_id for task in all_tasks if task.parent_task_id}
+
+    today_local = (datetime.now(timezone.utc) - timedelta(minutes=timezone_offset_minutes)).date()
+    start_local = today_local - timedelta(days=context_days - 1)
+
+    tasks_by_date: dict[str, int] = {}
+    for task in all_tasks:
+        if task.status != models.TaskStatus.done or task.completed_at is None:
+            continue
+        if task.id in parent_task_ids:
+            continue
+        local_date = _completion_trend_local_date(task.completed_at, timezone_offset_minutes)
+        if not start_local <= local_date <= today_local:
+            continue
+        key = local_date.isoformat()
+        tasks_by_date[key] = tasks_by_date.get(key, 0) + 1
+
+    minutes_by_date: dict[str, int] = {}
+    for project in projects:
+        for session in project.pomodoro_sessions:
+            if session.mode != "focus":
+                continue
+            local_date = _completion_trend_local_date(session.completed_at, timezone_offset_minutes)
+            if not start_local <= local_date <= today_local:
+                continue
+            key = local_date.isoformat()
+            minutes_by_date[key] = minutes_by_date.get(key, 0) + session.minutes
+
+    points = [
+        schemas.GoalCompletionTrendPoint(
+            date=(start_local + timedelta(days=offset)).isoformat(),
+            tasks_completed=tasks_by_date.get((start_local + timedelta(days=offset)).isoformat(), 0),
+            minutes_worked=minutes_by_date.get((start_local + timedelta(days=offset)).isoformat(), 0),
+        )
+        for offset in range(context_days)
+    ]
+
+    return schemas.GoalCompletionTrendRead(context_days=context_days, points=points)
+
+
+def _completion_trend_local_date(value: datetime, timezone_offset_minutes: int):
+    return (as_utc(value) - timedelta(minutes=timezone_offset_minutes)).date()
 
 
 def classify_goal_log(
@@ -710,11 +911,14 @@ def generate_captain_compass(
     }
 
 
-def goal_task_read(task: models.Task) -> schemas.GoalTaskRead:
+def goal_task_read(task: models.Task, has_children: bool = False) -> schemas.GoalTaskRead:
     return schemas.GoalTaskRead(
         id=task.id,
         project_id=task.project_id,
         project_name=task.project.name if task.project else "Unknown",
+        parent_task_id=task.parent_task_id,
+        breakdown_type=task.breakdown_type,
+        has_children=has_children,
         linked_goals=task_linked_goals(task),
         title=task.title,
         description=task.description,
